@@ -12,6 +12,8 @@ wheels/
 # Data and databases
 data/
 *.db
+*.db-shm
+*.db-wal
 
 # Secrets
 *.age

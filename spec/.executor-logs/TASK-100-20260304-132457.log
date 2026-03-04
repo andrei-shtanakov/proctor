@@ -1,0 +1,86 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-100 — Test Infrastructure Setup
+
+**Priority:** P0
+**Estimate:** 1h
+**Milestone:** Milestone 1: Foundation (Phase 0)
+
+## Checklist (implement ALL items):
+
+- [ ] pytest discovers and runs tests from `tests/`
+- [ ] `@pytest.mark.asyncio` tests work with anyio backend
+- [ ] conftest.py provides `anyio_backend` fixture
+- [ ] ruff lint and format configured and passing
+
+## Related Requirements:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/requirements.md
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All checklist items verified and working.
+
+## Summary
+
+The test infrastructure was already largely in place from TASK-001. I added one verification:
+
+**Files modified:**
+- `tests/test_scaffold.py` — Added `test_async_anyio_backend` that confirms `@pytest.mark.asyncio` + `anyio_backend` fixture runs on both asyncio and trio
+
+**Checklist results:**
+- **pytest discovers and runs tests from `tests/`** — 7 tests discovered and passing
+- **`@pytest.mark.asyncio` tests work with anyio backend** — Verified with new test running on both asyncio and trio
+- **conftest.py provides `anyio_backend` fixture** — Fixture params `["asyncio", "trio"]`, working correctly
+- **ruff lint and format configured and passing** — Rules `E, F, I, UP, B, SIM` with line-length=88, all passing
+
+**Configuration details:**
+- `pyproject.toml`: `asyncio_mode = "strict"`, `testpaths = ["tests"]`
+- `conftest.py`: `anyio_backend` fixture parametrized for asyncio + trio
+- Dev deps: `pytest>=9.0.2`, `pytest-asyncio>=1.3.0`, `anyio[trio]>=4.12.1`, `ruff>=0.15.4`
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

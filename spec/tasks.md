@@ -38,21 +38,21 @@
 ## Milestone 1: Foundation (Phase 0)
 
 ### TASK-001: Project Scaffold and Dependencies
-P0 | TODO | Est: 2h
+🔴 P0 | ✅ DONE | Est: 2h
 
 **Description:**
 Set up `pyproject.toml` with src layout, hatchling build backend, core runtime and dev dependencies. Create package structure with `__init__.py` and `__main__.py`. Configure ruff and pytest.
 
 **Checklist:**
-- [ ] Update `pyproject.toml` with all dependencies (pydantic, aiosqlite, nats-py, litellm, tiktoken, mcp, aiohttp, pyyaml)
-- [ ] Add dev dependencies (pytest, anyio[trio], pytest-asyncio, ruff)
-- [ ] Configure hatchling build, pytest, and ruff sections
-- [ ] Create `src/proctor/__init__.py` with `__version__`
-- [ ] Create `src/proctor/__main__.py` with async placeholder
-- [ ] Create `tests/__init__.py` and `tests/conftest.py` with anyio_backend fixture
-- [ ] Update `.gitignore` (add data/, *.db, *.age)
-- [ ] Run `uv sync` and verify
-- [ ] Run `uv run ruff check` — no errors
+- [x] Update `pyproject.toml` with all dependencies (pydantic, aiosqlite, nats-py, litellm, tiktoken, mcp, aiohttp, pyyaml)
+- [x] Add dev dependencies (pytest, anyio[trio], pytest-asyncio, ruff)
+- [x] Configure hatchling build, pytest, and ruff sections
+- [x] Create `src/proctor/__init__.py` with `__version__`
+- [x] Create `src/proctor/__main__.py` with async placeholder
+- [x] Create `tests/__init__.py` and `tests/conftest.py` with anyio_backend fixture
+- [x] Update `.gitignore` (add data/, *.db, *.age)
+- [x] Run `uv sync` and verify
+- [x] Run `uv run ruff check` — no errors
 
 **Traces to:** [NFR-003]
 **Depends on:** —
@@ -61,16 +61,16 @@ Set up `pyproject.toml` with src layout, hatchling build backend, core runtime a
 ---
 
 ### TASK-100: Test Infrastructure Setup
-P0 | TODO | Est: 1h
+🔴 P0 | ✅ DONE | Est: 1h
 
 **Description:**
 Verify test infrastructure works: pytest discovers tests, anyio backend is configured, async tests run.
 
 **Checklist:**
-- [ ] pytest discovers and runs tests from `tests/`
-- [ ] `@pytest.mark.asyncio` tests work with anyio backend
-- [ ] conftest.py provides `anyio_backend` fixture
-- [ ] ruff lint and format configured and passing
+- [x] pytest discovers and runs tests from `tests/`
+- [x] `@pytest.mark.asyncio` tests work with anyio backend
+- [x] conftest.py provides `anyio_backend` fixture
+- [x] ruff lint and format configured and passing
 
 **Traces to:** [NFR-000]
 **Depends on:** [TASK-001]
@@ -79,7 +79,7 @@ Verify test infrastructure works: pytest discovers tests, anyio backend is confi
 ---
 
 ### TASK-002: Core Models (Event, Task, Envelope)
-P0 | TODO | Est: 2h
+🔴 P0 | ⬜ TODO | Est: 2h
 
 **Description:**
 Implement pydantic models for Event, Task, TaskStatus, and Envelope in `src/proctor/core/models.py`. All models auto-generate UUID ids and UTC timestamps.
@@ -105,7 +105,7 @@ Implement pydantic models for Event, Task, TaskStatus, and Envelope in `src/proc
 ---
 
 ### TASK-003: Config Loading
-P0 | TODO | Est: 2h
+🔴 P0 | ⬜ TODO | Est: 2h
 
 **Description:**
 Implement YAML config loading with nested pydantic models (LLMConfig, NATSConfig, SchedulerConfig, ProctorConfig). Provide sensible defaults and graceful handling of missing config files.
@@ -131,7 +131,7 @@ Implement YAML config loading with nested pydantic models (LLMConfig, NATSConfig
 ---
 
 ### TASK-004: EventBus (Internal Async Pub/Sub)
-P0 | TODO | Est: 3h
+🔴 P0 | ⬜ TODO | Est: 3h
 
 **Description:**
 Implement async EventBus with fnmatch wildcard pattern matching, multiple subscriber support, error isolation, and unsubscribe capability.
@@ -159,7 +159,7 @@ Implement async EventBus with fnmatch wildcard pattern matching, multiple subscr
 ---
 
 ### TASK-005: StateManager (SQLite Wrapper)
-P0 | TODO | Est: 4h
+🔴 P0 | ⬜ TODO | Est: 4h
 
 **Description:**
 Implement async SQLite wrapper with aiosqlite for task persistence, config overrides, and schedule storage. Schema: tasks (with status index), schedules, config_overrides tables.
@@ -193,7 +193,7 @@ Implement async SQLite wrapper with aiosqlite for task persistence, config overr
 ---
 
 ### TASK-006: Bootstrap (Application Startup/Shutdown)
-P0 | TODO | Est: 3h
+🔴 P0 | ⬜ TODO | Est: 3h
 
 **Description:**
 Implement Application class that owns all core components (EventBus, StateManager), manages lifecycle, and wires event handlers. Update `__main__.py` with signal handling.
@@ -222,7 +222,7 @@ Implement Application class that owns all core components (EventBus, StateManage
 ## Milestone 2: MVP (Phase 1)
 
 ### TASK-007: WorkflowSpec Model
-P0 | TODO | Est: 2h
+🔴 P0 | ⬜ TODO | Est: 2h
 
 **Description:**
 Implement the universal WorkflowSpec pydantic model with support for simple, DAG, FSM (placeholder), and orchestrator (placeholder) modes. Includes Step, StepType, StepRetry, WorkflowPolicies models.
@@ -250,7 +250,7 @@ Implement the universal WorkflowSpec pydantic model with support for simple, DAG
 ---
 
 ### TASK-008: DAG Executor
-P0 | TODO | Est: 4h
+🔴 P0 | ⬜ TODO | Est: 4h
 
 **Description:**
 Implement topological sort with cycle detection and parallel DAG execution using asyncio.TaskGroup. Steps wait for their dependencies via asyncio.Event signaling.
@@ -281,7 +281,7 @@ Implement topological sort with cycle detection and parallel DAG execution using
 ---
 
 ### TASK-009: Workflow Engine (Dispatcher)
-P0 | TODO | Est: 3h
+🔴 P0 | ⬜ TODO | Est: 3h
 
 **Description:**
 Implement WorkflowEngine that dispatches WorkflowSpec to the correct executor based on mode. Supports simple (direct LLM call) and DAG (via DAGExecutor) modes.
@@ -308,7 +308,7 @@ Implement WorkflowEngine that dispatches WorkflowSpec to the correct executor ba
 ---
 
 ### TASK-010: Agent Runtime (LLM Loop)
-P0 | TODO | Est: 4h
+🔴 P0 | ⬜ TODO | Est: 4h
 
 **Description:**
 Implement the Agent Runtime: an LLM agent loop that alternates between calling the LLM and executing tool calls until a text response is returned or max_turns is reached.
@@ -337,7 +337,7 @@ Implement the Agent Runtime: an LLM agent loop that alternates between calling t
 ---
 
 ### TASK-011: Terminal Trigger
-P1 | TODO | Est: 2h
+🟠 P1 | ⬜ TODO | Est: 2h
 
 **Description:**
 Implement the terminal trigger that reads lines from stdin and publishes them as events. Includes the Trigger ABC and TerminalTrigger implementation.
@@ -362,7 +362,7 @@ Implement the terminal trigger that reads lines from stdin and publishes them as
 ---
 
 ### TASK-012: Integration — Wire Everything Together
-P0 | TODO | Est: 3h
+🔴 P0 | ⬜ TODO | Est: 3h
 
 **Description:**
 Wire terminal trigger events to workflow engine execution in the Application bootstrap. Add `_handle_terminal` that creates a simple WorkflowSpec from terminal text, executes it, and publishes the result event. Write end-to-end integration test.

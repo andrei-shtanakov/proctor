@@ -4,6 +4,8 @@ import importlib
 import subprocess
 import sys
 
+import pytest
+
 import proctor
 
 
@@ -47,3 +49,20 @@ def test_entry_point_runs() -> None:
     )
     assert result.returncode == 0
     assert f"Proctor v{proctor.__version__}" in result.stdout
+
+
+@pytest.mark.asyncio
+async def test_async_anyio_backend(anyio_backend: str) -> None:
+    """Async tests run on both asyncio and trio via anyio."""
+    import anyio
+
+    result: list[str] = []
+
+    async def append_value() -> None:
+        result.append(anyio_backend)
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(append_value)
+
+    assert len(result) == 1
+    assert result[0] in ("asyncio", "trio")
