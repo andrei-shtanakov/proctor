@@ -1,0 +1,122 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-011 — Terminal Trigger
+
+**Priority:** P1
+**Estimate:** 2h
+**Milestone:** Milestone 2: MVP (Phase 1)
+
+## Checklist (implement ALL items):
+
+- [ ] Create `src/proctor/triggers/__init__.py`
+- [ ] Implement `Trigger` ABC with `start(bus)` and `stop()` methods
+- [ ] Implement `TerminalTrigger` with stdin reading via asyncio.StreamReader
+- [ ] Implement `_process_line()` — empty lines ignored, quit commands, event publishing
+- [ ] Write tests: process line publishes event, empty lines ignored, quit command
+- [ ] [TEST] Unit tests: non-empty line publishes trigger.terminal event
+- [ ] [TEST] Unit tests: empty and whitespace lines ignored
+- [ ] [TEST] Unit tests: /quit returns "quit" signal
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-010: Terminal Input Trigger
+**As an** operator
+**I want** to type commands in the terminal to create tasks
+**So that** I can interact with Proctor directly from the command line
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a TerminalTrigger started with an EventBus
+WHEN a non-empty line is received
+THEN an Event with type="trigger.terminal" and the text in payload is published
+
+GIVEN a TerminalTrigger
+WHEN an empty or whitespace-only line is received
+THEN no event is published
+
+GIVEN a TerminalTrigger
+WHEN "/quit" or "/exit" is received
+THEN the trigger signals to stop
+```
+
+**Priority:** P0
+**Traces to:** [TASK-011], [DESIGN-010]
+
+---
+
+### 2.5 Integration
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Files created:
+- `src/proctor/triggers/__init__.py` — Package exports (`Trigger`, `TerminalTrigger`)
+- `src/proctor/triggers/base.py` — `Trigger` ABC with `start(bus)` and `stop()` abstract methods
+- `src/proctor/triggers/terminal.py` — `TerminalTrigger` implementation with stdin reading via `asyncio.StreamReader`
+- `tests/test_triggers/__init__.py` — Test package init
+- `tests/test_triggers/test_terminal.py` — 28 tests covering all acceptance criteria
+
+### Checklist completion:
+- [x] `triggers/__init__.py` with package exports
+- [x] `Trigger` ABC with `start(bus)` and `stop()` methods
+- [x] `TerminalTrigger` with stdin reading via `asyncio.StreamReader`
+- [x] `_process_line()` — empty lines ignored, quit commands, event publishing
+- [x] Tests: non-empty line publishes `trigger.terminal` event
+- [x] Tests: empty and whitespace lines ignored
+- [x] Tests: `/quit`, `/exit`, `/q` return "quit" signal (case-insensitive)
+- [x] 28 tests passing (all on both asyncio + trio backends)
+- [x] No lint errors, no format issues
+- [x] Pre-existing pyrefly errors only (not from this change)
+
+### Notes:
+- Follows existing codebase patterns: pydantic models, anyio-compatible async, class-based test organization
+- `QUIT_COMMANDS` is a `frozenset` constant for O(1) lookup
+- Quit matching is case-insensitive and strips whitespace
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

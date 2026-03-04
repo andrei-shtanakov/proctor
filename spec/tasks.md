@@ -131,26 +131,26 @@ Implement YAML config loading with nested pydantic models (LLMConfig, NATSConfig
 ---
 
 ### TASK-004: EventBus (Internal Async Pub/Sub)
-🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
+🔴 P0 | ✅ DONE | Est: 3h
 
 **Description:**
 Implement async EventBus with fnmatch wildcard pattern matching, multiple subscriber support, error isolation, and unsubscribe capability.
 
 **Checklist:**
-- [ ] Implement `_Subscription` with pattern, handler, UUID id
-- [ ] Implement `EventBus.subscribe(pattern, handler)` returning sub_id
-- [ ] Implement `EventBus.unsubscribe(sub_id)`
-- [ ] Implement `EventBus.publish(event)` with `asyncio.create_task` per handler
-- [ ] Implement `_safe_call` for exception isolation
-- [ ] Write tests: exact match, wildcard, multiple subscribers, unsubscribe, error isolation
+- [x] Implement `_Subscription` with pattern, handler, UUID id
+- [x] Implement `EventBus.subscribe(pattern, handler)` returning sub_id
+- [x] Implement `EventBus.unsubscribe(sub_id)`
+- [x] Implement `EventBus.publish(event)` with `asyncio.create_task` per handler
+- [x] Implement `_safe_call` for exception isolation
+- [x] Write tests: exact match, wildcard, multiple subscribers, unsubscribe, error isolation
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: subscribe and publish exact topic
-- [ ] Unit tests: wildcard pattern matching (trigger.*)
-- [ ] Unit tests: multiple subscribers on same pattern
-- [ ] Unit tests: unsubscribe stops delivery
-- [ ] Unit tests: handler error doesn't crash bus
-- [ ] Coverage >= 80%
+- [x] Unit tests: subscribe and publish exact topic
+- [x] Unit tests: wildcard pattern matching (trigger.*)
+- [x] Unit tests: multiple subscribers on same pattern
+- [x] Unit tests: unsubscribe stops delivery
+- [x] Unit tests: handler error doesn't crash bus
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-003]
 **Depends on:** [TASK-002]
@@ -337,7 +337,7 @@ Implement the Agent Runtime: an LLM agent loop that alternates between calling t
 ---
 
 ### TASK-011: Terminal Trigger
-🟠 P1 | ⬜ TODO | Est: 2h
+🟠 P1 | 🔄 IN_PROGRESS | Est: 2h
 
 **Description:**
 Implement the terminal trigger that reads lines from stdin and publishes them as events. Includes the Trigger ABC and TerminalTrigger implementation.

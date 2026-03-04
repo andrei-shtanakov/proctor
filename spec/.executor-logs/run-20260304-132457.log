@@ -109,3 +109,19 @@
 2026-03-04T09:43:31.329717Z [info     ] 🔍 Starting code review         module=runner task_id=TASK-004
 2026-03-04T09:43:31.394428Z [info     ] 🔍 Review using: claude         module=runner task_id=TASK-004
 2026-03-04T09:45:47.118248Z [info     ] ✅ Code review passed           module=runner task_id=TASK-004
+2026-03-04T09:45:47.212590Z [info     ] Committed changes              module=hooks
+2026-03-04T09:45:47.214963Z [info     ] Dispatching tasks in parallel  count=1 module=executor
+2026-03-04T09:45:47.215033Z [info     ] Dispatching task               module=executor name='Terminal Trigger' task_id=TASK-011
+2026-03-04T09:45:47.215264Z [info     ] Starting: Terminal Trigger     module=runner task_id=TASK-011
+2026-03-04T09:45:47.215333Z [info     ] Pre-start hook                 module=hooks task_id=TASK-011
+2026-03-04T09:45:47.215371Z [info     ] Syncing dependencies           module=hooks
+2026-03-04T09:45:47.247893Z [info     ] Dependencies synced            module=hooks
+2026-03-04T09:48:42.502266Z [info     ] Post-done hook                 module=hooks success=True task_id=TASK-011
+2026-03-04T09:48:42.502597Z [info     ] Running tests                  module=hooks
+2026-03-04T09:48:43.477620Z [info     ] Tests passed                   module=hooks
+2026-03-04T09:48:43.477790Z [info     ] Running lint                   module=hooks
+2026-03-04T09:48:43.543406Z [info     ] Lint passed                    module=hooks
+2026-03-04T09:48:43.544359Z [info     ] Running code review            module=hooks
+2026-03-04T09:48:43.544571Z [info     ] 🔍 Starting code review         module=runner task_id=TASK-011
+2026-03-04T09:48:43.606948Z [info     ] 🔍 Review using: claude         module=runner task_id=TASK-011
+2026-03-04T09:50:57.762022Z [info     ] ✅ Code review passed           module=runner task_id=TASK-011
