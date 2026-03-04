@@ -45,16 +45,21 @@ pyrefly check                        # Type check (run after every change)
 | Module | Purpose |
 |--------|---------|
 | `core/` | Kernel — internal asyncio EventBus, SQLite state manager, config (YAML→pydantic), bootstrap, core models (Event, Task, Envelope) |
-| `triggers/` | Input adapters (Telegram, webhook, filesystem, email, terminal, heartbeat) — each implements `Trigger` ABC |
-| `scheduler/` | Cron/at/interval schedules stored in SQLite, emits `schedule.due` events |
-| `router/` | Two-layer task routing: capability scoring + safety invariants (scope isolation, branch locking, concurrency limits) |
-| `workflow/` | Pipeline engine — DAG, FSM, Decision Tree, multi-agent orchestrator. WorkflowSpec is the central pydantic model |
-| `workers/` | Agent Runtime (LLM loop: prompt→tool calls→result), worker registry (NATS discovery), local/Docker/SSH workers |
-| `memory/` | Three-layer: working (RAM, per-task), episodic (SQLite, per-process), semantic (FTS5, global). Plus self-model |
-| `mcp/` | MCP client/server/controller/registry/proxy. NATS MCP Proxy bridges stdio↔NATS for remote tool access |
-| `infra/` | Thin wrappers: Docker SDK, asyncssh, Vagrant CLI, Ansible runner, tmux |
-| `a2a/` | A2A Gateway for external agent interop (Phase 6) |
-| `control/` | Safety (kill switch, FORBIDDEN list), budget tracking, health monitoring, TUI dashboard |
+| `triggers/` | Input adapters — Trigger ABC and TerminalTrigger (stdin→events). Future: Telegram, webhook, filesystem, email, heartbeat |
+| `workflow/` | Pipeline engine — WorkflowSpec model, DAG executor (topo-sort + parallel), WorkflowEngine dispatcher. Supports simple and DAG modes |
+| `workers/` | Agent Runtime (LLM loop: prompt→tool calls→result). Future: worker registry, local/Docker/SSH workers |
+
+**Planned modules** (not yet implemented):
+
+| Module | Purpose | Phase |
+|--------|---------|-------|
+| `scheduler/` | Cron/at/interval schedules stored in SQLite | Phase 2 |
+| `router/` | Two-layer task routing: capability scoring + safety invariants | Phase 2 |
+| `memory/` | Three-layer: working (RAM), episodic (SQLite), semantic (FTS5) | Phases 2, 4 |
+| `mcp/` | MCP client/server/controller/registry/proxy | Phase 3 |
+| `infra/` | Thin wrappers: Docker SDK, asyncssh, Vagrant CLI, Ansible runner, tmux | Phase 3 |
+| `a2a/` | A2A Gateway for external agent interop | Phase 6 |
+| `control/` | Safety (kill switch, FORBIDDEN list), budget tracking, health monitoring, TUI dashboard | Phase 5 |
 
 **Data flow:** Trigger → Event → EventBus → Router (score + invariants) → NATS → Worker (Agent Runtime: LiteLLM + MCP tools) → Result → State.
 
@@ -70,21 +75,22 @@ pyrefly check                        # Type check (run after every change)
 
 ## Implementation Status
 
-The project is in pre-implementation phase. Architecture design and Phase 0+1 plan exist in `docs/plans/`. No source code yet.
+Phase 0 (Foundation) and Phase 1 (MVP) are complete. All 12 tasks are DONE — see `spec/tasks.md` for details.
 
-**Current phase:** Phase 0 (Foundation) — project scaffold, core models, config, SQLite state, EventBus, bootstrap, NATS skeleton.
+**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration.
 
-**Next:** Phase 1 (MVP) — WorkflowSpec, DAG engine, LLM step execution, Agent Runtime, local worker, terminal trigger, MCP client.
+**Current phase:** Post-Phase 1. The system accepts terminal input, executes simple and DAG workflows via LLM, and persists task state in SQLite.
+
+**Next:** Phase 2 — NATS real messaging, scheduler, router, additional triggers (Telegram, webhook), episodic memory.
 
 ## Key Conventions
 
 - All models use pydantic `BaseModel`
 - Async everywhere (asyncio, aiosqlite, nats-py async client)
-- Workers never access SQLite directly — all state through Core via NATS
-- MCP tools are dynamic (not hardcoded) — agents discover tools at runtime
-- FSM states persist to SQLite at every transition (survives Core restart)
-- Self-modification has 3 levels: config (auto), workflow templates (auto+review), code (requires operator approval)
-- FORBIDDEN list is hardcoded: cannot modify `core/bootstrap.py`, `mcp/vault.py`, or self-modification guardrails
+- EventBus handles all intra-process communication (NATS stubbed for Phase 2)
+- LLM calls abstracted behind `Callable[[str], Awaitable[str]]` interface (mock in tests, real LiteLLM in future)
+- Agent Runtime uses tool definitions (`ToolDef`) — tools are dynamic, not hardcoded
+- Task state persists to SQLite at every transition (survives process restart)
 
 ## Reference Docs
 

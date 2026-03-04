@@ -165,26 +165,26 @@ Implement async EventBus with fnmatch wildcard pattern matching, multiple subscr
 Implement async SQLite wrapper with aiosqlite for task persistence, config overrides, and schedule storage. Schema: tasks (with status index), schedules, config_overrides tables.
 
 **Checklist:**
-- [ ] Implement SQLite schema with 3 tables and index
-- [ ] Implement `initialize()` — open DB, create tables, enable WAL
-- [ ] Implement `close()` — close connection
-- [ ] Implement `save_task()` — upsert by id
-- [ ] Implement `get_task()` — by id, returns None if not found
-- [ ] Implement `list_tasks(status?)` — filtered query
-- [ ] Implement `_row_to_task()` — SQLite row to pydantic Task
-- [ ] Implement `set_config()` / `get_config()` — key-value config overrides
-- [ ] Implement `list_tables()` — for testing
-- [ ] Write tests: table creation, CRUD, status filter, config overrides
+- [x] Implement SQLite schema with 3 tables and index
+- [x] Implement `initialize()` — open DB, create tables, enable WAL
+- [x] Implement `close()` — close connection
+- [x] Implement `save_task()` — upsert by id
+- [x] Implement `get_task()` — by id, returns None if not found
+- [x] Implement `list_tasks(status?)` — filtered query
+- [x] Implement `_row_to_task()` — SQLite row to pydantic Task
+- [x] Implement `set_config()` / `get_config()` — key-value config overrides
+- [x] Implement `list_tables()` — for testing
+- [x] Write tests: table creation, CRUD, status filter, config overrides
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: tables created on initialize
-- [ ] Unit tests: save and get task roundtrip
-- [ ] Unit tests: update task status
-- [ ] Unit tests: list tasks by status
-- [ ] Unit tests: get nonexistent returns None
-- [ ] Unit tests: config override set/get/update
-- [ ] Unit tests: config get with default
-- [ ] Coverage >= 80%
+- [x] Unit tests: tables created on initialize
+- [x] Unit tests: save and get task roundtrip
+- [x] Unit tests: update task status
+- [x] Unit tests: list tasks by status
+- [x] Unit tests: get nonexistent returns None
+- [x] Unit tests: config override set/get/update
+- [x] Unit tests: config get with default
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-004]
 **Depends on:** [TASK-002]
@@ -256,23 +256,23 @@ Implement the universal WorkflowSpec pydantic model with support for simple, DAG
 Implement topological sort with cycle detection and parallel DAG execution using asyncio.TaskGroup. Steps wait for their dependencies via asyncio.Event signaling.
 
 **Checklist:**
-- [ ] Implement `topo_sort()` with DFS-based cycle detection
-- [ ] Implement `StepResult` model
-- [ ] Implement `DAGExecutor.__init__` with steps and step_runner
-- [ ] Implement `DAGExecutor.execute()` with TaskGroup-based parallel execution
-- [ ] Handle dependency failure propagation (skip dependents)
-- [ ] Handle step execution errors
-- [ ] Write tests: linear chain, parallel branches, cycle detection, failure propagation
+- [x] Implement `topo_sort()` with DFS-based cycle detection
+- [x] Implement `StepResult` model
+- [x] Implement `DAGExecutor.__init__` with steps and step_runner
+- [x] Implement `DAGExecutor.execute()` with TaskGroup-based parallel execution
+- [x] Handle dependency failure propagation (skip dependents)
+- [x] Handle step execution errors
+- [x] Write tests: linear chain, parallel branches, cycle detection, failure propagation
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: topo_sort linear chain
-- [ ] Unit tests: topo_sort parallel steps
-- [ ] Unit tests: cycle detection raises ValueError
-- [ ] Unit tests: single step execution
-- [ ] Unit tests: execute linear DAG with mock runner
-- [ ] Unit tests: execute parallel DAG with mock runner
-- [ ] Unit tests: step failure stops dependents
-- [ ] Coverage >= 80%
+- [x] Unit tests: topo_sort linear chain
+- [x] Unit tests: topo_sort parallel steps
+- [x] Unit tests: cycle detection raises ValueError
+- [x] Unit tests: single step execution
+- [x] Unit tests: execute linear DAG with mock runner
+- [x] Unit tests: execute parallel DAG with mock runner
+- [x] Unit tests: step failure stops dependents
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-007]
 **Depends on:** [TASK-007]
@@ -362,24 +362,24 @@ Implement the terminal trigger that reads lines from stdin and publishes them as
 ---
 
 ### TASK-012: Integration — Wire Everything Together
-🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
+🔴 P0 | ✅ DONE | Est: 3h
 
 **Description:**
 Wire terminal trigger events to workflow engine execution in the Application bootstrap. Add `_handle_terminal` that creates a simple WorkflowSpec from terminal text, executes it, and publishes the result event. Write end-to-end integration test.
 
 **Checklist:**
-- [ ] Update `Application.set_llm_call()` to create WorkflowEngine
-- [ ] Implement `_handle_terminal()` — create WorkflowSpec, execute, publish result event
-- [ ] Subscribe `_handle_terminal` to "trigger.terminal" in `start()`
-- [ ] Write integration test: terminal event -> workflow -> task.completed event
-- [ ] Run all tests: `uv run pytest tests/ -v`
-- [ ] Run lint: `uv run ruff check src/ tests/`
-- [ ] Run format: `uv run ruff format --check src/ tests/`
+- [x] Update `Application.set_llm_call()` to create WorkflowEngine
+- [x] Implement `_handle_terminal()` — create WorkflowSpec, execute, publish result event
+- [x] Subscribe `_handle_terminal` to "trigger.terminal" in `start()`
+- [x] Write integration test: terminal event -> workflow -> task.completed event
+- [x] Run all tests: `uv run pytest tests/ -v`
+- [x] Run lint: `uv run ruff check src/ tests/`
+- [x] Run format: `uv run ruff format --check src/ tests/`
 
 **Tests (Definition of Done):**
-- [ ] Integration test: terminal command executes simple workflow and emits result
-- [ ] All existing unit tests still pass
-- [ ] Coverage >= 80%
+- [x] Integration test: terminal command executes simple workflow and emits result
+- [x] All existing unit tests still pass
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-011]
 **Depends on:** [TASK-006], [TASK-009], [TASK-010], [TASK-011]

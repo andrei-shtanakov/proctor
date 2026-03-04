@@ -436,20 +436,20 @@ THEN tasks are persisted in SQLite and their status transitions are tracked
 ## 5. Acceptance Criteria
 
 ### Milestone 1: Foundation (Phase 0)
-- [ ] REQ-001 — Core models (Event, Task, Envelope) with full validation
-- [ ] REQ-002 — Config loading from YAML with defaults
-- [ ] REQ-003 — EventBus with wildcard subscriptions
-- [ ] REQ-004 — SQLite StateManager with task CRUD and config overrides
-- [ ] REQ-005 — Application bootstrap with start/stop lifecycle
-- [ ] NFR-000 — Test infrastructure with pytest + anyio
-- [ ] NFR-003 — Code quality gates (ruff, pyrefly)
+- [x] REQ-001 — Core models (Event, Task, Envelope) with full validation
+- [x] REQ-002 — Config loading from YAML with defaults
+- [x] REQ-003 — EventBus with wildcard subscriptions
+- [x] REQ-004 — SQLite StateManager with task CRUD and config overrides
+- [x] REQ-005 — Application bootstrap with start/stop lifecycle
+- [x] NFR-000 — Test infrastructure with pytest + anyio
+- [x] NFR-003 — Code quality gates (ruff, pyrefly)
 
 ### Milestone 2: MVP (Phase 1)
-- [ ] REQ-006 — WorkflowSpec model with simple and DAG modes
-- [ ] REQ-007 — DAG execution with topo-sort and parallel steps
-- [ ] REQ-008 — Workflow engine dispatcher
-- [ ] REQ-009 — Agent runtime with LLM loop and tool calling
-- [ ] REQ-010 — Terminal trigger for operator input
-- [ ] REQ-011 — End-to-end integration: terminal -> workflow -> result
-- [ ] NFR-001 — Performance targets met
-- [ ] NFR-002 — Reliability requirements met
+- [x] REQ-006 — WorkflowSpec model with simple and DAG modes
+- [x] REQ-007 — DAG execution with topo-sort and parallel steps
+- [x] REQ-008 — Workflow engine dispatcher
+- [x] REQ-009 — Agent runtime with LLM loop and tool calling
+- [x] REQ-010 — Terminal trigger for operator input
+- [x] REQ-011 — End-to-end integration: terminal -> workflow -> result
+- [x] NFR-001 — Performance targets met
+- [x] NFR-002 — Reliability requirements met
