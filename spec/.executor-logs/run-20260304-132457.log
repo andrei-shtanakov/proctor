@@ -125,3 +125,5 @@
 2026-03-04T09:48:43.544571Z [info     ] 🔍 Starting code review         module=runner task_id=TASK-011
 2026-03-04T09:48:43.606948Z [info     ] 🔍 Review using: claude         module=runner task_id=TASK-011
 2026-03-04T09:50:57.762022Z [info     ] ✅ Code review passed           module=runner task_id=TASK-011
+2026-03-04T09:50:57.863092Z [info     ] Committed changes              module=hooks
+2026-03-04T09:50:57.865563Z [info     ] Execution summary (parallel)   completed=8 failed=0 module=executor remaining=3 total_cost_usd=None

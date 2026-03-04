@@ -1,0 +1,124 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-009 — Workflow Engine (Dispatcher)
+
+**Priority:** P0
+**Estimate:** 3h
+**Milestone:** Milestone 2: MVP (Phase 1)
+
+## Checklist (implement ALL items):
+
+- [ ] Implement `WorkflowResult` model
+- [ ] Implement `WorkflowEngine.__init__` with LLM call function
+- [ ] Implement `execute()` with match/case dispatch
+- [ ] Implement `_execute_simple()` — LLM call with prompt
+- [ ] Implement `_execute_dag()` — build step_runner, execute via DAGExecutor
+- [ ] Return error for unsupported modes (FSM, orchestrator)
+- [ ] Write tests: simple workflow, DAG workflow, unsupported mode
+- [ ] [TEST] Unit tests: simple workflow execution
+- [ ] [TEST] Unit tests: DAG workflow execution
+- [ ] [TEST] Unit tests: unsupported mode returns error
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-008: Workflow Engine Dispatcher
+**As a** system developer
+**I want** a dispatcher that routes WorkflowSpecs to the correct executor
+**So that** the system handles multiple workflow modes transparently
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a WorkflowSpec with mode=SIMPLE and a prompt
+WHEN the WorkflowEngine executes it
+THEN the LLM is called with the prompt and the result is returned
+
+GIVEN a WorkflowSpec with mode=DAG and steps
+WHEN the WorkflowEngine executes it
+THEN all steps execute via DAGExecutor and the last step's output is the final result
+
+GIVEN a WorkflowSpec with mode=FSM (not yet implemented)
+WHEN the WorkflowEngine executes it
+THEN a WorkflowResult with an error "not supported" is returned
+```
+
+**Priority:** P0
+**Traces to:** [TASK-009], [DESIGN-008]
+
+---
+
+### 2.3 Agent Runtime
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Files created:
+- `src/proctor/workflow/engine.py` — `WorkflowResult` model and `WorkflowEngine` dispatcher
+- `tests/test_workflow/test_engine.py` — 29 tests covering all checklist items
+
+### Files modified:
+- `src/proctor/workflow/__init__.py` — added `WorkflowEngine` and `WorkflowResult` exports
+
+### Implementation details:
+- **`WorkflowResult`** — pydantic model with `workflow_id`, `output`, `step_results`, `error`
+- **`WorkflowEngine.__init__`** — takes `LLMCall` (async str→str callable)
+- **`execute()`** — match/case dispatch on `WorkflowMode`
+- **`_execute_simple()`** — validates prompt exists, calls LLM, returns result
+- **`_execute_dag()`** — builds step_runner that injects dependency context, runs via `DAGExecutor`, returns last step's output as final result
+- **Unsupported modes** (FSM, orchestrator) return error "not supported yet"
+
+### Test coverage:
+- `TestWorkflowResultModel` — 4 tests (success, error, step_results, serialization)
+- `TestSimpleWorkflow` — 4 tests (success, no prompt, empty prompt, LLM failure)
+- `TestDAGWorkflow` — 6 tests (linear chain, last step output, dep context passing, no steps, LLM failure, cycle)
+- `TestUnsupportedModes` — 2 tests (FSM, orchestrator)
+- `TestImports` — 1 test
+
+All 29 tests pass. No lint errors.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

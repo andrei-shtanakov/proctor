@@ -159,7 +159,7 @@ Implement async EventBus with fnmatch wildcard pattern matching, multiple subscr
 ---
 
 ### TASK-005: StateManager (SQLite Wrapper)
-🔴 P0 | 🔄 IN_PROGRESS | Est: 4h
+🔴 P0 | ✅ DONE | Est: 4h
 
 **Description:**
 Implement async SQLite wrapper with aiosqlite for task persistence, config overrides, and schedule storage. Schema: tasks (with status index), schedules, config_overrides tables.
@@ -193,7 +193,7 @@ Implement async SQLite wrapper with aiosqlite for task persistence, config overr
 ---
 
 ### TASK-006: Bootstrap (Application Startup/Shutdown)
-🔴 P0 | ⬜ TODO | Est: 3h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
 
 **Description:**
 Implement Application class that owns all core components (EventBus, StateManager), manages lifecycle, and wires event handlers. Update `__main__.py` with signal handling.
@@ -250,7 +250,7 @@ Implement the universal WorkflowSpec pydantic model with support for simple, DAG
 ---
 
 ### TASK-008: DAG Executor
-🔴 P0 | 🔄 IN_PROGRESS | Est: 4h
+🔴 P0 | ✅ DONE | Est: 4h
 
 **Description:**
 Implement topological sort with cycle detection and parallel DAG execution using asyncio.TaskGroup. Steps wait for their dependencies via asyncio.Event signaling.
@@ -281,7 +281,7 @@ Implement topological sort with cycle detection and parallel DAG execution using
 ---
 
 ### TASK-009: Workflow Engine (Dispatcher)
-🔴 P0 | ⬜ TODO | Est: 3h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
 
 **Description:**
 Implement WorkflowEngine that dispatches WorkflowSpec to the correct executor based on mode. Supports simple (direct LLM call) and DAG (via DAGExecutor) modes.
@@ -337,23 +337,23 @@ Implement the Agent Runtime: an LLM agent loop that alternates between calling t
 ---
 
 ### TASK-011: Terminal Trigger
-🟠 P1 | 🔄 IN_PROGRESS | Est: 2h
+🟠 P1 | ✅ DONE | Est: 2h
 
 **Description:**
 Implement the terminal trigger that reads lines from stdin and publishes them as events. Includes the Trigger ABC and TerminalTrigger implementation.
 
 **Checklist:**
-- [ ] Create `src/proctor/triggers/__init__.py`
-- [ ] Implement `Trigger` ABC with `start(bus)` and `stop()` methods
-- [ ] Implement `TerminalTrigger` with stdin reading via asyncio.StreamReader
-- [ ] Implement `_process_line()` — empty lines ignored, quit commands, event publishing
-- [ ] Write tests: process line publishes event, empty lines ignored, quit command
+- [x] Create `src/proctor/triggers/__init__.py`
+- [x] Implement `Trigger` ABC with `start(bus)` and `stop()` methods
+- [x] Implement `TerminalTrigger` with stdin reading via asyncio.StreamReader
+- [x] Implement `_process_line()` — empty lines ignored, quit commands, event publishing
+- [x] Write tests: process line publishes event, empty lines ignored, quit command
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: non-empty line publishes trigger.terminal event
-- [ ] Unit tests: empty and whitespace lines ignored
-- [ ] Unit tests: /quit returns "quit" signal
-- [ ] Coverage >= 80%
+- [x] Unit tests: non-empty line publishes trigger.terminal event
+- [x] Unit tests: empty and whitespace lines ignored
+- [x] Unit tests: /quit returns "quit" signal
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-010]
 **Depends on:** [TASK-004]

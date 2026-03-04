@@ -1,5 +1,6 @@
 """Core module — models, config, bus, state, bootstrap."""
 
+from proctor.core.bootstrap import Application, LLMCall
 from proctor.core.bus import EventBus, Handler
 from proctor.core.config import (
     LLMConfig,
@@ -12,10 +13,12 @@ from proctor.core.models import Envelope, Event, Task, TaskStatus
 from proctor.core.state import StateManager
 
 __all__ = [
+    "Application",
     "Envelope",
     "Event",
     "EventBus",
     "Handler",
+    "LLMCall",
     "LLMConfig",
     "NATSConfig",
     "ProctorConfig",

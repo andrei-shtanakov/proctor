@@ -1,0 +1,90 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-006 — Bootstrap (Application Startup/Shutdown)
+
+**Priority:** P0
+**Estimate:** 3h
+**Milestone:** Milestone 1: Foundation (Phase 0)
+
+## Checklist (implement ALL items):
+
+- [ ] Implement `Application.__init__` — create bus, state
+- [ ] Implement `Application.start()` — init state, subscribe handlers, set running
+- [ ] Implement `Application.stop()` — close state, unset running
+- [ ] Implement `Application.set_llm_call()` — inject LLM function
+- [ ] Subscribe `_handle_terminal` to `trigger.terminal` on start
+- [ ] Update `__main__.py` with signal handling (SIGINT, SIGTERM)
+- [ ] Write tests: start/stop lifecycle, db created, event bus works
+- [ ] [TEST] Unit tests: app starts and stops cleanly
+- [ ] [TEST] Unit tests: state.db file created
+- [ ] [TEST] Unit tests: event bus functional after start
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-005: Application Lifecycle
+**As an** operator
+**I want** a clean startup/shutdown lifecycle
+**So that** all components initialize and tear down gracefully
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a ProctorConfig
+WHEN I create an Application and call start()
+THEN the data directory is created, SQLite is initialized, EventBus is active, and is_running is True
+
+GIVEN a running Application
+WHEN I call stop()
+THEN SQLite is closed, is_running is False, and no resources leak
+
+GIVEN the __main__.py entrypoint
+WHEN I run python -m proctor
+THEN the Application starts and responds to SIGINT/SIGTERM for graceful shutdown
+```
+
+**Priority:** P0
+**Traces to:** [TASK-006], [DESIGN-005]
+
+---
+
+### 2.2 Workflow Engine
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+

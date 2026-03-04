@@ -40,15 +40,22 @@ def test_main_is_coroutine() -> None:
 
 
 def test_entry_point_runs() -> None:
-    """python -m proctor runs without crashing."""
-    result = subprocess.run(
+    """python -m proctor starts and responds to SIGTERM."""
+    import signal
+    import time
+
+    proc = subprocess.Popen(
         [sys.executable, "-m", "proctor"],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=10,
     )
-    assert result.returncode == 0
-    assert f"Proctor v{proctor.__version__}" in result.stdout
+    # Wait for startup
+    time.sleep(2)
+    assert proc.poll() is None, "Process exited prematurely"
+    proc.send_signal(signal.SIGTERM)
+    stdout, stderr = proc.communicate(timeout=5)
+    assert f"Proctor v{proctor.__version__}" in stdout
 
 
 @pytest.mark.asyncio
