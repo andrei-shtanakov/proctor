@@ -88,3 +88,36 @@ When complete, respond with:
 Begin implementation:
 
 
+=== OUTPUT ===
+## Summary
+
+### Files Created
+- **`src/proctor/core/bootstrap.py`** — `Application` class with `__init__`, `start()`, `stop()`, `set_llm_call()`, and `_handle_terminal()` event handler
+- **`tests/test_core/test_bootstrap.py`** — 16 tests covering lifecycle, state initialization, event bus wiring, terminal handler, error paths, and public exports
+
+### Files Modified
+- **`src/proctor/__main__.py`** — Full rewrite with `argparse` config loading, `Application` bootstrap, and `anyio.open_signal_receiver` for SIGINT/SIGTERM graceful shutdown
+- **`src/proctor/core/__init__.py`** — Added `Application` and `LLMCall` exports
+- **`tests/test_scaffold.py`** — Updated `test_entry_point_runs` to send SIGTERM since the app now runs until signaled
+
+### Checklist Coverage
+- `Application.__init__` — creates bus, state, sets `is_running=False`
+- `Application.start()` — creates data_dir, initializes state, subscribes `_handle_terminal` to `trigger.terminal`, sets `is_running=True`
+- `Application.stop()` — closes state, sets `is_running=False`
+- `Application.set_llm_call()` — injects LLM callable
+- `_handle_terminal` subscribed to `trigger.terminal` on start
+- `__main__.py` with SIGINT/SIGTERM signal handling via `anyio.open_signal_receiver`
+- 16 tests: lifecycle, db created, event bus functional, LLM call/error paths, exports
+
+### Results
+- **272/272 tests pass**
+- **Lint: clean** (`ruff check .`)
+- **Format: clean** (`ruff format --check .`)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

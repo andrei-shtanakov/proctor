@@ -281,25 +281,25 @@ Implement topological sort with cycle detection and parallel DAG execution using
 ---
 
 ### TASK-009: Workflow Engine (Dispatcher)
-🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
+🔴 P0 | ✅ DONE | Est: 3h
 
 **Description:**
 Implement WorkflowEngine that dispatches WorkflowSpec to the correct executor based on mode. Supports simple (direct LLM call) and DAG (via DAGExecutor) modes.
 
 **Checklist:**
-- [ ] Implement `WorkflowResult` model
-- [ ] Implement `WorkflowEngine.__init__` with LLM call function
-- [ ] Implement `execute()` with match/case dispatch
-- [ ] Implement `_execute_simple()` — LLM call with prompt
-- [ ] Implement `_execute_dag()` — build step_runner, execute via DAGExecutor
-- [ ] Return error for unsupported modes (FSM, orchestrator)
-- [ ] Write tests: simple workflow, DAG workflow, unsupported mode
+- [x] Implement `WorkflowResult` model
+- [x] Implement `WorkflowEngine.__init__` with LLM call function
+- [x] Implement `execute()` with match/case dispatch
+- [x] Implement `_execute_simple()` — LLM call with prompt
+- [x] Implement `_execute_dag()` — build step_runner, execute via DAGExecutor
+- [x] Return error for unsupported modes (FSM, orchestrator)
+- [x] Write tests: simple workflow, DAG workflow, unsupported mode
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: simple workflow execution
-- [ ] Unit tests: DAG workflow execution
-- [ ] Unit tests: unsupported mode returns error
-- [ ] Coverage >= 80%
+- [x] Unit tests: simple workflow execution
+- [x] Unit tests: DAG workflow execution
+- [x] Unit tests: unsupported mode returns error
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-008]
 **Depends on:** [TASK-007], [TASK-008]

@@ -20,3 +20,13 @@
 2026-03-04T10:32:30.703407Z [info     ] 🔍 Starting code review         module=runner task_id=TASK-009
 2026-03-04T10:32:30.761708Z [info     ] 🔍 Review using: claude         module=runner task_id=TASK-009
 2026-03-04T10:33:24.081106Z [info     ] ✅ Code review passed           module=runner task_id=TASK-009
+2026-03-04T10:33:24.172846Z [info     ] Committed changes              module=hooks
+2026-03-04T10:33:24.174758Z [info     ] Post-done hook                 module=hooks success=True task_id=TASK-006
+2026-03-04T10:33:24.174817Z [info     ] Running tests                  module=hooks
+2026-03-04T10:33:27.202589Z [info     ] Tests passed                   module=hooks
+2026-03-04T10:33:27.202742Z [info     ] Running lint                   module=hooks
+2026-03-04T10:33:27.296612Z [info     ] Lint passed                    module=hooks
+2026-03-04T10:33:27.299548Z [info     ] Running code review            module=hooks
+2026-03-04T10:33:27.299808Z [info     ] 🔍 Starting code review         module=runner task_id=TASK-006
+2026-03-04T10:33:27.353241Z [info     ] 🔍 Review using: claude         module=runner task_id=TASK-006
+2026-03-04T10:34:33.152953Z [info     ] ✅ Code review passed           module=runner task_id=TASK-006
