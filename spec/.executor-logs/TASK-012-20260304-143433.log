@@ -1,0 +1,228 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-012 — Integration — Wire Everything Together
+
+**Priority:** P0
+**Estimate:** 3h
+**Milestone:** Milestone 2: MVP (Phase 1)
+
+## Checklist (implement ALL items):
+
+- [ ] Update `Application.set_llm_call()` to create WorkflowEngine
+- [ ] Implement `_handle_terminal()` — create WorkflowSpec, execute, publish result event
+- [ ] Subscribe `_handle_terminal` to "trigger.terminal" in `start()`
+- [ ] Write integration test: terminal event -> workflow -> task.completed event
+- [ ] Run all tests: `uv run pytest tests/ -v`
+- [ ] Run lint: `uv run ruff check src/ tests/`
+- [ ] Run format: `uv run ruff format --check src/ tests/`
+- [ ] [TEST] Integration test: terminal command executes simple workflow and emits result
+- [ ] [TEST] All existing unit tests still pass
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-011: End-to-End Terminal to Result
+**As an** operator
+**I want** to type a command and see the LLM result
+**So that** Proctor is usable as an MVP
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a started Application with a configured LLM function
+WHEN a "trigger.terminal" event is published with text "Tell me about RISC-V"
+THEN a simple workflow is created, the LLM is called, and a "task.completed" event with the result is published
+
+GIVEN a started Application
+WHEN terminal commands are processed
+THEN tasks are persisted in SQLite and their status transitions are tracked
+```
+
+**Priority:** P0
+**Traces to:** [TASK-012], [DESIGN-005], [DESIGN-008]
+
+---
+
+## 3. Non-Functional Requirements
+
+### NFR-000: Testing Requirements
+| Aspect | Requirement |
+|--------|------------|
+| Unit test coverage | >= 80% for all core, workflow, workers, triggers modules |
+| Integration tests | Terminal -> workflow -> result end-to-end test |
+| Test framework | pytest + anyio (NOT asyncio directly) |
+| CI requirement | All tests pass before merge |
+| Async testing | Use `@pytest.mark.asyncio` with anyio backend |
+
+**Definition of Done for any task:**
+- [ ] Unit tests written and passing
+- [ ] Coverage has not decreased
+- [ ] Integration test if interfaces are affected
+- [ ] `ruff check` and `ruff format` pass
+- [ ] `pyrefly check` passes
+
+**Traces to:** [TASK-100]
+
+---
+
+### NFR-001: Performance
+| Metric | Requirement |
+|--------|------------|
+| Startup time | < 2 seconds for Application.start() |
+| EventBus latency | < 10ms for event delivery to subscribers |
+| SQLite operations | < 50ms for task CRUD operations |
+| DAG execution overhead | < 100ms beyond step execution time |
+
+**Traces to:** [TASK-005], [TASK-008]
+
+---
+
+### NFR-002: Reliability
+| Aspect | Requirement |
+|--------|------------|
+| Handler isolation | EventBus handler errors do not crash other handlers |
+| State persistence | All task state survives process restart |
+| Graceful shutdown | Application.stop() cleanly releases all resources |
+| DAG error handling | Step failures propagate to dependents without crashing executor |
+
+**Traces to:** [TASK-004], [TASK-006], [TASK-008]
+
+---
+
+### NFR-003: Code Quality
+| Metric | Requirement |
+|--------|------------|
+| Type hints | All public APIs fully typed |
+| Linting | ruff check passes with E, F, I, UP rules |
+| Formatting | ruff format with line-length=88 |
+| Type checking | pyrefly check passes |
+| Models | All data models use pydantic BaseModel |
+
+**Traces to:** [TASK-001]
+
+---
+
+## 4. Constraints and Tech Stack
+
+### 4.1 Technology Constraints
+
+| Aspect | Decision | Rationale |
+|--------|---------|-----------|
+| Language | Python 3.12+ | LLM ecosystem is Python-first; self-modification easier in single language |
+| Architecture | Microkernel + distributed workers | Distribution is day-1 requirement; workers isolated from core |
+| Messaging | NATS (+ JetStream) | Single binary, zero-config, covers pub/sub + queue + request/reply |
+| Storage | SQLite (3 databases) | Simple, reliable, no external DB server needed |
+| LLM | Multi-provider via LiteLLM | Claude for complex, local models for simple, routing between them |
+| Tools | MCP (dynamic) | Standard protocol, no hardcoded tools, runtime provisioning |
+| Framework | None (pydantic + asyncio) | Minimal dependencies, full control over orchestration |
+| Build | hatchling with src layout | Standard Python packaging |
+| Package manager | uv | Fast, reliable Python package management |
+
+### 4.2 Integration Constraints
+
+- NATS connection stubbed in Phase 1 (no real NATS dependency yet)
+- LLM calls abstracted behind callable interface (real LiteLLM wiring deferred)
+- MCP client interface defined but not connected to real MCP servers
+
+### 4.3 Business Constraints
+
+- Single operator: no multi-tenant complexity
+- Budget: LLM API costs managed per-task (tracked from Phase 5)
+- Timeline: Phase 0 (1-2 weeks) + Phase 1 (2-3 weeks)
+
+---
+
+## 5. Acceptance Criteria
+
+### Milestone 1: Foundation (Phase 0)
+- [ ] REQ-001 — Core models (Event, Task, Envelope) with full validation
+- [ ] REQ-002 — Config loading from YAML with defaults
+- [ ] REQ-003 — EventBus with wildcard subscriptions
+- [ ] REQ-004 — SQLite StateManager with task CRUD and config overrides
+- [ ] REQ-005 — Application bootstrap with start/stop lifecycle
+- [ ] NFR-000 — Test infrastructure with pytest + anyio
+- [ ] NFR-003 — Code quality gates (ruff, pyrefly)
+
+### Milestone 2: MVP (Phase 1)
+- [ ] REQ-006 — WorkflowSpec model with simple and DAG modes
+- [ ] REQ-007 — DAG execution with topo-sort and parallel steps
+- [ ] REQ-008 — Workflow engine dispatcher
+- [ ] REQ-009 — Agent runtime with LLM loop and tool calling
+- [ ] REQ-010 — Terminal trigger for operator input
+- [ ] REQ-011 — End-to-end integration: terminal -> workflow -> result
+- [ ] NFR-001 — Performance targets met
+- [ ] NFR-002 — Reliability requirements met
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Changes Made
+
+**Modified:** `src/proctor/core/bootstrap.py`
+- `set_llm_call()` now creates a `WorkflowEngine` instance alongside storing the LLM callable
+- `_handle_terminal()` rewritten to:
+  1. Create a `Task` and persist it to SQLite (PENDING)
+  2. Transition to RUNNING and persist
+  3. Build a `WorkflowSpec(mode=SIMPLE)` from terminal text
+  4. Execute via `WorkflowEngine`
+  5. Transition to COMPLETED/FAILED and persist
+  6. Publish `task.completed` or `task.failed` event
+
+**Created:** `tests/test_integration.py` — 5 integration tests:
+- `test_terminal_creates_workflow_and_emits_result` — end-to-end terminal→workflow→result
+- `test_task_persisted_in_sqlite` — verifies Task saved with COMPLETED status
+- `test_task_status_transitions_tracked` — verifies PENDING→RUNNING→COMPLETED
+- `test_failed_workflow_persists_failed_task` — LLM error → FAILED task in DB
+- `test_workflow_engine_used_not_raw_llm` — confirms WorkflowEngine is wired
+
+### Results
+- **277 tests pass** (all existing + 5 new)
+- **Lint:** `ruff check` passes
+- **Format:** `ruff format` passes
+- **Coverage:** 92% overall (bootstrap.py at 89% — uncovered lines are the outer exception handler path)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

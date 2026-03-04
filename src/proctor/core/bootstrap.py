@@ -2,11 +2,14 @@
 
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from proctor.core.bus import EventBus
 from proctor.core.config import ProctorConfig
-from proctor.core.models import Event
+from proctor.core.models import Event, Task, TaskStatus
 from proctor.core.state import StateManager
+from proctor.workflow.engine import WorkflowEngine
+from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +29,12 @@ class Application:
         self.state = StateManager(config.data_dir / "state.db")
         self.is_running = False
         self._llm_call: LLMCall | None = None
+        self._engine: WorkflowEngine | None = None
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
-        """Inject LLM callable for workflow execution."""
+        """Inject LLM callable and create WorkflowEngine."""
         self._llm_call = llm_call
+        self._engine = WorkflowEngine(llm_call)
 
     async def start(self) -> None:
         """Initialize state, subscribe handlers, set running."""
@@ -48,14 +53,15 @@ class Application:
     async def _handle_terminal(self, event: Event) -> None:
         """Handle terminal trigger events.
 
-        Creates a simple workflow from terminal text and publishes
+        Creates a Task, builds a simple WorkflowSpec, executes via
+        WorkflowEngine, persists status transitions, and publishes
         the result as task.completed or task.failed.
         """
         text = event.payload.get("text", "")
         if not text:
             return
 
-        if self._llm_call is None:
+        if self._engine is None:
             await self.bus.publish(
                 Event(
                     type="task.failed",
@@ -65,17 +71,56 @@ class Application:
             )
             return
 
+        # Create and persist task
+        task = Task(
+            trigger_event=event.id,
+            spec={"prompt": text},
+        )
+        await self.state.save_task(task)
+
+        # Transition to RUNNING
+        task.status = TaskStatus.RUNNING
+        task.updated_at = datetime.now(UTC)
+        await self.state.save_task(task)
+
+        # Build workflow and execute
+        spec = WorkflowSpec(
+            workflow_id=task.id,
+            mode=WorkflowMode.SIMPLE,
+            prompt=text,
+        )
+
         try:
-            result = await self._llm_call(text)
+            result = await self._engine.execute(spec)
+
+            if result.error:
+                task.status = TaskStatus.FAILED
+                task.result = {"error": result.error}
+            else:
+                task.status = TaskStatus.COMPLETED
+                task.result = {"output": result.output}
+
+            task.updated_at = datetime.now(UTC)
+            await self.state.save_task(task)
+
             await self.bus.publish(
                 Event(
-                    type="task.completed",
+                    type=(
+                        "task.completed"
+                        if task.status == TaskStatus.COMPLETED
+                        else "task.failed"
+                    ),
                     source="application",
-                    payload={"output": result},
+                    payload=task.result,
                 )
             )
         except Exception as exc:
-            logger.exception("LLM call failed")
+            logger.exception("Workflow execution failed")
+            task.status = TaskStatus.FAILED
+            task.result = {"error": str(exc)}
+            task.updated_at = datetime.now(UTC)
+            await self.state.save_task(task)
+
             await self.bus.publish(
                 Event(
                     type="task.failed",

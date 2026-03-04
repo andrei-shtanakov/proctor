@@ -193,25 +193,25 @@ Implement async SQLite wrapper with aiosqlite for task persistence, config overr
 ---
 
 ### TASK-006: Bootstrap (Application Startup/Shutdown)
-🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
+🔴 P0 | ✅ DONE | Est: 3h
 
 **Description:**
 Implement Application class that owns all core components (EventBus, StateManager), manages lifecycle, and wires event handlers. Update `__main__.py` with signal handling.
 
 **Checklist:**
-- [ ] Implement `Application.__init__` — create bus, state
-- [ ] Implement `Application.start()` — init state, subscribe handlers, set running
-- [ ] Implement `Application.stop()` — close state, unset running
-- [ ] Implement `Application.set_llm_call()` — inject LLM function
-- [ ] Subscribe `_handle_terminal` to `trigger.terminal` on start
-- [ ] Update `__main__.py` with signal handling (SIGINT, SIGTERM)
-- [ ] Write tests: start/stop lifecycle, db created, event bus works
+- [x] Implement `Application.__init__` — create bus, state
+- [x] Implement `Application.start()` — init state, subscribe handlers, set running
+- [x] Implement `Application.stop()` — close state, unset running
+- [x] Implement `Application.set_llm_call()` — inject LLM function
+- [x] Subscribe `_handle_terminal` to `trigger.terminal` on start
+- [x] Update `__main__.py` with signal handling (SIGINT, SIGTERM)
+- [x] Write tests: start/stop lifecycle, db created, event bus works
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: app starts and stops cleanly
-- [ ] Unit tests: state.db file created
-- [ ] Unit tests: event bus functional after start
-- [ ] Coverage >= 80%
+- [x] Unit tests: app starts and stops cleanly
+- [x] Unit tests: state.db file created
+- [x] Unit tests: event bus functional after start
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-005]
 **Depends on:** [TASK-003], [TASK-004], [TASK-005]
@@ -362,7 +362,7 @@ Implement the terminal trigger that reads lines from stdin and publishes them as
 ---
 
 ### TASK-012: Integration — Wire Everything Together
-🔴 P0 | ⬜ TODO | Est: 3h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
 
 **Description:**
 Wire terminal trigger events to workflow engine execution in the Application bootstrap. Add `_handle_terminal` that creates a simple WorkflowSpec from terminal text, executes it, and publishes the result event. Write end-to-end integration test.

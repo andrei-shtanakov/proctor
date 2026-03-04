@@ -1,0 +1,972 @@
+=== REVIEW PROMPT ===
+# Code Review Request
+
+## Task Completed: TASK-012 — Integration — Wire Everything Together
+
+## Changed Files:
+pyproject.toml
+spec/.executor-logs/TASK-006-20260304-142914.log
+spec/.executor-logs/TASK-006-review-20260304-143327.log
+spec/.executor-logs/run-20260304-142914.log
+spec/.executor-progress.txt
+spec/.executor-state.db-wal
+spec/.task-history.log
+spec/tasks.md
+src/proctor/core/bootstrap.py
+uv.lock
+
+## Full Diff:
+diff --git a/pyproject.toml b/pyproject.toml
+index e1f5119..0f0b607 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -22,6 +22,7 @@ dev = [
+     "pyrefly>=0.55.0",
+     "pytest>=9.0.2",
+     "pytest-asyncio>=1.3.0",
++    "pytest-cov>=7.0.0",
+     "ruff>=0.15.4",
+     "spec-runner>=1.0.0",
+ ]
+diff --git a/spec/.executor-logs/TASK-006-20260304-142914.log b/spec/.executor-logs/TASK-006-20260304-142914.log
+index c03ffbd..caaa16c 100644
+--- a/spec/.executor-logs/TASK-006-20260304-142914.log
++++ b/spec/.executor-logs/TASK-006-20260304-142914.log
+@@ -88,3 +88,36 @@ When complete, respond with:
+ Begin implementation:
+ 
+ 
++=== OUTPUT ===
++## Summary
++
++### Files Created
++- **`src/proctor/core/bootstrap.py`** — `Application` class with `__init__`, `start()`, `stop()`, `set_llm_call()`, and `_handle_terminal()` event handler
++- **`tests/test_core/test_bootstrap.py`** — 16 tests covering lifecycle, state initialization, event bus wiring, terminal handler, error paths, and public exports
++
++### Files Modified
++- **`src/proctor/__main__.py`** — Full rewrite with `argparse` config loading, `Application` bootstrap, and `anyio.open_signal_receiver` for SIGINT/SIGTERM graceful shutdown
++- **`src/proctor/core/__init__.py`** — Added `Application` and `LLMCall` exports
++- **`tests/test_scaffold.py`** — Updated `test_entry_point_runs` to send SIGTERM since the app now runs until signaled
++
++### Checklist Coverage
++- `Application.__init__` — creates bus, state, sets `is_running=False`
++- `Application.start()` — creates data_dir, initializes state, subscribes `_handle_terminal` to `trigger.terminal`, sets `is_running=True`
++- `Application.stop()` — closes state, sets `is_running=False`
++- `Application.set_llm_call()` — injects LLM callable
++- `_handle_terminal` subscribed to `trigger.terminal` on start
++- `__main__.py` with SIGINT/SIGTERM signal handling via `anyio.open_signal_receiver`
++- 16 tests: lifecycle, db created, event bus functional, LLM call/error paths, exports
++
++### Results
++- **272/272 tests pass**
++- **Lint: clean** (`ruff check .`)
++- **Format: clean** (`ruff format --check .`)
++
++TASK_COMPLETE
++
++
++=== STDERR ===
++
++
++=== RETURN CODE: 0 ===
+diff --git a/spec/.executor-logs/TASK-006-review-20260304-143327.log b/spec/.executor-logs/TASK-006-review-20260304-143327.log
+new file mode 100644
+index 0000000..579cf43
+--- /dev/null
++++ b/spec/.executor-logs/TASK-006-review-20260304-143327.log
+@@ -0,0 +1,996 @@
++=== REVIEW PROMPT ===
++# Code Review Request
++
++## Task Completed: TASK-006 — Bootstrap (Application Startup/Shutdown)
++
++## Changed Files:
++spec/.executor-logs/TASK-006-20260304-142914.log
++spec/.executor-logs/TASK-009-20260304-142914.log
++spec/.executor-logs/TASK-009-review-20260304-143230.log
++spec/.executor-logs/run-20260304-132457.log
++spec/.executor-logs/run-20260304-142914.log
++spec/.executor-progress.txt
++spec/.executor-state.db-shm
++spec/.executor-state.db-wal
++spec/.task-history.log
++spec/tasks.md
++src/proctor/__main__.py
++src/proctor/core/__init__.py
++src/proctor/core/bootstrap.py
++src/proctor/workflow/__init__.py
++src/proctor/workflow/engine.py
++tests/test_core/test_bootstrap.py
++tests/test_scaffold.py
++tests/test_workflow/test_engine.py
++
++## Full Diff:
++diff --git a/spec/.executor-logs/TASK-006-20260304-142914.log b/spec/.executor-logs/TASK-006-20260304-142914.log
++new file mode 100644
++index 0000000..caaa16c
++--- /dev/null
+++++ b/spec/.executor-logs/TASK-006-20260304-142914.log
++@@ -0,0 +1,123 @@
+++=== PROMPT ===
+++# Task Execution Request
+++
+++## Task: TASK-006 — Bootstrap (Application Startup/Shutdown)
+++
+++**Priority:** P0
+++**Estimate:** 3h
+++**Milestone:** Milestone 1: Foundation (Phase 0)
+++
+++## Checklist (implement ALL items):
+++
+++- [ ] Implement `Application.__init__` — create bus, state
+++- [ ] Implement `Application.start()` — init state, subscribe handlers, set running
+++- [ ] Implement `Application.stop()` — close state, unset running
+++- [ ] Implement `Application.set_llm_call()` — inject LLM function
+++- [ ] Subscribe `_handle_terminal` to `trigger.terminal` on start
+++- [ ] Update `__main__.py` with signal handling (SIGINT, SIGTERM)
+++- [ ] Write tests: start/stop lifecycle, db created, event bus works
+++- [ ] [TEST] Unit tests: app starts and stops cleanly
+++- [ ] [TEST] Unit tests: state.db file created
+++- [ ] [TEST] Unit tests: event bus functional after start
+++- [ ] [TEST] Coverage >= 80%
+++
+++## Related Requirements:
+++
+++#### REQ-005: Application Lifecycle
+++**As an** operator
+++**I want** a clean startup/shutdown lifecycle
+++**So that** all components initialize and tear down gracefully
+++
+++**Acceptance Criteria:**
+++```gherkin
+++GIVEN a ProctorConfig
+++WHEN I create an Application and call start()
+++THEN the data directory is created, SQLite is initialized, EventBus is active, and is_running is True
+++
+++GIVEN a running Application
+++WHEN I call stop()
+++THEN SQLite is closed, is_running is False, and no resources leak
+++
+++GIVEN the __main__.py entrypoint
+++WHEN I run python -m proctor
+++THEN the Application starts and responds to SIGINT/SIGTERM for graceful shutdown
+++```
+++
+++**Priority:** P0
+++**Traces to:** [TASK-006], [DESIGN-005]
+++
+++---
+++
+++### 2.2 Workflow Engine
+++
+++## Related Design:
+++
+++See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++
+++## Instructions:
+++
+++1. Implement ALL checklist items for this task
+++2. Write unit tests for new code (coverage ≥80%)
+++3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++4. Use existing code style and conventions
+++5. Create/update files as needed
+++
+++## Dependencies:
+++
+++- To add a new dependency: `uv add <package>`
+++- To add a dev dependency: `uv add --dev <package>`
+++- NEVER edit pyproject.toml manually for dependencies
+++- After adding dependencies, they are available immediately
+++
+++## Success Criteria:
+++
+++- All checklist items implemented
+++- All tests pass (`uv run pytest`)
+++- No lint errors (`uv run ruff check .`)
+++- Code follows project conventions
+++
+++## Output:
+++
+++When complete, respond with:
+++- Summary of changes made
+++- Files created/modified
+++- Any issues or notes
+++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++
+++
+++Begin implementation:
+++
+++
+++=== OUTPUT ===
+++## Summary
+++
+++### Files Created
+++- **`src/proctor/core/bootstrap.py`** — `Application` class with `__init__`, `start()`, `stop()`, `set_llm_call()`, and `_handle_terminal()` event handler
+++- **`tests/test_core/test_bootstrap.py`** — 16 tests covering lifecycle, state initialization, event bus wiring, terminal handler, error paths, and public exports
+++
+++### Files Modified
+++- **`src/proctor/__main__.py`** — Full rewrite with `argparse` config loading, `Application` bootstrap, and `anyio.open_signal_receiver` for SIGINT/SIGTERM graceful shutdown
+++- **`src/proctor/core/__init__.py`** — Added `Application` and `LLMCall` exports
+++- **`tests/test_scaffold.py`** — Updated `test_entry_point_runs` to send SIGTERM since the app now runs until signaled
+++
+++### Checklist Coverage
+++- `Application.__init__` — creates bus, state, sets `is_running=False`
+++- `Application.start()` — creates data_dir, initializes state, subscribes `_handle_terminal` to `trigger.terminal`, sets `is_running=True`
+++- `Application.stop()` — closes state, sets `is_running=False`
+++- `Application.set_llm_call()` — injects LLM callable
+++- `_handle_terminal` subscribed to `trigger.terminal` on start
+++- `__main__.py` with SIGINT/SIGTERM signal handling via `anyio.open_signal_receiver`
+++- 16 tests: lifecycle, db created, event bus functional, LLM call/error paths, exports
+++
+++### Results
+++- **272/272 tests pass**
+++- **Lint: clean** (`ruff check .`)
+++- **Format: clean** (`ruff format --check .`)
+++
+++TASK_COMPLETE
+++
+++
+++=== STDERR ===
+++
+++
+++=== RETURN CODE: 0 ===
++diff --git a/spec/.executor-logs/TASK-009-20260304-142914.log b/spec/.executor-logs/TASK-009-20260304-142914.log
++new file mode 100644
++index 0000000..6ea1cfc
++--- /dev/null
+++++ b/spec/.executor-logs/TASK-009-20260304-142914.log
++@@ -0,0 +1,124 @@
+++=== PROMPT ===
+++# Task Execution Request
+++
+++## Task: TASK-009 — Workflow Engine (Dispatcher)
+++
+++**Priority:** P0
+++**Estimate:** 3h
+++**Milestone:** Milestone 2: MVP (Phase 1)
+++
+++## Checklist (implement ALL items):
+++
+++- [ ] Implement `WorkflowResult` model
+++- [ ] Implement `WorkflowEngine.__init__` with LLM call function
+++- [ ] Implement `execute()` with match/case dispatch
+++- [ ] Implement `_execute_simple()` — LLM call with prompt
+++- [ ] Implement `_execute_dag()` — build step_runner, execute via DAGExecutor
+++- [ ] Return error for unsupported modes (FSM, orchestrator)
+++- [ ] Write tests: simple workflow, DAG workflow, unsupported mode
+++- [ ] [TEST] Unit tests: simple workflow execution
+++- [ ] [TEST] Unit tests: DAG workflow execution
+++- [ ] [TEST] Unit tests: unsupported mode returns error
+++- [ ] [TEST] Coverage >= 80%
+++
+++## Related Requirements:
+++
+++#### REQ-008: Workflow Engine Dispatcher
+++**As a** system developer
+++**I want** a dispatcher that routes WorkflowSpecs to the correct executor
+++**So that** the system handles multiple workflow modes transparently
+++
+++**Acceptance Criteria:**
+++```gherkin
+++GIVEN a WorkflowSpec with mode=SIMPLE and a prompt
+++WHEN the WorkflowEngine executes it
+++THEN the LLM is called with the prompt and the result is returned
+++
+++GIVEN a WorkflowSpec with mode=DAG and steps
+++WHEN the WorkflowEngine executes it
+++THEN all steps execute via DAGExecutor and the last step's output is the final result
+++
+++GIVEN a WorkflowSpec with mode=FSM (not yet implemented)
+++WHEN the WorkflowEngine executes it
+++THEN a WorkflowResult with an error "not supported" is returned
+++```
+++
+++**Priority:** P0
+++**Traces to:** [TASK-009], [DESIGN-008]
+++
+++---
+++
+++### 2.3 Agent Runtime
+++
+++## Related Design:
+++
+++See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++
+++## Instructions:
+++
+++1. Implement ALL checklist items for this task
+++2. Write unit tests for new code (coverage ≥80%)
+++3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++4. Use existing code style and conventions
+++5. Create/update files as needed
+++
+++## Dependencies:
+++
+++- To add a new dependency: `uv add <package>`
+++- To add a dev dependency: `uv add --dev <package>`
+++- NEVER edit pyproject.toml manually for dependencies
+++- After adding dependencies, they are available immediately
+++
+++## Success Criteria:
+++
+++- All checklist items implemented
+++- All tests pass (`uv run pytest`)
+++- No lint errors (`uv run ruff check .`)
+++- Code follows project conventions
+++
+++## Output:
+++
+++When complete, respond with:
+++- Summary of changes made
+++- Files created/modified
+++- Any issues or notes
+++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++
+++
+++Begin implementation:
+++
+++
+++=== OUTPUT ===
+++## Summary
+++
+++### Files created:
+++- `src/proctor/workflow/engine.py` — `WorkflowResult` model and `WorkflowEngine` dispatcher
+++- `tests/test_workflow/test_engine.py` — 29 tests covering all checklist items
+++
+++### Files modified:
+++- `src/proctor/workflow/__init__.py` — added `WorkflowEngine` and `WorkflowResult` exports
+++
+++### Implementation details:
+++- **`WorkflowResult`** — pydantic model with `workflow_id`, `output`, `step_results`, `error`
+++- **`WorkflowEngine.__init__`** — takes `LLMCall` (async str→str callable)
+++- **`execute()`** — match/case dispatch on `WorkflowMode`
+++- **`_execute_simple()`** — validates prompt exists, calls LLM, returns result
+++- **`_execute_dag()`** — builds step_runner that injects dependency context, runs via `DAGExecutor`, returns last step's output as final result
+++- **Unsupported modes** (FSM, orchestrator) return error "not supported yet"
+++
+++### Test coverage:
+++- `TestWorkflowResultModel` — 4 tests (success, error, step_results, serialization)
+++- `TestSimpleWorkflow` — 4 tests (success, no prompt, empty prompt, LLM failure)
+++- `TestDAGWorkflow` — 6 tests (linear chain, last step output, dep context passing, no steps, LLM failure, cycle)
+++- `TestUnsupportedModes` — 2 tests (FSM, orchestrator)
+++- `TestImports` — 1 test
+++
+++All 29 tests pass. No lint errors.
+++
+++TASK_COMPLETE
+++
+++
+++=== STDERR ===
+++
+++
+++=== RETURN CODE: 0 ===
++diff --git a/spec/.executor-logs/TASK-009-review-20260304-143230.log b/spec/.executor-logs/TASK-009-review-20260304-143230.log
++new file mode 100644
++index 0000000..08f6245
++--- /dev/null
+++++ b/spec/.executor-logs/TASK-009-review-20260304-143230.log
++@@ -0,0 +1,1000 @@
+++=== REVIEW PROMPT ===
+++# Code Review Request
+++
+++## Task Completed: TASK-009 — Workflow Engine (Dispatcher)
+++
+++## Changed Files:
+++spec/.executor-logs/TASK-011-20260304-134547.log
+++spec/.executor-logs/TASK-011-review-20260304-134843.log
+++spec/.executor-logs/run-20260304-132457.log
+++spec/.executor-progress.txt
+++spec/.executor-state.db-shm
+++spec/.executor-state.db-wal
+++spec/.task-history.log
+++spec/tasks.md
+++src/proctor/__main__.py
+++src/proctor/core/__init__.py
+++src/proctor/triggers/__init__.py
+++src/proctor/triggers/base.py
+++src/proctor/triggers/terminal.py
+++src/proctor/workflow/__init__.py
+++tests/test_scaffold.py
+++tests/test_triggers/__init__.py
+++tests/test_triggers/test_terminal.py
+++
+++## Full Diff:
+++diff --git a/spec/.executor-logs/TASK-011-20260304-134547.log b/spec/.executor-logs/TASK-011-20260304-134547.log
+++new file mode 100644
+++index 0000000..862b026
+++--- /dev/null
++++++ b/spec/.executor-logs/TASK-011-20260304-134547.log
+++@@ -0,0 +1,122 @@
++++=== PROMPT ===
++++# Task Execution Request
++++
++++## Task: TASK-011 — Terminal Trigger
++++
++++**Priority:** P1
++++**Estimate:** 2h
++++**Milestone:** Milestone 2: MVP (Phase 1)
++++
++++## Checklist (implement ALL items):
++++
++++- [ ] Create `src/proctor/triggers/__init__.py`
++++- [ ] Implement `Trigger` ABC with `start(bus)` and `stop()` methods
++++- [ ] Implement `TerminalTrigger` with stdin reading via asyncio.StreamReader
++++- [ ] Implement `_process_line()` — empty lines ignored, quit commands, event publishing
++++- [ ] Write tests: process line publishes event, empty lines ignored, quit command
++++- [ ] [TEST] Unit tests: non-empty line publishes trigger.terminal event
++++- [ ] [TEST] Unit tests: empty and whitespace lines ignored
++++- [ ] [TEST] Unit tests: /quit returns "quit" signal
++++- [ ] [TEST] Coverage >= 80%
++++
++++## Related Requirements:
++++
++++#### REQ-010: Terminal Input Trigger
++++**As an** operator
++++**I want** to type commands in the terminal to create tasks
++++**So that** I can interact with Proctor directly from the command line
++++
++++**Acceptance Criteria:**
++++```gherkin
++++GIVEN a TerminalTrigger started with an EventBus
++++WHEN a non-empty line is received
++++THEN an Event with type="trigger.terminal" and the text in payload is published
++++
++++GIVEN a TerminalTrigger
++++WHEN an empty or whitespace-only line is received
++++THEN no event is published
++++
++++GIVEN a TerminalTrigger
++++WHEN "/quit" or "/exit" is received
++++THEN the trigger signals to stop
++++```
++++
++++**Priority:** P0
++++**Traces to:** [TASK-011], [DESIGN-010]
++++
++++---
++++
++++### 2.5 Integration
++++
++++## Related Design:
++++
++++See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
++++
++++## Instructions:
++++
++++1. Implement ALL checklist items for this task
++++2. Write unit tests for new code (coverage ≥80%)
++++3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
++++4. Use existing code style and conventions
++++5. Create/update files as needed
++++
++++## Dependencies:
++++
++++- To add a new dependency: `uv add <package>`
++++- To add a dev dependency: `uv add --dev <package>`
++++- NEVER edit pyproject.toml manually for dependencies
++++- After adding dependencies, they are available immediately
++++
++++## Success Criteria:
++++
++++- All checklist items implemented
++++- All tests pass (`uv run pytest`)
++++- No lint errors (`uv run ruff check .`)
++++- Code follows project conventions
++++
++++## Output:
++++
++++When complete, respond with:
++++- Summary of changes made
++++- Files created/modified
++++- Any issues or notes
++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
++++
++++
++++Begin implementation:
++++
++++
++++=== OUTPUT ===
++++## Summary
++++
++++### Files created:
++++- `src/proctor/triggers/__init__.py` — Package exports (`Trigger`, `TerminalTrigger`)
++++- `src/proctor/triggers/base.py` — `Trigger` ABC with `start(bus)` and `stop()` abstract methods
++++- `src/proctor/triggers/terminal.py` — `TerminalTrigger` implementation with stdin reading via `asyncio.StreamReader`
++++- `tests/test_triggers/__init__.py` — Test package init
++++- `tests/test_triggers/test_terminal.py` — 28 tests covering all acceptance criteria
++++
++++### Checklist completion:
++++- [x] `triggers/__init__.py` with package exports
++++- [x] `Trigger` ABC with `start(bus)` and `stop()` methods
++++- [x] `TerminalTrigger` with stdin reading via `asyncio.StreamReader`
++++- [x] `_process_line()` — empty lines ignored, quit commands, event publishing
++++- [x] Tests: non-empty line publishes `trigger.terminal` event
++++- [x] Tests: empty and whitespace lines ignored
++++- [x] Tests: `/quit`, `/exit`, `/q` return "quit" signal (case-insensitive)
++++- [x] 28 tests passing (all on both asyncio + trio backends)
++++- [x] No lint errors, no format issues
++++- [x] Pre-existing pyrefly errors only (not from this change)
++++
++++### Notes:
++++- Follows existing codebase patterns: pydantic models, anyio-compatible async, class-based test organization
++++- `QUIT_COMMANDS` is a `frozenset` constant for O(1) lookup
++++- Quit matching is case-insensitive and strips whitespace
++++
++++TASK_COMPLETE
++++
++++
++++=== STDERR ===
++++
++++
++++=== RETURN CODE: 0 ===
+++diff --git a/spec/.executor-logs/TASK-011-review-20260304-134843.log b/spec/.executor-logs/TASK-011-review-20260304-134843.log
+++new file mode 100644
+++index 0000000..edd90a1
+++--- /dev/null
++++++ b/spec/.executor-logs/TASK-011-review-20260304-134843.log
+++@@ -0,0 +1,988 @@
++++=== REVIEW PROMPT ===
++++# Code Review Request
++++
++++## Task Completed: TASK-011 — Terminal Trigger
++++
++++## Changed Files:
++++pyproject.toml
++++spec/.executor-logs/TASK-004-20260304-133613.log
++++spec/.executor-logs/TASK-004-review-20260304-134331.log
++++spec/.executor-logs/TASK-005-20260304-133613.log
++++spec/.executor-logs/TASK-008-20260304-133613.log
++++spec/.executor-logs/run-20260304-132457.log
++++spec/.executor-progress.txt
++++spec/.executor-state.db-wal
++++spec/.task-history.log
++++spec/tasks.md
++++src/proctor/core/__init__.py
++++src/proctor/core/bus.py
++++src/proctor/core/state.py
++++src/proctor/workflow/__init__.py
++++src/proctor/workflow/dag.py
++++tests/test_core/test_bus.py
++++tests/test_core/test_state.py
++++tests/test_workflow/test_dag.py
++++uv.lock
++++
++++## Full Diff:
++++diff --git a/pyproject.toml b/pyproject.toml
++++index 2a57cde..e1f5119 100644
++++--- a/pyproject.toml
+++++++ b/pyproject.toml
++++@@ -19,6 +19,7 @@ dependencies = [
++++ [dependency-groups]
++++ dev = [
++++     "anyio[trio]>=4.12.1",
+++++    "pyrefly>=0.55.0",
++++     "pytest>=9.0.2",
++++     "pytest-asyncio>=1.3.0",
++++     "ruff>=0.15.4",
++++@@ -47,3 +48,6 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
++++ 
++++ [tool.ruff.lint.isort]
++++ known-first-party = ["proctor"]
+++++
+++++[tool.uv.sources]
+++++spec-runner = { path = "../executor" }
++++diff --git a/spec/.executor-logs/TASK-004-20260304-133613.log b/spec/.executor-logs/TASK-004-20260304-133613.log
++++new file mode 100644
++++index 0000000..54d270d
++++--- /dev/null
+++++++ b/spec/.executor-logs/TASK-004-20260304-133613.log
++++@@ -0,0 +1,130 @@
+++++=== PROMPT ===
+++++# Task Execution Request
+++++
+++++## Task: TASK-004 — EventBus (Internal Async Pub/Sub)
+++++
+++++**Priority:** P0
+++++**Estimate:** 3h
+++++**Milestone:** Milestone 1: Foundation (Phase 0)
+++++
+++++## Checklist (implement ALL items):
+++++
+++++- [ ] Implement `_Subscription` with pattern, handler, UUID id
+++++- [ ] Implement `EventBus.subscribe(pattern, handler)` returning sub_id
+++++- [ ] Implement `EventBus.unsubscribe(sub_id)`
+++++- [ ] Implement `EventBus.publish(event)` with `asyncio.create_task` per handler
+++++- [ ] Implement `_safe_call` for exception isolation
+++++- [ ] Write tests: exact match, wildcard, multiple subscribers, unsubscribe, error isolation
+++++- [ ] [TEST] Unit tests: subscribe and publish exact topic
+++++- [ ] [TEST] Unit tests: wildcard pattern matching (trigger.*)
+++++- [ ] [TEST] Unit tests: multiple subscribers on same pattern
+++++- [ ] [TEST] Unit tests: unsubscribe stops delivery
+++++- [ ] [TEST] Unit tests: handler error doesn't crash bus
+++++- [ ] [TEST] Coverage >= 80%
+++++
+++++## Related Requirements:
+++++
+++++#### REQ-003: Internal Event Bus
+++++**As a** system developer
+++++**I want** an async pub/sub bus with wildcard pattern matching
+++++**So that** modules can communicate without tight coupling
+++++
+++++**Acceptance Criteria:**
+++++```gherkin
+++++GIVEN an EventBus instance
+++++WHEN I subscribe to "trigger.*" and publish an Event with type "trigger.telegram"
+++++THEN the subscriber handler is called with the event
+++++
+++++GIVEN multiple subscribers on the same pattern
+++++WHEN an event is published
+++++THEN all matching handlers are called
+++++
+++++GIVEN a handler that raises an exception
+++++WHEN an event is published to its pattern
+++++THEN other handlers still execute and the error is logged
+++++
+++++GIVEN a subscription ID
+++++WHEN I call unsubscribe with that ID
+++++THEN subsequent events no longer reach that handler
+++++```
+++++
+++++**Priority:** P0
+++++**Traces to:** [TASK-004], [DESIGN-003]
+++++
+++++---
+++++
+++++## Related Design:
+++++
+++++See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++++
+++++## Instructions:
+++++
+++++1. Implement ALL checklist items for this task
+++++2. Write unit tests for new code (coverage ≥80%)
+++++3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++++4. Use existing code style and conventions
+++++5. Create/update files as needed
+++++
+++++## Dependencies:
+++++
+++++- To add a new dependency: `uv add <package>`
+++++- To add a dev dependency: `uv add --dev <package>`
+++++- NEVER edit pyproject.toml manually for dependencies
+++++- After adding dependencies, they are available immediately
+++++
+++++## Success Criteria:
+++++
+++++- All checklist items implemented
+++++- All tests pass (`uv run pytest`)
+++++- No lint errors (`uv run ruff check .`)
+++++- Code follows project conventions
+++++
+++++## Output:
+++++
+++++When complete, respond with:
+++++- Summary of changes made
+++++- Files created/modified
+++++- Any issues or notes
+++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++++
+++++
+++++Begin implementation:
+++++
+++++
+++++=== OUTPUT ===
+++++## Summary
+++++
+++++### Files created:
+++++- **`src/proctor/core/bus.py`** — EventBus implementation with `_Subscription`, `EventBus.subscribe()`, `EventBus.unsubscribe()`, `EventBus.publish()`, and `_safe_call()` for error isolation
+++++- **`tests/test_core/test_bus.py`** — 32 tests covering all checklist items
+++++
+++++### Files modified:
+++++- **`src/proctor/core/__init__.py`** — Added `EventBus` and `Handler` exports
+++++
+++++### Implementation details:
+++++- Uses `fnmatch` for wildcard pattern matching (e.g. `"trigger.*"` matches `"trigger.terminal"`)
+++++- Uses `anyio.create_task_group` instead of `asyncio.create_task` for concurrent handler execution — works on both asyncio and trio backends
+++++- `_safe_call` catches and logs exceptions per handler, isolating failures
+++++- Each subscription gets a UUID for unsubscribe
+++++
+++++### Test coverage (32 tests):
+++++- `_Subscription`: auto-generated ID, fields
+++++- `subscribe`: returns ID, multiple subscriptions, same pattern different IDs
+++++- `unsubscribe`: removes subscription, unknown ID is noop, stops delivery
+++++- `publish`: exact match, wildcard match, no match, star-matches-all, multiple subscribers, no subscribers silent, payload preserved
+++++- Error isolation: bad handler doesn't crash bus, error is logged, multiple errors don't stop others
+++++- Public exports: from `proctor.core.bus` and `proctor.core`
+++++
+++++### Quality checks:
+++++- All 199 tests pass (full suite)
+++++- Lint clean (`ruff check`)
+++++- Format clean (`ruff format`)
+++++- Pyrefly: 0 new type errors (2 pre-existing in other files)
+++++
+++++TASK_COMPLETE
+++++
+++++
+++++=== STDERR ===
+++++
+++++
+++++=== RETURN CODE: 0 ===
++++diff --git a/spec/.executor-logs/TASK-004-review-20260304-134331.log b/spec/.executor-logs/TASK-004-review-20260304-134331.log
++++new file mode 100644
++++index 0000000..883ec4d
++++--- /dev/null
+++++++ b/spec/.executor-logs/TASK-004-review-20260304-134331.log
++++@@ -0,0 +1,1001 @@
+++++=== REVIEW PROMPT ===
+++++# Code Review Request
+++++
+++++## Task Completed: TASK-004 — EventBus (Internal Async Pub/Sub)
+++++
+++++## Changed Files:
+++++pyproject.toml
+++++spec/.executor-logs/TASK-010-20260304-133101.log
+++++spec/.executor-logs/TASK-010-review-20260304-133342.log
+++++spec/.executor-logs/run-20260304-132457.log
+++++spec/.executor-progress.txt
+++++spec/.executor-state.db-wal
+++++spec/.task-history.log
+++++spec/tasks.md
+++++src/proctor/core/__init__.py
+++++src/proctor/workflow/__init__.py
+++++tests/test_workers/test_runtime.py
+++++uv.lock
+++++
+++++## Full Diff:
+++++diff --git a/pyproject.toml b/pyproject.toml
+++++index 2a57cde..e1f5119 100644
+++++--- a/pyproject.toml
++++++++ b/pyproject.toml
+++++@@ -19,6 +19,7 @@ dependencies = [
+++++ [dependency-groups]
+++++ dev = [
+++++     "anyio[trio]>=4.12.1",
++++++    "pyrefly>=0.55.0",
+++++     "pytest>=9.0.2",
+++++     "pytest-asyncio>=1.3.0",
+++++     "ruff>=0.15.4",
+++++@@ -47,3 +48,6 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
+++++ 
+++++ [tool.ruff.lint.isort]
+++++ known-first-party = ["proctor"]
++++++
++++++[tool.uv.sources]
++++++spec-runner = { path = "../executor" }
+++++diff --git a/spec/.executor-logs/TASK-010-20260304-133101.log b/spec/.executor-logs/TASK-010-20260304-133101.log
+++++index c790740..9867b08 100644
+++++--- a/spec/.executor-logs/TASK-010-20260304-133101.log
++++++++ b/spec/.executor-logs/TASK-010-20260304-133101.log
+++++@@ -94,3 +94,46 @@ When complete, respond with:
+++++ Begin implementation:
+++++ 
+++++ 
++++++=== OUTPUT ===
++++++## Summary
++++++
++++++### Files Created
++++++- `src/proctor/workers/__init__.py` — Module exports for `AgentRuntime`, `ToolDef`, `ToolResult`, `AgentResult`, `LLMFn`
++++++- `src/proctor/workers/runtime.py` — Agent Runtime implementation
++++++- `tests/test_workers/__init__.py` — Test package init
++++++- `tests/test_workers/test_runtime.py` — 33 tests covering all acceptance criteria
++++++
++++++### Implementation Details
++++++
++++++**Models** (`runtime.py`):
++++++- `ToolDef` — tool name, description, async handler
++++++- `ToolResult` — tool name + output/error
++++++- `AgentResult` — final output, turn count, list of tool results
++++++- `LLMFn` — type alias for the LLM callable
++++++
++++++**AgentRuntime**:
++++++- `__init__` — accepts `llm_fn`, optional `tools` list, `max_turns` (default 10)
++++++- `run(instruction)` — main loop: builds messages, calls LLM, handles `text`/`tool_call` responses
++++++- `_call_tool()` — executes tool with error handling; returns error `ToolResult` for unknown tools or exceptions
++++++- `_build_tool_defs()` — serializes tool definitions for the LLM
++++++
++++++**Test Coverage** (33 tests, all on both asyncio + trio):
++++++- Simple text completion (no tools) — 3 tests
++++++- Tool call + response — 4 tests
++++++- Max turns limit — 3 tests
++++++- Unknown tool error — 2 tests
++++++- Tool exception handling — 1 test
++++++- Model unit tests — 6 tests
++++++- Public exports — 1 test
++++++
++++++### Verification
++++++- 108/108 tests pass (`uv run pytest`)
++++++- 0 lint errors (`uv run ruff check .`)
++++++
++++++TASK_COMPLETE
++++++
++++++
++++++=== STDERR ===
++++++
++++++
++++++=== RETURN CODE: 0 ===
+++++diff --git a/spec/.executor-logs/TASK-010-review-20260304-133342.log b/spec/.executor-logs/TASK-010-review-20260304-133342.log
+++++new file mode 100644
+++++index 0000000..9bd7457
+++++--- /dev/null
++++++++ b/spec/.executor-logs/TASK-010-review-20260304-133342.log
+++++@@ -0,0 +1,986 @@
++++++=== REVIEW PROMPT ===
++++++# Code Review Request
++++++
++++++## Task Completed: TASK-010 — Agent Runtime (LLM Loop)
++++++
++++++## Changed Files:
++++++spec/.executor-logs/TASK-003-20260304-132750.log
++++++spec/.executor-logs/TASK-003-review-20260304-133214.log
++++++spec/.executor-logs/TASK-010-20260304-133101.log
++++++spec/.executor-logs/run-20260304-132457.log
++++++spec/.executor-progress.txt
++++++spec/.executor-state.db-wal
++++++spec/.task-history.log
++++++spec/tasks.md
++++++src/proctor/workers/runtime.py
++++++tests/test_workers/__init__.py
++++++tests/test_workers/test_runtime.py
++++++tests/test_workflow/test_spec.py
++++++
++++++## Full Diff:
++++++diff --git a/spec/.executor-logs/TASK-003-20260304-132750.log b/spec/.executor-logs/TASK-003-20260304-132750.log
++++++index 116118d..7e52d18 100644
++++++--- a/spec/.executor-logs/TASK-003-20260304-132750.log
+++++++++ b/spec/.executor-logs/TASK-003-20260304-132750.log
++++++@@ -85,3 +85,29 @@ When complete, respond with:
++++++ Begin implementation:
++++++ 
++++++ 
+++++++=== OUTPUT ===
+++++++## Summary
+++++++
+++++++### Files created:
+++++++- `src/proctor/core/config.py` — Config models (`LLMConfig`, `NATSConfig`, `SchedulerConfig`, `ProctorConfig`) and `load_config()` function
+++++++- `config/proctor.yaml` — Example configuration file
+++++++- `tests/test_core/test_config.py` — 24 tests covering all checklist items
+++++++
+++++++### Files modified:
+++++++- `src/proctor/core/__init__.py` — Added exports for all config types and `load_config`
+++++++
+++++++### Checklist coverage:
+++++++- `LLMConfig`, `NATSConfig`
+... (diff truncated)
+
+## Diff Summary:
+pyproject.toml                                     |   1 +
+ spec/.executor-logs/TASK-006-20260304-142914.log   |  33 +
+ .../TASK-006-review-20260304-143327.log            | 996 +++++++++++++++++++++
+ spec/.executor-logs/run-20260304-142914.log        |  24 +
+ spec/.executor-progress.txt                        |   5 +
+ spec/.executor-state.db-wal                        | Bin 16512 -> 74192 bytes
+ spec/.task-history.log                             |   5 +
+ spec/tasks.md                                      |  50 +-
+ src/proctor/core/bootstrap.py                      |  61 +-
+ uv.lock                                            | 100 +++
+ 10 files changed, 1242 insertions(+), 33 deletions(-)
+
+## Task Checklist
+- Update `Application.set_llm_call()` to create WorkflowEngine
+- Implement `_handle_terminal()` — create WorkflowSpec, execute, publish result event
+- Subscribe `_handle_terminal` to "trigger.terminal" in `start()`
+- Write integration test: terminal event -> workflow -> task.completed event
+- Run all tests: `uv run pytest tests/ -v`
+- Run lint: `uv run ruff check src/ tests/`
+- Run format: `uv run ruff format --check src/ tests/`
+- [TEST] Integration test: terminal command executes simple workflow and emits result
+- [TEST] All existing unit tests still pass
+- [TEST] Coverage >= 80%
+
+## Test Results
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-9.0.2, pluggy-1.6.0 -- /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 277 items
+
+tests/test_core/test_bootstrap.py::TestInit::test_creates_bus_and_state PASSED [  0%]
+tests/test_core/test_bootstrap.py::TestInit::test_config_stored PASSED   [  0%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_start_sets_running PASSED [  1%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_stop_clears_running PASSED [  1%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_data_dir_created PASSED [  1%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_state_db_created PASSED [  2%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_state_tables_created PASSED [  2%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_double_stop_is_safe PASSED [  2%]
+tests/test_core/test_bootstrap.py::TestSetLLMCall::test_set_llm_call PASSED [  3%]
+tests/test_core/test_bootstrap.py::TestEventBusFunctional::test_bus_works_after_start PASSED [  3%]
+tests/test_core/test_bootstrap.py::TestEventBusFunctional::test_terminal_handler_subscribed PASSED [  3%]
+tests/test_core/test_bootstrap.py::TestHandleTerminal::test_no_llm_publishes_failed PASSED [  4%]
+tests/test_core/test_bootstrap.py::TestHandleTerminal::test_empty_text_ignored PASSED [  4%]
+tests/test_core/test_bootstrap.py::TestHandleTerminal::test_llm_error_publishes_failed PASSED [  5%]
+tests/test_core/test_bootstrap.py::TestPublicExports::test_import_application PASSED [  5%]
+tests/test_core/test_bootstrap.py::TestPublicExports::test_import_llm_call PASSED [  5%]
+tests/test_core/test_bus.py::TestSubscript
+
+## Lint Status
+clean
+
+## Review Instructions:
+
+Launch the following review agents in parallel using the Task tool:
+
+### 1. Quality Agent
+Review the code changes for:
+- Bugs and logic errors
+- Security vulnerabilities
+- Error handling gaps
+
+### 2. Implementation Agent
+Verify the implementation:
+- Code achieves the stated task goals
+- All checklist items are properly implemented
+- Edge cases are handled
+
+### 3. Testing Agent
+Review test coverage:
+- New code has adequate test coverage
+- Tests are meaningful and not trivial
+
+## Output:
+
+For each issue found, describe it briefly.
+If issues are found, fix them and respond with: "REVIEW_FIXED"
+If no issues found, respond with: "REVIEW_PASSED"
+
+
+=== OUTPUT ===
+All 277 tests pass. Here's my review:
+
+## Review Results
+
+### Quality
+- **No bugs or logic errors found.** The code is clean and straightforward.
+- **Error handling is solid:** Exception catch in `_handle_terminal` properly persists FAILED status and publishes error events. The "no LLM configured" early return is correct.
+- **No security concerns** for this internal component.
+
+### Implementation Completeness
+All checklist items are properly implemented:
+- `set_llm_call()` creates `WorkflowEngine` ✓
+- `_handle_terminal()` creates Task, WorkflowSpec, executes, publishes result ✓
+- Terminal handler subscribed in `start()` ✓
+- Task status transitions: PENDING → RUNNING → COMPLETED/FAILED ✓
+- Task persistence to SQLite ✓
+
+### Testing
+- **5 integration tests** cover the happy path, persistence, status transitions, error path, and engine wiring
+- **16 unit tests** in `test_bootstrap.py` cover lifecycle, events, and edge cases
+- All 277 tests pass with clean lint
+
+### Minor Observations (not blocking)
+- `_handle_terminal` does 3 `save_task` calls per event (PENDING, RUNNING, COMPLETED). Acceptable for correctness but could batch in the future if performance matters.
+- The `task.*` wildcard subscription in tests captures both `task.completed` and `task.failed` correctly via the existing EventBus fnmatch pattern.
+
+REVIEW_PASSED
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
