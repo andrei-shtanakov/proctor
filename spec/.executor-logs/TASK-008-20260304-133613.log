@@ -1,0 +1,135 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-008 — DAG Executor
+
+**Priority:** P0
+**Estimate:** 4h
+**Milestone:** Milestone 2: MVP (Phase 1)
+
+## Checklist (implement ALL items):
+
+- [ ] Implement `topo_sort()` with DFS-based cycle detection
+- [ ] Implement `StepResult` model
+- [ ] Implement `DAGExecutor.__init__` with steps and step_runner
+- [ ] Implement `DAGExecutor.execute()` with TaskGroup-based parallel execution
+- [ ] Handle dependency failure propagation (skip dependents)
+- [ ] Handle step execution errors
+- [ ] Write tests: linear chain, parallel branches, cycle detection, failure propagation
+- [ ] [TEST] Unit tests: topo_sort linear chain
+- [ ] [TEST] Unit tests: topo_sort parallel steps
+- [ ] [TEST] Unit tests: cycle detection raises ValueError
+- [ ] [TEST] Unit tests: single step execution
+- [ ] [TEST] Unit tests: execute linear DAG with mock runner
+- [ ] [TEST] Unit tests: execute parallel DAG with mock runner
+- [ ] [TEST] Unit tests: step failure stops dependents
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-007: DAG Execution
+**As a** system developer
+**I want** topological sort and parallel execution of DAG steps
+**So that** multi-step workflows execute in correct dependency order
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a list of Steps with linear dependencies (A -> B -> C)
+WHEN topo_sort is called
+THEN steps are returned in order A, B, C
+
+GIVEN a DAG with parallel branches (root -> left, root -> right -> join)
+WHEN DAGExecutor executes with a step runner
+THEN root runs first, left and right run in parallel, join runs last
+
+GIVEN a DAG with a cycle (A depends on B, B depends on A)
+WHEN topo_sort is called
+THEN a ValueError is raised mentioning "cycle"
+
+GIVEN a step that returns an error
+WHEN its dependents are reached
+THEN they are skipped with a "dependency failed" error
+```
+
+**Priority:** P0
+**Traces to:** [TASK-008], [DESIGN-007]
+
+---
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Files created:
+- **`src/proctor/workflow/dag.py`** — DAG executor module with:
+  - `StepResult` pydantic model (step_id, output, error)
+  - `StepRunner` type alias
+  - `topo_sort()` — DFS-based topological sort with cycle detection
+  - `DAGExecutor` — parallel step execution using anyio task groups and events
+
+- **`tests/test_workflow/test_dag.py`** — 29 tests covering:
+  - topo_sort: linear chain, reverse input, parallel branches, independent steps
+  - Cycle detection: simple cycle, self-cycle, three-node cycle
+  - DAGExecutor: single step, linear DAG, parallel branches (with timing verification), failure propagation, exception handling, parallel failure isolation, cycle rejection at execute time, results completeness, prior results passed to runner
+  - StepResult model: success, error, serialization
+  - Package imports
+
+### Files modified:
+- **`src/proctor/workflow/__init__.py`** — Added exports for `DAGExecutor`, `StepResult`, `StepRunner`, `topo_sort`
+
+### Key decisions:
+- Used **anyio** (not asyncio) for `Event` and `create_task_group` so tests pass on both asyncio and trio backends
+- Dependency failure propagation: when a step fails, all downstream dependents are skipped with a descriptive error message
+- Runner exceptions are caught and stored as `StepResult.error` (not re-raised)
+
+### Verification:
+- 29/29 DAG tests pass (both asyncio and trio backends)
+- 145/145 total tests pass (no regressions)
+- Lint clean (`ruff check` passes)
+- Format clean (`ruff format --check` passes)
+- pyrefly not available in environment (pre-existing)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

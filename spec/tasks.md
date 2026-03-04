@@ -131,7 +131,7 @@ Implement YAML config loading with nested pydantic models (LLMConfig, NATSConfig
 ---
 
 ### TASK-004: EventBus (Internal Async Pub/Sub)
-🔴 P0 | ⬜ TODO | Est: 3h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 3h
 
 **Description:**
 Implement async EventBus with fnmatch wildcard pattern matching, multiple subscriber support, error isolation, and unsubscribe capability.
@@ -159,7 +159,7 @@ Implement async EventBus with fnmatch wildcard pattern matching, multiple subscr
 ---
 
 ### TASK-005: StateManager (SQLite Wrapper)
-🔴 P0 | ⬜ TODO | Est: 4h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 4h
 
 **Description:**
 Implement async SQLite wrapper with aiosqlite for task persistence, config overrides, and schedule storage. Schema: tasks (with status index), schedules, config_overrides tables.
@@ -250,7 +250,7 @@ Implement the universal WorkflowSpec pydantic model with support for simple, DAG
 ---
 
 ### TASK-008: DAG Executor
-🔴 P0 | ⬜ TODO | Est: 4h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 4h
 
 **Description:**
 Implement topological sort with cycle detection and parallel DAG execution using asyncio.TaskGroup. Steps wait for their dependencies via asyncio.Event signaling.
@@ -308,27 +308,27 @@ Implement WorkflowEngine that dispatches WorkflowSpec to the correct executor ba
 ---
 
 ### TASK-010: Agent Runtime (LLM Loop)
-🔴 P0 | 🔄 IN_PROGRESS | Est: 4h
+🔴 P0 | ✅ DONE | Est: 4h
 
 **Description:**
 Implement the Agent Runtime: an LLM agent loop that alternates between calling the LLM and executing tool calls until a text response is returned or max_turns is reached.
 
 **Checklist:**
-- [ ] Create `src/proctor/workers/__init__.py`
-- [ ] Implement `ToolDef`, `ToolResult`, `AgentResult` models
-- [ ] Implement `AgentRuntime.__init__` with llm_fn, tools, max_turns
-- [ ] Implement `AgentRuntime.run()` — the main loop
-- [ ] Implement `_call_tool()` — execute tool with error handling
-- [ ] Handle unknown tool names gracefully
-- [ ] Handle max_turns limit
-- [ ] Write tests: no-tools completion, tool call + response, max turns, unknown tool
+- [x] Create `src/proctor/workers/__init__.py`
+- [x] Implement `ToolDef`, `ToolResult`, `AgentResult` models
+- [x] Implement `AgentRuntime.__init__` with llm_fn, tools, max_turns
+- [x] Implement `AgentRuntime.run()` — the main loop
+- [x] Implement `_call_tool()` — execute tool with error handling
+- [x] Handle unknown tool names gracefully
+- [x] Handle max_turns limit
+- [x] Write tests: no-tools completion, tool call + response, max turns, unknown tool
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: simple completion without tools
-- [ ] Unit tests: tool call and response
-- [ ] Unit tests: max turns limit
-- [ ] Unit tests: unknown tool returns error
-- [ ] Coverage >= 80%
+- [x] Unit tests: simple completion without tools
+- [x] Unit tests: tool call and response
+- [x] Unit tests: max turns limit
+- [x] Unit tests: unknown tool returns error
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-009]
 **Depends on:** [TASK-001], [TASK-100]

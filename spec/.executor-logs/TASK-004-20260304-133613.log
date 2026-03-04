@@ -1,0 +1,130 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-004 — EventBus (Internal Async Pub/Sub)
+
+**Priority:** P0
+**Estimate:** 3h
+**Milestone:** Milestone 1: Foundation (Phase 0)
+
+## Checklist (implement ALL items):
+
+- [ ] Implement `_Subscription` with pattern, handler, UUID id
+- [ ] Implement `EventBus.subscribe(pattern, handler)` returning sub_id
+- [ ] Implement `EventBus.unsubscribe(sub_id)`
+- [ ] Implement `EventBus.publish(event)` with `asyncio.create_task` per handler
+- [ ] Implement `_safe_call` for exception isolation
+- [ ] Write tests: exact match, wildcard, multiple subscribers, unsubscribe, error isolation
+- [ ] [TEST] Unit tests: subscribe and publish exact topic
+- [ ] [TEST] Unit tests: wildcard pattern matching (trigger.*)
+- [ ] [TEST] Unit tests: multiple subscribers on same pattern
+- [ ] [TEST] Unit tests: unsubscribe stops delivery
+- [ ] [TEST] Unit tests: handler error doesn't crash bus
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-003: Internal Event Bus
+**As a** system developer
+**I want** an async pub/sub bus with wildcard pattern matching
+**So that** modules can communicate without tight coupling
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN an EventBus instance
+WHEN I subscribe to "trigger.*" and publish an Event with type "trigger.telegram"
+THEN the subscriber handler is called with the event
+
+GIVEN multiple subscribers on the same pattern
+WHEN an event is published
+THEN all matching handlers are called
+
+GIVEN a handler that raises an exception
+WHEN an event is published to its pattern
+THEN other handlers still execute and the error is logged
+
+GIVEN a subscription ID
+WHEN I call unsubscribe with that ID
+THEN subsequent events no longer reach that handler
+```
+
+**Priority:** P0
+**Traces to:** [TASK-004], [DESIGN-003]
+
+---
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Files created:
+- **`src/proctor/core/bus.py`** — EventBus implementation with `_Subscription`, `EventBus.subscribe()`, `EventBus.unsubscribe()`, `EventBus.publish()`, and `_safe_call()` for error isolation
+- **`tests/test_core/test_bus.py`** — 32 tests covering all checklist items
+
+### Files modified:
+- **`src/proctor/core/__init__.py`** — Added `EventBus` and `Handler` exports
+
+### Implementation details:
+- Uses `fnmatch` for wildcard pattern matching (e.g. `"trigger.*"` matches `"trigger.terminal"`)
+- Uses `anyio.create_task_group` instead of `asyncio.create_task` for concurrent handler execution — works on both asyncio and trio backends
+- `_safe_call` catches and logs exceptions per handler, isolating failures
+- Each subscription gets a UUID for unsubscribe
+
+### Test coverage (32 tests):
+- `_Subscription`: auto-generated ID, fields
+- `subscribe`: returns ID, multiple subscriptions, same pattern different IDs
+- `unsubscribe`: removes subscription, unknown ID is noop, stops delivery
+- `publish`: exact match, wildcard match, no match, star-matches-all, multiple subscribers, no subscribers silent, payload preserved
+- Error isolation: bad handler doesn't crash bus, error is logged, multiple errors don't stop others
+- Public exports: from `proctor.core.bus` and `proctor.core`
+
+### Quality checks:
+- All 199 tests pass (full suite)
+- Lint clean (`ruff check`)
+- Format clean (`ruff format`)
+- Pyrefly: 0 new type errors (2 pre-existing in other files)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

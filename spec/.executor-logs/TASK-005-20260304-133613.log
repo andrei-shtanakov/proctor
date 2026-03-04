@@ -1,0 +1,143 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-005 — StateManager (SQLite Wrapper)
+
+**Priority:** P0
+**Estimate:** 4h
+**Milestone:** Milestone 1: Foundation (Phase 0)
+
+## Checklist (implement ALL items):
+
+- [ ] Implement SQLite schema with 3 tables and index
+- [ ] Implement `initialize()` — open DB, create tables, enable WAL
+- [ ] Implement `close()` — close connection
+- [ ] Implement `save_task()` — upsert by id
+- [ ] Implement `get_task()` — by id, returns None if not found
+- [ ] Implement `list_tasks(status?)` — filtered query
+- [ ] Implement `_row_to_task()` — SQLite row to pydantic Task
+- [ ] Implement `set_config()` / `get_config()` — key-value config overrides
+- [ ] Implement `list_tables()` — for testing
+- [ ] Write tests: table creation, CRUD, status filter, config overrides
+- [ ] [TEST] Unit tests: tables created on initialize
+- [ ] [TEST] Unit tests: save and get task roundtrip
+- [ ] [TEST] Unit tests: update task status
+- [ ] [TEST] Unit tests: list tasks by status
+- [ ] [TEST] Unit tests: get nonexistent returns None
+- [ ] [TEST] Unit tests: config override set/get/update
+- [ ] [TEST] Unit tests: config get with default
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-004: SQLite State Persistence
+**As a** system developer
+**I want** async SQLite storage for tasks and configuration
+**So that** task state survives process restarts
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a StateManager initialized with a db path
+WHEN initialize() is called
+THEN tasks, schedules, and config_overrides tables are created
+
+GIVEN a Task saved via save_task()
+WHEN I call get_task(task_id)
+THEN the same task is returned with all fields intact
+
+GIVEN multiple tasks with different statuses
+WHEN I call list_tasks(status=PENDING)
+THEN only tasks with PENDING status are returned
+
+GIVEN a config override set via set_config("key", value)
+WHEN I call get_config("key")
+THEN the stored value is returned
+```
+
+**Priority:** P0
+**Traces to:** [TASK-005], [DESIGN-004]
+
+---
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Files created:
+- `src/proctor/core/state.py` — StateManager implementation
+
+### Files modified:
+- `src/proctor/core/__init__.py` — added `StateManager` to exports
+
+### Files created (tests):
+- `tests/test_core/test_state.py` — 22 tests covering all checklist items
+
+### Implementation details:
+
+**StateManager** (`src/proctor/core/state.py`):
+- `initialize()` — opens DB, creates 3 tables (`tasks`, `schedules`, `config_overrides`), creates `idx_tasks_status` index, enables WAL mode
+- `close()` — closes connection
+- `save_task()` — upsert by id using `ON CONFLICT` SQL
+- `get_task()` — lookup by id, returns `None` if not found
+- `list_tasks(status?)` — filtered query with optional status
+- `set_config()` / `get_config()` — key-value config overrides with JSON serialization
+- `list_tables()` — returns table names (for testing)
+- `_row_to_task()` — module-level function converting SQLite row to pydantic Task
+
+**Tests** (22 tests, all passing):
+- Table creation (3 tables, idempotent)
+- Save/get roundtrip (full fields, minimal, deadline, timestamps)
+- Update task status, preserves id
+- List tasks (all, by status, empty, nonexistent status)
+- Get nonexistent returns None
+- Config overrides (set/get, default, update, complex/numeric/boolean values)
+- Public export verification
+
+### Notes:
+- Tests use `anyio_backend = "asyncio"` override because aiosqlite is asyncio-only (no trio support)
+- Pre-existing failures in `test_workflow/test_dag.py` (missing `asyncio` import in `dag.py`) — not related to this task
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
