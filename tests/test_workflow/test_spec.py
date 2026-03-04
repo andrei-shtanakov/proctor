@@ -300,6 +300,6 @@ class TestWorkflowSpec:
         assert Step(id="t").id == "t"
         assert StepRetry().max_attempts == 1
         assert WorkflowPolicies().max_retries == 2
-        assert WorkflowSpec(
-            workflow_id="w", mode=WorkflowMode.SIMPLE
-        ).workflow_id == "w"
+        assert (
+            WorkflowSpec(workflow_id="w", mode=WorkflowMode.SIMPLE).workflow_id == "w"
+        )

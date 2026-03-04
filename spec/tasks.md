@@ -222,26 +222,26 @@ Implement Application class that owns all core components (EventBus, StateManage
 ## Milestone 2: MVP (Phase 1)
 
 ### TASK-007: WorkflowSpec Model
-🔴 P0 | 🔄 IN_PROGRESS | Est: 2h
+🔴 P0 | ✅ DONE | Est: 2h
 
 **Description:**
 Implement the universal WorkflowSpec pydantic model with support for simple, DAG, FSM (placeholder), and orchestrator (placeholder) modes. Includes Step, StepType, StepRetry, WorkflowPolicies models.
 
 **Checklist:**
-- [ ] Create `src/proctor/workflow/__init__.py`
-- [ ] Implement `WorkflowMode` and `StepType` StrEnums
-- [ ] Implement `Step` model with id, type, description, inputs, outputs, depends_on, retry
-- [ ] Implement `StepRetry` and `WorkflowPolicies` models
-- [ ] Implement `WorkflowSpec` with mode-specific fields and shared policies
-- [ ] Write tests: simple spec, DAG spec with steps, serialization roundtrip
+- [x] Create `src/proctor/workflow/__init__.py`
+- [x] Implement `WorkflowMode` and `StepType` StrEnums
+- [x] Implement `Step` model with id, type, description, inputs, outputs, depends_on, retry
+- [x] Implement `StepRetry` and `WorkflowPolicies` models
+- [x] Implement `WorkflowSpec` with mode-specific fields and shared policies
+- [x] Write tests: simple spec, DAG spec with steps, serialization roundtrip
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: simple spec creation
-- [ ] Unit tests: DAG spec with step dependencies
-- [ ] Unit tests: policies defaults
-- [ ] Unit tests: serialization roundtrip
-- [ ] Unit tests: step inputs/outputs
-- [ ] Coverage >= 80%
+- [x] Unit tests: simple spec creation
+- [x] Unit tests: DAG spec with step dependencies
+- [x] Unit tests: policies defaults
+- [x] Unit tests: serialization roundtrip
+- [x] Unit tests: step inputs/outputs
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-006]
 **Depends on:** [TASK-001], [TASK-100]

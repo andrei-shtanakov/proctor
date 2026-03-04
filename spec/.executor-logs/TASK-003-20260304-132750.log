@@ -85,3 +85,29 @@ When complete, respond with:
 Begin implementation:
 
 
+=== OUTPUT ===
+## Summary
+
+### Files created:
+- `src/proctor/core/config.py` — Config models (`LLMConfig`, `NATSConfig`, `SchedulerConfig`, `ProctorConfig`) and `load_config()` function
+- `config/proctor.yaml` — Example configuration file
+- `tests/test_core/test_config.py` — 24 tests covering all checklist items
+
+### Files modified:
+- `src/proctor/core/__init__.py` — Added exports for all config types and `load_config`
+
+### Checklist coverage:
+- `LLMConfig`, `NATSConfig`, `SchedulerConfig` models with defaults per DESIGN-002
+- `ProctorConfig` root model with nested configs (defaults to `LLMConfig()`, etc.)
+- `load_config(path)` returns defaults if file missing, `None`, or empty YAML
+- Example `config/proctor.yaml` matches the design spec
+- Tests: default config values, YAML loading, missing file, nested defaults, string paths, empty YAML, invalid YAML, full roundtrip, example config, public exports
+- 24 tests, all passing. 75 total tests passing. No lint errors.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

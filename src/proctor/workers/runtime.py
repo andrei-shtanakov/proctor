@@ -150,9 +150,7 @@ class AgentRuntime:
             output = await tool.handler(**tool_args)
             return ToolResult(tool_name=tool_name, output=str(output))
         except Exception as exc:
-            logger.error(
-                "Tool %s failed: %s", tool_name, exc, exc_info=True
-            )
+            logger.error("Tool %s failed: %s", tool_name, exc, exc_info=True)
             return ToolResult(
                 tool_name=tool_name,
                 error=f"Tool error: {exc}",
@@ -161,6 +159,5 @@ class AgentRuntime:
     def _build_tool_defs(self) -> list[dict[str, Any]]:
         """Build tool definitions for the LLM."""
         return [
-            {"name": t.name, "description": t.description}
-            for t in self.tools.values()
+            {"name": t.name, "description": t.description} for t in self.tools.values()
         ]
