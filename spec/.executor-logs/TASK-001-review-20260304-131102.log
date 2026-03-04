@@ -1,0 +1,1243 @@
+=== REVIEW PROMPT ===
+# Code Review Request
+
+## Task Completed: TASK-001 — Project Scaffold and Dependencies
+
+## Changed Files:
+docs/plans/2026-03-04-proctor-phase0-phase1-plan.md
+
+## Full Diff:
+diff --git a/docs/plans/2026-03-04-proctor-phase0-phase1-plan.md b/docs/plans/2026-03-04-proctor-phase0-phase1-plan.md
+new file mode 100644
+index 0000000..a6dd018
+--- /dev/null
++++ b/docs/plans/2026-03-04-proctor-phase0-phase1-plan.md
+@@ -0,0 +1,2552 @@
++# Proctor Phase 0 + Phase 1 Implementation Plan
++
++> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
++
++**Goal:** Build a working Proctor core that can receive a task from the terminal, decompose it into a DAG of steps, execute steps via an LLM agent with MCP tools, and return the result.
++
++**Architecture:** Microkernel with internal asyncio EventBus, SQLite state, NATS messaging (mocked in tests). Terminal trigger sends command → Workflow engine builds DAG → Agent Runtime executes steps via LiteLLM + MCP client → Result displayed.
++
++**Tech Stack:** Python 3.12, pydantic 2.x, asyncio, aiosqlite, nats-py, litellm, mcp SDK, aiohttp, pytest + anyio, ruff, pyrefly
++
++---
++
++## Phase 0: Foundation
++
++### Task 1: Project scaffold and dependencies
++
++**Files:**
++- Modify: `pyproject.toml`
++- Create: `src/proctor/__init__.py`
++- Create: `src/proctor/__main__.py`
++- Create: `tests/__init__.py`
++- Create: `tests/conftest.py`
++- Modify: `.gitignore`
++
++**Step 1: Set up pyproject.toml with src layout and core dependencies**
++
++```toml
++[project]
++name = "proctor"
++version = "0.1.0"
++description = "Distributed autonomous agent system"
++readme = "README.md"
++requires-python = ">=3.12"
++dependencies = [
++    "pydantic>=2.10",
++    "aiosqlite>=0.20",
++    "nats-py>=2.9",
++    "litellm>=1.55",
++    "tiktoken>=0.8",
++    "mcp>=1.0",
++    "aiohttp>=3.11",
++    "pyyaml>=6.0",
++]
++
++[dependency-groups]
++dev = [
++    "pytest>=8.0",
++    "anyio[trio]>=4.0",
++    "pytest-asyncio>=0.24",
++    "ruff>=0.8",
++]
++
++[build-system]
++requires = ["hatchling"]
++build-backend = "hatchling.build"
++
++[tool.hatch.build.targets.wheel]
++packages = ["src/proctor"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++asyncio_mode = "auto"
++
++[tool.ruff]
++line-length = 88
++src = ["src"]
++
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP"]
++```
++
++**Step 2: Create package structure**
++
++```python
++# src/proctor/__init__.py
++"""Proctor: Distributed autonomous agent system."""
++
++__version__ = "0.1.0"
++```
++
++```python
++# src/proctor/__main__.py
++"""Entrypoint: python -m proctor"""
++
++import asyncio
++
++
++def main() -> None:
++    """Start Proctor."""
++    print(f"Proctor starting...")
++    asyncio.run(_run())
++
++
++async def _run() -> None:
++    """Async main loop placeholder."""
++    print("Proctor running. Press Ctrl+C to stop.")
++    try:
++        await asyncio.Event().wait()
++    except asyncio.CancelledError:
++        pass
++
++
++if __name__ == "__main__":
++    main()
++```
++
++```python
++# tests/__init__.py
++```
++
++```python
++# tests/conftest.py
++"""Shared test fixtures."""
++
++import asyncio
++from collections.abc import AsyncGenerator
++
++import pytest
++
++
++@pytest.fixture
++def anyio_backend():
++    return "asyncio"
++```
++
++Update `.gitignore` to add:
++```
++data/
++*.db
++*.age
++```
++
++**Step 3: Install dependencies**
++
++Run: `uv sync`
++Expected: all packages install successfully
++
++**Step 4: Verify package runs**
++
++Run: `uv run python -m proctor &; sleep 1; kill %1`
++Expected: "Proctor starting..." output
++
++**Step 5: Run ruff**
++
++Run: `uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/`
++Expected: no errors
++
++**Step 6: Commit**
++
++```bash
++git add src/ tests/ pyproject.toml .gitignore uv.lock
++git commit -m "feat: project scaffold with src layout and dependencies"
++```
++
++---
++
++### Task 2: Core models (Event, Task, Envelope)
++
++**Files:**
++- Create: `src/proctor/core/__init__.py`
++- Create: `src/proctor/core/models.py`
++- Create: `tests/test_core/__init__.py`
++- Create: `tests/test_core/test_models.py`
++
++**Step 1: Write failing tests for core models**
++
++```python
++# tests/test_core/__init__.py
++```
++
++```python
++# tests/test_core/test_models.py
++"""Tests for core pydantic models."""
++
++from datetime import datetime, timezone
++
++import pytest
++
++from proctor.core.models import (
++    Envelope,
++    Event,
++    Task,
++    TaskStatus,
++)
++
++
++class TestEvent:
++    def test_create_event(self):
++        event = Event(
++            type="trigger.telegram",
++            source="telegram-trigger",
++            payload={"text": "hello"},
++        )
++        assert event.id  # auto-generated UUID
++        assert event.type == "trigger.telegram"
++        assert event.timestamp <= datetime.now(timezone.utc)
++
++    def test_event_id_is_unique(self):
++        e1 = Event(type="test", source="test", payload={})
++        e2 = Event(type="test", source="test", payload={})
++        assert e1.id != e2.id
++
++
++class TestTask:
++    def test_create_task_minimal(self):
++        task = Task(spec={"mode": "simple", "prompt": "hello"})
++        assert task.status == TaskStatus.PENDING
++        assert task.retries == 0
++        assert task.worker_id is None
++
++    def test_task_status_transitions(self):
++        task = Task(spec={"mode": "simple", "prompt": "hello"})
++        assert task.status == TaskStatus.PENDING
++        task.status = TaskStatus.ASSIGNED
++        assert task.status == TaskStatus.ASSIGNED
++
++
++class TestTaskStatus:
++    def test_all_statuses_exist(self):
++        assert TaskStatus.PENDING
++        assert TaskStatus.ASSIGNED
++        assert TaskStatus.RUNNING
++        assert TaskStatus.COMPLETED
++        assert TaskStatus.FAILED
++
++
++class TestEnvelope:
++    def test_create_envelope(self):
++        env = Envelope(
++            type="task.assign",
++            source="core",
++            target="worker-1",
++            payload={"task_id": "123"},
++        )
++        assert env.id
++        assert env.reply_to is None
++        assert env.ttl_seconds is None
++
++    def test_envelope_with_correlation(self):
++        env = Envelope(
++            type="task.result",
++            source="worker-1",
++            payload={"result": "ok"},
++            correlation_id="original-123",
++        )
++        assert env.correlation_id == "original-123"
++```
++
++**Step 2: Run tests to verify they fail**
++
++Run: `uv run pytest tests/test_core/test_models.py -v`
++Expected: FAIL (module not found)
++
++**Step 3: Implement core models**
++
++```python
++# src/proctor/core/__init__.py
++"""Core module: EventBus, State, Config, Models."""
++```
++
++```python
++# src/proctor/core/models.py
++"""Core pydantic models: Event, Task, Envelope."""
++
++from __future__ import annotations
++
++import uuid
++from datetime import datetime, timezone
++from enum import StrEnum
++from typing import Any
++
++from pydantic import BaseModel, Field
++
++
++def _utcnow() -> datetime:
++    return datetime.now(timezone.utc)
++
++
++def _uuid() -> str:
++    return str(uuid.uuid4())
++
++
++class TaskStatus(StrEnum):
++    PENDING = "pending"
++    ASSIGNED = "assigned"
++    RUNNING = "running"
++    COMPLETED = "completed"
++    FAILED = "failed"
++
++
++class Event(BaseModel):
++    """Something that happened in the system."""
++
++    id: str = Field(default_factory=_uuid)
++    type: str
++    source: str
++    payload: dict[str, Any] = Field(default_factory=dict)
++    timestamp: datetime = Field(default_factory=_utcnow)
++
++
++class Task(BaseModel):
++    """A unit of work to be executed by a worker."""
++
++    id: str = Field(default_factory=_uuid)
++    status: TaskStatus = TaskStatus.PENDING
++    spec: dict[str, Any]
++    trigger_event: str | None = None
++    worker_id: str | None = None
++    result: Any | None = None
++    retries: int = 0
++    created_at: datetime = Field(default_factory=_utcnow)
++    updated_at: datetime = Field(default_factory=_utcnow)
++    deadline: datetime | None = None
++
++
++class Envelope(BaseModel):
++    """NATS message wrapper."""
++
++    id: str = Field(default_factory=_uuid)
++    type: str
++    source: str
++    target: str | None = None
++    payload: dict[str, Any] = Field(default_factory=dict)
++    reply_to: str | None = None
++    correlation_id: str | None = None
++    timestamp: datetime = Field(default_factory=_utcnow)
++    ttl_seconds: int | None = None
++```
++
++**Step 4: Run tests**
++
++Run: `uv run pytest tests/test_core/test_models.py -v`
++Expected: all PASS
++
++**Step 5: Lint and format**
++
++Run: `uv run ruff check src/proctor/core/ && uv run ruff format src/proctor/core/`
++
++**Step 6: Commit**
++
++```bash
++git add src/proctor/core/ tests/test_core/
++git commit -m "feat(core): add Event, Task, Envelope pydantic models"
++```
++
++---
++
++### Task 3: Config loading
++
++**Files:**
++- Create: `src/proctor/core/config.py`
++- Create: `config/proctor.yaml`
++- Create: `tests/test_core/test_config.py`
++
++**Step 1: Write failing tests**
++
++```python
++# tests/test_core/test_config.py
++"""Tests for config loading."""
++
++from pathlib import Path
++
++import pytest
++
++from proctor.core.config import ProctorConfig, load_config
++
++
++class TestProctorConfig:
++    def test_default_config(self):
++        cfg = ProctorConfig()
++        assert cfg.node_role == "standalone"
++        assert cfg.nats_url == "nats://localhost:4222"
++        assert cfg.data_dir == Path("data")
++
++    def test_load_from_yaml(self, tmp_path):
++        yaml_file = tmp_path / "test.yaml"
++        yaml_file.write_text(
++            "node_role: core\n"
++            "nats_url: nats://192.168.1.10:4222\n"
++            "data_dir: /var/proctor/data\n"
++        )
++        cfg = load_config(yaml_file)
++        assert cfg.node_role == "core"
++        assert cfg.nats_url == "nats://192.168.1.10:4222"
++
++    def test_load_missing_file_returns_default(self):
++        cfg = load_config(Path("/nonexistent/path.yaml"))
++        assert cfg.node_role == "standalone"
++
++    def test_llm_config_defaults(self):
++        cfg = ProctorConfig()
++        assert cfg.llm.default_model is not None
++        assert cfg.llm.max_tokens > 0
++```
++
++**Step 2: Run tests to verify failure**
++
++Run: `uv run pytest tests/test_core/test_config.py -v`
++Expected: FAIL
++
++**Step 3: Implement config**
++
++```python
++# src/proctor/core/config.py
++"""Configuration loading from YAML files."""
++
++from __future__ import annotations
++
++import logging
++from pathlib import Path
++from typing import Any
++
++import yaml
++from pydantic import BaseModel, Field
++
++logger = logging.getLogger(__name__)
++
++
++class LLMConfig(BaseModel):
++    """LLM provider configuration."""
++
++    default_model: str = "claude-sonnet-4-20250514"
++    fallback_model: str = "ollama/llama3.2"
++    max_tokens: int = 4096
++    temperature: float = 0.7
++
++
++class NATSConfig(BaseModel):
++    """NATS connection settings."""
++
++    url: str = "nats://localhost:4222"
++    connect_timeout: float = 5.0
++    reconnect_time_wait: float = 2.0
++    max_reconnect_attempts: int = 60
++
++
++class SchedulerConfig(BaseModel):
++    """Scheduler settings."""
++
++    poll_interval_seconds: int = 30
++    enabled: bool = True
++
++
++class ProctorConfig(BaseModel):
++    """Root configuration for Proctor."""
++
++    node_role: str = "standalone"  # standalone | core | worker
++    node_id: str = "node-1"
++    nats_url: str = "nats://localhost:4222"
++    data_dir: Path = Path("data")
++    log_level: str = "INFO"
++    llm: LLMConfig = Field(default_factory=LLMConfig)
++    nats: NATSConfig = Field(default_factory=NATSConfig)
++    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
++
++
++def load_config(path: Path) -> ProctorConfig:
++    """Load config from YAML. Returns defaults if file missing."""
++    if not path.exists():
++        logger.warning("Config file %s not found, using defaults", path)
++        return ProctorConfig()
++
++    with open(path) as f:
++        raw: dict[str, Any] = yaml.safe_load(f) or {}
++
++    return ProctorConfig(**raw)
++```
++
++```yaml
++# config/proctor.yaml
++node_role: standalone
++node_id: node-local
++nats_url: nats://localhost:4222
++data_dir: data
++log_level: INFO
++
++llm:
++  default_model: claude-sonnet-4-20250514
++  fallback_model: ollama/llama3.2
++  max_tokens: 4096
++
++scheduler:
++  poll_interval_seconds: 30
++  enabled: true
++```
++
++**Step 4: Run tests**
++
++Run: `uv run pytest tests/test_core/test_config.py -v`
++Expected: all PASS
++
++**Step 5: Commit**
++
++```bash
++git add src/proctor/core/config.py config/ tests/test_core/test_config.py
++git commit -m "feat(core): config loading from YAML with pydantic models"
++```
++
++---
++
++### Task 4: EventBus (internal async pub/sub)
++
++**Files:**
++- Create: `src/proctor/core/bus.py`
++- Create: `tests/test_core/test_bus.py`
++
++**Step 1: Write failing tests**
++
++```python
++# tests/test_core/test_bus.py
++"""Tests for internal EventBus."""
++
++import asyncio
++
++import pytest
++
++from proctor.core.bus import EventBus
++from proctor.core.models import Event
++
++
++@pytest.mark.asyncio
++async def test_subscribe_and_publish():
++    bus = EventBus()
++    received: list[Event] = []
++
++    async def handler(event: Event) -> None:
++        received.append(event)
++
++    bus.subscribe("test.topic", handler)
++    event = Event(type="test.topic", source="test", payload={"x": 1})
++    await bus.publish(event)
++
++    await asyncio.sleep(0.05)
++    assert len(received) == 1
++    assert received[0].payload == {"x": 1}
++
++
++@pytest.mark.asyncio
++async def test_wildcard_subscribe():
++    bus = EventBus()
++    received: list[Event] = []
++
++    async def handler(event: Event) -> None:
++        received.append(event)
++
++    bus.subscribe("trigger.*", handler)
++
++    await bus.publish(Event(type="trigger.telegram", source="t", payload={}))
++    await bus.publish(Event(type="trigger.webhook", source="t", payload={}))
++    await bus.publish(Event(type="task.created", source="t", payload={}))
++
++    await asyncio.sleep(0.05)
++    assert len(received) == 2
++
++
++@pytest.mark.asyncio
++async def test_multiple_subscribers():
++    bus = EventBus()
++    counts = {"a": 0, "b": 0}
++
++    async def handler_a(event: Event) -> None:
++        counts["a"] += 1
++
++    async def handler_b(event: Event) -> None:
++        counts["b"] += 1
++
++    bus.subscribe("test", handler_a)
++    bus.subscribe("test", handler_b)
++
++    await bus.publish(Event(type="test", source="t", payload={}))
++    await asyncio.sleep(0.05)
++
++    assert counts["a"] == 1
++    assert counts["b"] == 1
++
++
++@pytest.mark.asyncio
++async def test_unsubscribe():
++    bus = EventBus()
++    received: list[Event] = []
++
++    async def handler(event: Event) -> None:
++        received.append(event)
++
++    sub_id = bus.subscribe("test", handler)
++    bus.unsubscribe(sub_id)
++
++    await bus.publish(Event(type="test", source="t", payload={}))
++    await asyncio.sleep(0.05)
++
++    assert len(received) == 0
++
++
++@pytest.mark.asyncio
++async def test_handler_error_does_not_crash_bus():
++    bus = EventBus()
++    received: list[Event] = []
++
++    async def bad_handler(event: Event) -> None:
++        raise ValueError("oops")
++
++    async def good_handler(event: Event) -> None:
++        received.append(event)
++
++    bus.subscribe("test", bad_handler)
++    bus.subscribe("test", good_handler)
++
++    await bus.publish(Event(type="test", source="t", payload={}))
++    await asyncio.sleep(0.05)
++
++    assert len(received) == 1
++```
++
++**Step 2: Run tests to verify failure**
++
++Run: `uv run pytest tests/test_core/test_bus.py -v`
++Expected: FAIL
++
++**Step 3: Implement EventBus**
++
++```python
++# src/proctor/core/bus.py
++"""Internal async EventBus (intra-process pub/sub)."""
++
++from __future__ import annotations
++
++import asyncio
++import fnmatch
++import logging
++import uuid
++from collections.abc import Awaitable, Callable
++
++from proctor.core.models import Event
++
++logger = logging.getLogger(__name__)
++
++Handler = Callable[[Event], Awaitable[None]]
++
++
++class _Subscription:
++    def __init__(self, pattern: str, handler: Handler) -> None:
++        self.id = str(uuid.uuid4())
++        self.pattern = pattern
++        self.handler = handler
++
++    def matches(self, event_type: str) -> bool:
++        return fnmatch.fnmatch(event_type, self.pattern)
++
++
++class EventBus:
++    """Simple async pub/sub for internal module communication."""
++
++    def __init__(self) -> None:
++        self._subscriptions: dict[str, _Subscription] = {}
++
++    def subscribe(self, pattern: str, handler: Handler) -> str:
++        """Subscribe to events matching pattern. Returns subscription ID."""
++        sub = _Subscription(pattern, handler)
++        self._subscriptions[sub.id] = sub
++        return sub.id
++
++    def unsubscribe(self, sub_id: str) -> None:
++        """Remove a subscription by ID."""
++        self._subscriptions.pop(sub_id, None)
++
++    async def publish(self, event: Event) -> None:
++        """Publish event to all matching subscribers."""
++        for sub in list(self._subscriptions.values()):
++            if sub.matches(event.type):
++                asyncio.create_task(self._safe_call(sub, event))
++
++    async def _safe_call(self, sub: _Subscription, event: Event) -> None:
++        try:
++            await sub.handler(event)
++        except Exception:
++            logger.exception(
++                "Handler %s failed for event %s",
++                sub.handler.__name__,
++                event.type,
++            )
++```
++
++**Step 4: Run tests**
++
++Run: `uv run pytest tests/test_core/test_bus.py -v`
++Expected: all PASS
++
++**Step 5: Commit**
++
++```bash
++git add src/proctor/core/bus.py tests/test_core/test_bus.py
++git commit -m "feat(core): async EventBus with wildcard subscriptions"
++```
++
++---
++
++### Task 5: StateManager (SQLite wrapper)
++
++**Files:**
++- Create: `src/proctor/core/state.py`
++- Create: `tests/test_core/test_state.py`
++
++**Step 1: Write failing tests**
++
++```python
++# tests/test_core/test_state.py
++"""Tests for SQLite state manager."""
++
++import pytest
++
++from proctor.core.models import Task, TaskStatus
++from proctor.core.state import StateManager
++
++
++@pytest.fixture
++async def state(tmp_path):
++    sm = StateManager(tmp_path / "test_state.db")
++    await sm.initialize()
++    yield sm
++    await sm.close()
++
++
++@pytest.mark.asyncio
++async def test_initialize_creates_tables(state: StateManager):
++    tables = await state.list_tables()
++    assert "tasks" in tables
++    assert "schedules" in tables
++    assert "config_overrides" in tables
++
++
++@pytest.mark.asyncio
++async def test_save_and_get_task(state: StateManager):
++    task = Task(spec={"mode": "simple", "prompt": "test"})
++    await state.save_task(task)
++
++    loaded = await state.get_task(task.id)
++    assert loaded is not None
++    assert loaded.id == task.id
++    assert loaded.spec == task.spec
++    assert loaded.status == TaskStatus.PENDING
++
++
++@pytest.mark.asyncio
++async def test_update_task_status(state: StateManager):
++    task = Task(spec={"mode": "simple", "prompt": "test"})
++    await state.save_task(task)
++
++    task.status = TaskStatus.RUNNING
++    task.worker_id = "worker-1"
++    await state.save_task(task)
++
++    loaded = await state.get_task(task.id)
++    assert loaded is not None
++    assert loaded.status == TaskStatus.RUNNING
++    assert loaded.worker_id == "worker-1"
++
++
++@pytest.mark.asyncio
++async def test_list_tasks_by_status(state: StateManager):
++    t1 = Task(spec={"mode": "simple", "prompt": "a"})
++    t2 = Task(spec={"mode": "simple", "prompt": "b"}, status=TaskStatus.RUNNING)
++    t3 = Task(spec={"mode": "simple", "prompt": "c"})
++
++    await state.save_task(t1)
++    await state.save_task(t2)
++    await state.save_task(t3)
++
++    pending = await state.list_tasks(status=TaskStatus.PENDING)
++    assert len(pending) == 2
++
++    running = await state.list_tasks(status=TaskStatus.RUNNING)
++    assert len(running) == 1
++
++
++@pytest.mark.asyncio
++async def test_get_nonexistent_task_returns_none(state: StateManager):
++    result = await state.get_task("nonexistent-id")
++    assert result is None
++
++
++@pytest.mark.asyncio
++async def test_config_override_set_and_get(state: StateManager):
++    await state.set_config("retry_limit", 5)
++    val = await state.get_config("retry_limit")
++    assert val == 5
++
++    await state.set_config("retry_limit", 10)
++    val = await state.get_config("retry_limit")
++    assert val == 10
++
++
++@pytest.mark.asyncio
++async def test_config_get_missing_returns_default(state: StateManager):
++    val = await state.get_config("nonexistent", default=42)
++    assert val == 42
++```
++
++**Step 2: Run tests to verify failure**
++
++Run: `uv run pytest tests/test_core/test_state.py -v`
++Expected: FAIL
++
++**Step 3: Implement StateManager**
++
++```python
++# src/proctor/core/state.py
++"""SQLite state manager for tasks, schedules, and config."""
++
++from __future__ import annotations
++
++import json
++import logging
++from pathlib import Path
++from typing import Any
++
++import aiosqlite
++
++from proctor.core.models import Task, TaskStatus
++
++logger = logging.getLogger(__name__)
++
++_SCHEMA = """
++CREATE TABLE IF NOT EXISTS tasks (
++    id TEXT PRIMARY KEY,
++    status TEXT NOT NULL DEFAULT 'pending',
++    spec_json TEXT NOT NULL,
++    trigger_event TEXT,
++    worker_id TEXT,
++    result_json TEXT,
++    retries INTEGER NOT NULL DEFAULT 0,
++    created_at TEXT NOT NULL,
++    updated_at TEXT NOT NULL,
++    deadline TEXT
++);
++
++CREATE TABLE IF NOT EXISTS schedules (
++    id TEXT PRIMARY KEY,
++    type TEXT NOT NULL,
++    expression TEXT NOT NULL,
++    tz TEXT DEFAULT 'UTC',
++    workflow_id TEXT,
++    enabled INTEGER NOT NULL DEFAULT 1,
++    next_run TEXT,
++    last_run TEXT
++);
++
++CREATE TABLE IF NOT EXISTS config_overrides (
++    key TEXT PRIMARY KEY,
++    value_json TEXT NOT NULL,
++    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
++);
++
++CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
++"""
++
++
++class StateManager:
++    """Async SQLite wrapper for persistent state."""
++
++    def __init__(self, db_path: Path) -> None:
++        self._db_path = db_path
++        self._db: aiosqlite.Connection | None = None
++
++    async def initialize(self) -> None:
++        """Open DB and create tables."""
++        self._db_path.parent.mkdir(parents=True, exist_ok=True)
++        self._db = await aiosqlite.connect(str(self._db_path))
++        self._db.row_factory = aiosqlite.Row
++        await self._db.executescript(_SCHEMA)
++        await self._db.commit()
++
++    async def close(self) -> None:
++        """Close DB connection."""
++        if self._db:
++            await self._db.close()
++            self._db = None
++
++    @property
++    def db(self) -> aiosqlite.Connection:
++        assert self._db is not None, "StateManager not initialized"
++        return self._db
++
++    # --- Tasks ---
++
++    async def save_task(self, task: Task) -> None:
++        """Insert or update a task."""
++        await self.db.execute(
++            """INSERT INTO tasks
++               (id, status, spec_json, trigger_event, worker_id,
++                result_json, retries, created_at, updated_at, deadline)
++               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++               ON CONFLICT(id) DO UPDATE SET
++                 status=excluded.status,
++                 worker_id=excluded.worker_id,
++                 result_json=excluded.result_json,
++                 retries=excluded.retries,
++                 updated_at=excluded.updated_at,
++                 deadline=excluded.deadline
++            """,
++            (
++                task.id,
++                task.status.value,
++                json.dumps(task.spec),
++                task.trigger_event,
++                task.worker_id,
++                json.dumps(task.result) if task.result is not None else None,
++                task.retries,
++                task.created_at.isoformat(),
++                task.updated_at.isoformat(),
++                task.deadline.isoformat() if task.deadline else None,
++            ),
++        )
++        await self.db.commit()
++
++    async def get_task(self, task_id: str) -> Task | None:
++        """Get task by ID."""
++        cursor = await self.db.execute(
++            "SELECT * FROM tasks WHERE id = ?", (task_id,)
++        )
++        row = await cursor.fetchone()
++        if row is None:
++            return None
++        return self._row_to_task(row)
++
++    async def list_tasks(
++        self, status: TaskStatus | None = None
++    ) -> list[Task]:
++        """List tasks, optionally filtered by status."""
++        if status:
++            cursor = await self.db.execute(
++                "SELECT * FROM tasks WHERE status = ? ORDER BY created_at",
++                (status.value,),
++            )
++        else:
++            cursor = await self.db.execute(
++                "SELECT * FROM tasks ORDER BY created_at"
++            )
++        rows = await cursor.fetchall()
++        return [self._row_to_task(r) for r in rows]
++
++    def _row_to_task(self, row: aiosqlite.Row) -> Task:
++        return Task(
++            id=row["id"],
++            status=TaskStatus(row["status"]),
++            spec=json.loads(row["spec_json"]),
++            trigger_event=row["trigger_event"],
++            worker_id=row["worker_id"],
++            result=json.loads(row["result_json"])
++            if row["result_json"]
++            else None,
++            retries=row["retries"],
++            created_at=row["created_at"],
++            updated_at=row["updated_at"],
++            deadline=row["deadline"],
++        )
++
++    # --- Config overrides ---
++
++    async def set_config(self, key: str, value: Any) -> None:
++        """Set a config override."""
++        await self.db.execute(
++            """INSERT INTO config_overrides (key, value_json)
++               VALUES (?, ?)
++               ON CONFLICT(key) DO UPDATE SET
++                 value_json=excluded.value_json,
++                 updated_at=datetime('now')
++            """,
++            (key, json.dumps(value)),
++        )
++        await self.db.commit()
++
++    async def get_config(
++        self, key: str, default: Any = None
++    ) -> Any:
++        """Get a config override, or default."""
++        cursor = await self.db.execute(
++            "SELECT value_json FROM config_overrides WHERE key = ?",
++            (key,),
++        )
++        row = await cursor.fetchone()
++        if row is None:
++            return default
++        return json.loads(row["value_json"])
++
++    # --- Utility ---
++
++    async def list_tables(self) -> list[str]:
++        """List all tables (for testing)."""
++        cursor = await self.db.execute(
++            "SELECT name FROM sqlite_master WHERE type='table'"
++        )
++        rows = await cursor.fetchall()
++        return [r["name"] for r in rows]
++```
++
++**Step 4: Run tests**
++
++Run: `uv run pytest tests/test_core/test_state.py -v`
++Expected: all PASS
++
++**Step 5: Commit**
++
++```bash
++git add src/proctor/core/state.py tests/test_core/test_state.py
++git commit -m "feat(core): SQLite StateManager for tasks and config"
++```
++
++---
++
++### Task 6: Bootstrap (application startup and shutdown)
++
++**Files:**
++- Create: `src/proctor/core/bootstrap.py`
++- Modify: `src/proctor/__main__.py`
++- Create: `tests/test_core/test_bootstrap.py`
++
++**Step 1: Write failing tests**
++
++```python
++# tests/test_core/test_bootstrap.py
++"""Tests for application bootstrap."""
++
++import asyncio
++
++import pytest
++
++from proctor.core.bootstrap import Application
++from proctor.core.config import ProctorConfig
++
++
++@pytest.mark.asyncio
++async def test_app_starts_and_stops(tmp_path):
++    config = ProctorConfig(data_dir=tmp_path / "data")
++    app = Application(config)
++
++    await app.start()
++    assert app.bus is not None
++    assert app.state is not None
++    assert app.is_running
++
++    await app.stop()
++    assert not app.is_running
++
++
++@pytest.mark.asyncio
++async def test_app_state_db_created(tmp_path):
++    config = ProctorConfig(data_dir=tmp_path / "data")
++    app = Application(config)
++
++    await app.start()
++    assert (tmp_path / "data" / "state.db").exists()
++    await app.stop()
++
++
++@pytest.mark.asyncio
++async def test_app_event_bus_works(tmp_path):
++    config = ProctorConfig(data_dir=tmp_path / "data")
++    app = Application(config)
++    await app.start()
++
++    received = []
++    from proctor.core.models import Event
++
++    async def handler(event: Event) -> None:
++        received.append(event)
++
++    app.bus.subscribe("test", handler)
++    await app.bus.publish(Event(type="test", source="test", payload={}))
++    await asyncio.sleep(0.05)
++
++    assert len(received) == 1
++    await app.stop()
++```
++
++**Step 2: Run tests to verify failure**
++
++Run: `uv run pytest tests/test_core/test_bootstrap.py -v`
++Expected: FAIL
++
++**Step 3: Implement bootstrap**
++
++```python
++# src/proctor/core/bootstrap.py
++"""Application lifecycle: start, run, stop."""
++
++from __future__ import annotations
++
++import logging
++
++from proctor.core.bus import EventBus
++from proctor.core.config import ProctorConfig
++from proctor.core.state import StateManager
++
++logger = logging.getLogger(__name__)
++
++
++class Application:
++    """Main application container. Owns all core components."""
++
++    def __init__(self, config: ProctorConfig) -> None:
++        self.config = config
++        self.bus = EventBus()
++        self.state = StateManager(config.data_dir / "state.db")
++        self._running = False
++
++    @property
++    def is_running(self) -> bool:
++        return self._running
++
++    async def start(self) -> None:
++        """Initialize all core components."""
++        logger.info("Starting Proctor (node=%s, role=%s)",
++                     self.config.node_id, self.config.node_role)
++
++        self.config.data_dir.mkdir(parents=True, exist_ok=True)
++        await self.state.initialize()
++        self._running = True
++
++        logger.info("Proctor started")
++
++    async def stop(self) -> None:
++        """Gracefully shut down all components."""
++        logger.info("Stopping Proctor...")
++        self._running = False
++        await self.state.close()
++        logger.info("Proctor stopped")
++```
++
++Update `src/proctor/__main__.py`:
++
++```python
++# src/proctor/__main__.py
++"""Entrypoint: python -m proctor"""
++
++from __future__ import annotations
++
++import
+... (diff truncated)
+
+## Diff Summary:
+.../plans/2026-03-04-proctor-phase0-phase1-plan.md | 2552 ++++++++++++++++++++
+ 1 file changed, 2552 insertions(+)
+
+## Task Checklist
+- Update `pyproject.toml` with all dependencies (pydantic, aiosqlite, nats-py, litellm, tiktoken, mcp, aiohttp, pyyaml)
+- Add dev dependencies (pytest, anyio[trio], pytest-asyncio, ruff)
+- Configure hatchling build, pytest, and ruff sections
+- Create `src/proctor/__init__.py` with `__version__`
+- Create `src/proctor/__main__.py` with async placeholder
+- Create `tests/__init__.py` and `tests/conftest.py` with anyio_backend fixture
+- Update `.gitignore` (add data/, *.db, *.age)
+- Run `uv sync` and verify
+- Run `uv run ruff check` — no errors
+
+## Test Results
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-9.0.2, pluggy-1.6.0 -- /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 6 items
+
+tests/test_scaffold.py::test_version_exists PASSED                       [ 16%]
+tests/test_scaffold.py::test_version_is_string PASSED                    [ 33%]
+tests/test_scaffold.py::test_package_importable PASSED                   [ 50%]
+tests/test_scaffold.py::test_main_module_exists PASSED                   [ 66%]
+tests/test_scaffold.py::test_main_is_coroutine PASSED                    [ 83%]
+tests/test_scaffold.py::test_entry_point_runs PASSED                     [100%]
+
+============================== 6 passed in 0.04s ===============================
+warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+
+
+## Lint Status
+clean
+
+## Previous Errors (from retry)
+Unknown error
+
+## Review Instructions:
+
+Launch the following review agents in parallel using the Task tool:
+
+### 1. Quality Agent
+Review the code changes for:
+- Bugs and logic errors
+- Security vulnerabilities
+- Error handling gaps
+
+### 2. Implementation Agent
+Verify the implementation:
+- Code achieves the stated task goals
+- All checklist items are properly implemented
+- Edge cases are handled
+
+### 3. Testing Agent
+Review test coverage:
+- New code has adequate test coverage
+- Tests are meaningful and not trivial
+
+## Output:
+
+For each issue found, describe it briefly.
+If issues are found, fix them and respond with: "REVIEW_FIXED"
+If no issues found, respond with: "REVIEW_PASSED"
+
+
+=== OUTPUT ===
+All 5 tests pass, lint is clean. Here's what was fixed:
+
+| Fix | File | What changed |
+|-----|------|-------------|
+| `asyncio_mode` → `"strict"` | `pyproject.toml:36` | Prevents pytest-asyncio from hijacking anyio-driven async tests |
+| `anyio` added as runtime dep | `pyproject.toml:10` | Required for async runtime (was only in dev deps) |
+| `asyncio.run()` → `anyio.run()` | `__main__.py:3,18` | Matches the anyio-first architecture |
+| `asyncio.iscoroutinefunction` → `inspect.iscoroutinefunction` | `test_scaffold.py:36` | Removes unnecessary asyncio import from tests |
+| Hardcoded `"0.1.0"` removed | `test_scaffold.py:13,47` | Tests now use `proctor.__version__` dynamically + semver regex check |
+| Merged redundant version tests | `test_scaffold.py:10-14` | One test validates existence, type, and format |
+
+REVIEW_FIXED
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

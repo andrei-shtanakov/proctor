@@ -1,0 +1,99 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-001 — Project Scaffold and Dependencies
+
+**Priority:** P0
+**Estimate:** 
+**Milestone:** Milestone 1: Foundation (Phase 0)
+
+## Checklist (implement ALL items):
+
+- [ ] Update `pyproject.toml` with all dependencies (pydantic, aiosqlite, nats-py, litellm, tiktoken, mcp, aiohttp, pyyaml)
+- [ ] Add dev dependencies (pytest, anyio[trio], pytest-asyncio, ruff)
+- [ ] Configure hatchling build, pytest, and ruff sections
+- [ ] Create `src/proctor/__init__.py` with `__version__`
+- [ ] Create `src/proctor/__main__.py` with async placeholder
+- [ ] Create `tests/__init__.py` and `tests/conftest.py` with anyio_backend fixture
+- [ ] Update `.gitignore` (add data/, *.db, *.age)
+- [ ] Run `uv sync` and verify
+- [ ] Run `uv run ruff check` — no errors
+
+## Related Requirements:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/requirements.md
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+## ⚠️ RETRY — Attempt 3 of 3
+
+**Error type:** TASK_FAILED
+**What was tried:** Previous attempt for Project Scaffold and Dependencies
+**Error:** Unknown error
+
+**IMPORTANT:** Review the error above and fix the issue. Do not repeat the same mistake.
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+**Files created:**
+- `src/proctor/__init__.py` — package init with `__version__ = "0.1.0"`
+- `src/proctor/__main__.py` — async entry point (`python -m proctor`)
+- `tests/__init__.py` — empty test package marker
+- `tests/conftest.py` — `anyio_backend` fixture (asyncio + trio)
+- `tests/test_scaffold.py` — 6 smoke tests (version, import, entry point, coroutine check)
+
+**Files modified:**
+- `pyproject.toml` — hatchling build backend, src layout, runtime deps (pydantic, aiosqlite, nats-py, litellm, tiktoken, mcp, aiohttp, pyyaml), dev deps (pytest, anyio[trio], pytest-asyncio, ruff), tool configs (pytest, ruff with isort)
+- `.gitignore` — added `data/`, `*.db`, `*.age`, `.env`, IDE patterns
+- `uv.lock` — auto-updated by uv
+
+**Verification:**
+- `uv sync` — resolved 86 packages, all audited
+- `uv run ruff check .` — all checks passed
+- `uv run pytest -v` — 6/6 tests passed
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
