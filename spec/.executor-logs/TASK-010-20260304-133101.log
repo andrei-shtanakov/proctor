@@ -94,3 +94,46 @@ When complete, respond with:
 Begin implementation:
 
 
+=== OUTPUT ===
+## Summary
+
+### Files Created
+- `src/proctor/workers/__init__.py` — Module exports for `AgentRuntime`, `ToolDef`, `ToolResult`, `AgentResult`, `LLMFn`
+- `src/proctor/workers/runtime.py` — Agent Runtime implementation
+- `tests/test_workers/__init__.py` — Test package init
+- `tests/test_workers/test_runtime.py` — 33 tests covering all acceptance criteria
+
+### Implementation Details
+
+**Models** (`runtime.py`):
+- `ToolDef` — tool name, description, async handler
+- `ToolResult` — tool name + output/error
+- `AgentResult` — final output, turn count, list of tool results
+- `LLMFn` — type alias for the LLM callable
+
+**AgentRuntime**:
+- `__init__` — accepts `llm_fn`, optional `tools` list, `max_turns` (default 10)
+- `run(instruction)` — main loop: builds messages, calls LLM, handles `text`/`tool_call` responses
+- `_call_tool()` — executes tool with error handling; returns error `ToolResult` for unknown tools or exceptions
+- `_build_tool_defs()` — serializes tool definitions for the LLM
+
+**Test Coverage** (33 tests, all on both asyncio + trio):
+- Simple text completion (no tools) — 3 tests
+- Tool call + response — 4 tests
+- Max turns limit — 3 tests
+- Unknown tool error — 2 tests
+- Tool exception handling — 1 test
+- Model unit tests — 6 tests
+- Public exports — 1 test
+
+### Verification
+- 108/108 tests pass (`uv run pytest`)
+- 0 lint errors (`uv run ruff check .`)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

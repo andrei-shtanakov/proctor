@@ -388,6 +388,80 @@ class TestAgentRuntimeUnknownTool:
         assert "Unknown tool" in tool_msg["content"]
 
 
+class TestAgentRuntimeEdgeCases:
+    """Edge cases: unknown response type, empty instruction, boundary turns."""
+
+    @pytest.mark.anyio
+    async def test_unknown_response_type_treated_as_text(self) -> None:
+        """Unknown response type is treated as text response."""
+
+        async def mock_llm(
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]] | None,
+        ) -> dict[str, Any]:
+            return {"type": "something_unexpected", "content": "fallback"}
+
+        runtime = AgentRuntime(llm_fn=mock_llm)
+        result = await runtime.run("test")
+
+        assert result.output == "fallback"
+        assert result.turns == 1
+        assert result.tool_calls == []
+
+    @pytest.mark.anyio
+    async def test_empty_instruction(self) -> None:
+        """Empty instruction is passed to LLM without error."""
+
+        async def mock_llm(
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]] | None,
+        ) -> dict[str, Any]:
+            assert messages[0]["content"] == ""
+            return make_text_response("handled empty")
+
+        runtime = AgentRuntime(llm_fn=mock_llm)
+        result = await runtime.run("")
+
+        assert result.output == "handled empty"
+        assert result.turns == 1
+
+    @pytest.mark.anyio
+    async def test_max_turns_one_with_tool_call(self) -> None:
+        """With max_turns=1, loop exits after single tool call."""
+
+        async def mock_llm(
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]] | None,
+        ) -> dict[str, Any]:
+            return make_tool_call("t", {})
+
+        async def t() -> str:
+            return "tool output"
+
+        tool = ToolDef(name="t", description="t", handler=t)
+        runtime = AgentRuntime(llm_fn=mock_llm, tools=[tool], max_turns=1)
+        result = await runtime.run("test")
+
+        assert result.turns == 1
+        assert len(result.tool_calls) == 1
+        assert result.output == "tool output"
+
+    @pytest.mark.anyio
+    async def test_llm_exception_propagates(self) -> None:
+        """LLM function exceptions propagate to caller."""
+
+        async def mock_llm(
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]] | None,
+        ) -> dict[str, Any]:
+            raise RuntimeError("LLM service unavailable")
+
+        runtime = AgentRuntime(llm_fn=mock_llm)
+
+        with pytest.raises(RuntimeError, match="LLM service unavailable"):
+            await runtime.run("test")
+
+
 class TestAgentRuntimeToolErrors:
     """Tool handler exceptions are caught and reported."""
 

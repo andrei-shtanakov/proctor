@@ -65,3 +65,13 @@
 2026-03-04T09:32:14.031311Z [info     ] 🔍 Starting code review         module=runner task_id=TASK-003
 2026-03-04T09:32:14.085136Z [info     ] 🔍 Review using: claude         module=runner task_id=TASK-003
 2026-03-04T09:33:40.451872Z [info     ] ✅ Code review passed           module=runner task_id=TASK-003
+2026-03-04T09:33:40.548600Z [info     ] Committed changes              module=hooks
+2026-03-04T09:33:42.011631Z [info     ] Post-done hook                 module=hooks success=True task_id=TASK-010
+2026-03-04T09:33:42.011813Z [info     ] Running tests                  module=hooks
+2026-03-04T09:33:42.478173Z [info     ] Tests passed                   module=hooks
+2026-03-04T09:33:42.478478Z [info     ] Running lint                   module=hooks
+2026-03-04T09:33:42.542746Z [info     ] Lint passed                    module=hooks
+2026-03-04T09:33:42.543660Z [info     ] Running code review            module=hooks
+2026-03-04T09:33:42.543897Z [info     ] 🔍 Starting code review         module=runner task_id=TASK-010
+2026-03-04T09:33:42.592475Z [info     ] 🔍 Review using: claude         module=runner task_id=TASK-010
+2026-03-04T09:36:13.279950Z [info     ] ✅ Code review: issues fixed    module=runner task_id=TASK-010

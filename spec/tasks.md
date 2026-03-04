@@ -105,24 +105,24 @@ Implement pydantic models for Event, Task, TaskStatus, and Envelope in `src/proc
 ---
 
 ### TASK-003: Config Loading
-🔴 P0 | 🔄 IN_PROGRESS | Est: 2h
+🔴 P0 | ✅ DONE | Est: 2h
 
 **Description:**
 Implement YAML config loading with nested pydantic models (LLMConfig, NATSConfig, SchedulerConfig, ProctorConfig). Provide sensible defaults and graceful handling of missing config files.
 
 **Checklist:**
-- [ ] Implement `LLMConfig`, `NATSConfig`, `SchedulerConfig` models
-- [ ] Implement `ProctorConfig` root model with nested configs
-- [ ] Implement `load_config(path)` that returns defaults if file missing
-- [ ] Create `config/proctor.yaml` example
-- [ ] Write tests: default config, YAML loading, missing file, nested config defaults
+- [x] Implement `LLMConfig`, `NATSConfig`, `SchedulerConfig` models
+- [x] Implement `ProctorConfig` root model with nested configs
+- [x] Implement `load_config(path)` that returns defaults if file missing
+- [x] Create `config/proctor.yaml` example
+- [x] Write tests: default config, YAML loading, missing file, nested config defaults
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: default config values
-- [ ] Unit tests: YAML file loading
-- [ ] Unit tests: missing file returns defaults
-- [ ] Unit tests: nested LLM config defaults
-- [ ] Coverage >= 80%
+- [x] Unit tests: default config values
+- [x] Unit tests: YAML file loading
+- [x] Unit tests: missing file returns defaults
+- [x] Unit tests: nested LLM config defaults
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-002]
 **Depends on:** [TASK-001], [TASK-100]

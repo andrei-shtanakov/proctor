@@ -1,0 +1,986 @@
+=== REVIEW PROMPT ===
+# Code Review Request
+
+## Task Completed: TASK-010 — Agent Runtime (LLM Loop)
+
+## Changed Files:
+spec/.executor-logs/TASK-003-20260304-132750.log
+spec/.executor-logs/TASK-003-review-20260304-133214.log
+spec/.executor-logs/TASK-010-20260304-133101.log
+spec/.executor-logs/run-20260304-132457.log
+spec/.executor-progress.txt
+spec/.executor-state.db-wal
+spec/.task-history.log
+spec/tasks.md
+src/proctor/workers/runtime.py
+tests/test_workers/__init__.py
+tests/test_workers/test_runtime.py
+tests/test_workflow/test_spec.py
+
+## Full Diff:
+diff --git a/spec/.executor-logs/TASK-003-20260304-132750.log b/spec/.executor-logs/TASK-003-20260304-132750.log
+index 116118d..7e52d18 100644
+--- a/spec/.executor-logs/TASK-003-20260304-132750.log
++++ b/spec/.executor-logs/TASK-003-20260304-132750.log
+@@ -85,3 +85,29 @@ When complete, respond with:
+ Begin implementation:
+ 
+ 
++=== OUTPUT ===
++## Summary
++
++### Files created:
++- `src/proctor/core/config.py` — Config models (`LLMConfig`, `NATSConfig`, `SchedulerConfig`, `ProctorConfig`) and `load_config()` function
++- `config/proctor.yaml` — Example configuration file
++- `tests/test_core/test_config.py` — 24 tests covering all checklist items
++
++### Files modified:
++- `src/proctor/core/__init__.py` — Added exports for all config types and `load_config`
++
++### Checklist coverage:
++- `LLMConfig`, `NATSConfig`, `SchedulerConfig` models with defaults per DESIGN-002
++- `ProctorConfig` root model with nested configs (defaults to `LLMConfig()`, etc.)
++- `load_config(path)` returns defaults if file missing, `None`, or empty YAML
++- Example `config/proctor.yaml` matches the design spec
++- Tests: default config values, YAML loading, missing file, nested defaults, string paths, empty YAML, invalid YAML, full roundtrip, example config, public exports
++- 24 tests, all passing. 75 total tests passing. No lint errors.
++
++TASK_COMPLETE
++
++
++=== STDERR ===
++
++
++=== RETURN CODE: 0 ===
+diff --git a/spec/.executor-logs/TASK-003-review-20260304-133214.log b/spec/.executor-logs/TASK-003-review-20260304-133214.log
+new file mode 100644
+index 0000000..294257b
+--- /dev/null
++++ b/spec/.executor-logs/TASK-003-review-20260304-133214.log
+@@ -0,0 +1,1035 @@
++=== REVIEW PROMPT ===
++# Code Review Request
++
++## Task Completed: TASK-003 — Config Loading
++
++## Changed Files:
++spec/.executor-logs/TASK-003-20260304-132750.log
++spec/.executor-logs/TASK-007-20260304-132750.log
++spec/.executor-logs/TASK-007-review-20260304-133101.log
++spec/.executor-logs/TASK-010-20260304-133101.log
++spec/.executor-logs/run-20260304-132457.log
++spec/.executor-progress.txt
++spec/.executor-state.db-wal
++spec/.task-history.log
++spec/tasks.md
++src/proctor/core/config.py
++src/proctor/workers/__init__.py
++src/proctor/workers/runtime.py
++tests/test_core/test_config.py
++
++## Full Diff:
++diff --git a/spec/.executor-logs/TASK-003-20260304-132750.log b/spec/.executor-logs/TASK-003-20260304-132750.log
++index 116118d..7e52d18 100644
++--- a/spec/.executor-logs/TASK-003-20260304-132750.log
+++++ b/spec/.executor-logs/TASK-003-20260304-132750.log
++@@ -85,3 +85,29 @@ When complete, respond with:
++ Begin implementation:
++ 
++ 
+++=== OUTPUT ===
+++## Summary
+++
+++### Files created:
+++- `src/proctor/core/config.py` — Config models (`LLMConfig`, `NATSConfig`, `SchedulerConfig`, `ProctorConfig`) and `load_config()` function
+++- `config/proctor.yaml` — Example configuration file
+++- `tests/test_core/test_config.py` — 24 tests covering all checklist items
+++
+++### Files modified:
+++- `src/proctor/core/__init__.py` — Added exports for all config types and `load_config`
+++
+++### Checklist coverage:
+++- `LLMConfig`, `NATSConfig`, `SchedulerConfig` models with defaults per DESIGN-002
+++- `ProctorConfig` root model with nested configs (defaults to `LLMConfig()`, etc.)
+++- `load_config(path)` returns defaults if file missing, `None`, or empty YAML
+++- Example `config/proctor.yaml` matches the design spec
+++- Tests: default config values, YAML loading, missing file, nested defaults, string paths, empty YAML, invalid YAML, full roundtrip, example config, public exports
+++- 24 tests, all passing. 75 total tests passing. No lint errors.
+++
+++TASK_COMPLETE
+++
+++
+++=== STDERR ===
+++
+++
+++=== RETURN CODE: 0 ===
++diff --git a/spec/.executor-logs/TASK-007-20260304-132750.log b/spec/.executor-logs/TASK-007-20260304-132750.log
++index 8df076a..e784ca8 100644
++--- a/spec/.executor-logs/TASK-007-20260304-132750.log
+++++ b/spec/.executor-logs/TASK-007-20260304-132750.log
++@@ -87,3 +87,28 @@ When complete, respond with:
++ Begin implementation:
++ 
++ 
+++=== OUTPUT ===
+++## Summary
+++
+++**Files created:**
+++- `src/proctor/workflow/__init__.py` — package with public exports
+++- `src/proctor/workflow/spec.py` — all models: `WorkflowMode`, `StepType`, `StepRetry`, `Step`, `WorkflowPolicies`, `WorkflowSpec`
+++- `tests/test_workflow/__init__.py` — test package
+++- `tests/test_workflow/test_spec.py` — 21 tests covering all checklist items
+++
+++**Checklist results:**
+++- `WorkflowMode` and `StepType` StrEnums — implemented
+++- `Step` model with id, type, description, inputs, outputs, depends_on, retry — implemented
+++- `StepRetry` and `WorkflowPolicies` models — implemented with design-specified defaults (max_retries=2, max_runtime=900s)
+++- `WorkflowSpec` with mode-specific fields and shared policies — implemented
+++- Tests: simple spec, DAG spec with steps, policies defaults, serialization roundtrip, step inputs/outputs — all 21 pass
+++- Lint: clean
+++- All 51 project tests pass
+++
+++TASK_COMPLETE
+++
+++
+++=== STDERR ===
+++
+++
+++=== RETURN CODE: 0 ===
++diff --git a/spec/.executor-logs/TASK-007-review-20260304-133101.log b/spec/.executor-logs/TASK-007-review-20260304-133101.log
++new file mode 100644
++index 0000000..0fde3e5
++--- /dev/null
+++++ b/spec/.executor-logs/TASK-007-review-20260304-133101.log
++@@ -0,0 +1,1083 @@
+++=== REVIEW PROMPT ===
+++# Code Review Request
+++
+++## Task Completed: TASK-007 — WorkflowSpec Model
+++
+++## Changed Files:
+++config/proctor.yaml
+++spec/.executor-logs/TASK-002-20260304-132750.log
+++spec/.executor-logs/TASK-002-review-20260304-132943.log
+++spec/.executor-logs/TASK-003-20260304-132750.log
+++spec/.executor-logs/TASK-007-20260304-132750.log
+++spec/.executor-logs/run-20260304-132457.log
+++spec/.executor-progress.txt
+++spec/.executor-state.db-wal
+++spec/.task-history.log
+++spec/tasks.md
+++src/proctor/core/__init__.py
+++src/proctor/core/config.py
+++src/proctor/core/models.py
+++src/proctor/workflow/__init__.py
+++src/proctor/workflow/spec.py
+++tests/test_core/__init__.py
+++tests/test_core/test_config.py
+++tests/test_core/test_models.py
+++tests/test_workflow/__init__.py
+++tests/test_workflow/test_spec.py
+++
+++## Full Diff:
+++diff --git a/config/proctor.yaml b/config/proctor.yaml
+++new file mode 100644
+++index 0000000..4ca4165
+++--- /dev/null
++++++ b/config/proctor.yaml
+++@@ -0,0 +1,22 @@
++++# Proctor configuration
++++node_role: standalone
++++node_id: node-local
++++nats_url: nats://localhost:4222
++++data_dir: data
++++log_level: INFO
++++
++++llm:
++++  default_model: claude-sonnet-4-20250514
++++  fallback_model: ollama/llama3.2
++++  max_tokens: 4096
++++  temperature: 0.7
++++
++++nats:
++++  url: nats://localhost:4222
++++  connect_timeout: 5.0
++++  reconnect_time_wait: 2.0
++++  max_reconnect_attempts: 60
++++
++++scheduler:
++++  poll_interval_seconds: 30
++++  enabled: true
+++diff --git a/spec/.executor-logs/TASK-002-20260304-132750.log b/spec/.executor-logs/TASK-002-20260304-132750.log
+++new file mode 100644
+++index 0000000..0bf5238
+++--- /dev/null
++++++ b/spec/.executor-logs/TASK-002-20260304-132750.log
+++@@ -0,0 +1,114 @@
++++=== PROMPT ===
++++# Task Execution Request
++++
++++## Task: TASK-002 — Core Models (Event, Task, Envelope)
++++
++++**Priority:** P0
++++**Estimate:** 2h
++++**Milestone:** Milestone 1: Foundation (Phase 0)
++++
++++## Checklist (implement ALL items):
++++
++++- [ ] Create `src/proctor/core/__init__.py`
++++- [ ] Implement `TaskStatus` StrEnum with PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED
++++- [ ] Implement `Event` model with auto id, type, source, payload, timestamp
++++- [ ] Implement `Task` model with status machine, spec dict, optional fields
++++- [ ] Implement `Envelope` model with reply_to, correlation_id, ttl_seconds
++++- [ ] Write tests: creation, serialization, unique IDs, status values
++++- [ ] [TEST] Unit tests: Event creation and uniqueness
++++- [ ] [TEST] Unit tests: Task defaults and status transitions
++++- [ ] [TEST] Unit tests: Envelope with all optional fields
++++- [ ] [TEST] Coverage >= 80%
++++
++++## Related Requirements:
++++
++++#### REQ-001: Core Data Models
++++**As a** system developer
++++**I want** typed pydantic models for Event, Task, and Envelope
++++**So that** all inter-component communication is validated and serializable
++++
++++**Acceptance Criteria:**
++++```gherkin
++++GIVEN the core module is imported
++++WHEN I create an Event with type, source, and payload
++++THEN it has an auto-generated UUID id and UTC timestamp
++++AND it can be serialized to JSON and deserialized back
++++
++++GIVEN the core module is imported
++++WHEN I create a Task with a spec dict
++++THEN its status defaults to PENDING and retries defaults to 0
++++
++++GIVEN the core module is imported
++++WHEN I create an Envelope with type, source, and payload
++++THEN it supports optional reply_to, correlation_id, target, and ttl_seconds
++++```
++++
++++**Priority:** P0
++++**Traces to:** [TASK-002], [DESIGN-001]
++++
++++---
++++
++++## Related Design:
++++
++++See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
++++
++++## Instructions:
++++
++++1. Implement ALL checklist items for this task
++++2. Write unit tests for new code (coverage ≥80%)
++++3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
++++4. Use existing code style and conventions
++++5. Create/update files as needed
++++
++++## Dependencies:
++++
++++- To add a new dependency: `uv add <package>`
++++- To add a dev dependency: `uv add --dev <package>`
++++- NEVER edit pyproject.toml manually for dependencies
++++- After adding dependencies, they are available immediately
++++
++++## Success Criteria:
++++
++++- All checklist items implemented
++++- All tests pass (`uv run pytest`)
++++- No lint errors (`uv run ruff check .`)
++++- Code follows project conventions
++++
++++## Output:
++++
++++When complete, respond with:
++++- Summary of changes made
++++- Files created/modified
++++- Any issues or notes
++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
++++
++++
++++Begin implementation:
++++
++++
++++=== OUTPUT ===
++++## Summary
++++
++++**Files created:**
++++- `src/proctor/core/__init__.py` — public exports for `Event`, `Task`, `Envelope`, `TaskStatus`
++++- `src/proctor/core/models.py` — all four core models per DESIGN-001
++++- `tests/test_core/__init__.py` — test package init
++++- `tests/test_core/test_models.py` — 23 unit tests
++++
++++**Implementation details:**
++++- `TaskStatus` — StrEnum with 5 states (PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED)
++++- `Event` — auto-generated UUID `id` and UTC `timestamp`, required `type`/`source`, optional `payload`
++++- `Task` — defaults to PENDING status, retries=0, auto timestamps, optional `trigger_event`/`worker_id`/`result`/`deadline`
++++- `Envelope` — NATS wrapper with optional `reply_to`, `correlation_id`, `target`, `ttl_seconds`
++++
++++**Tests cover:** creation, defaults, auto-generated IDs, uniqueness (100 UUIDs), timestamp accuracy, serialization roundtrips, all optional fields, public exports. All models exercise every field path.
++++
++++**Results:** 51/51 tests pass, 0 lint errors, formatting clean.
++++
++++TASK_COMPLETE
++++
++++
++++=== STDERR ===
++++
++++
++++=== RETURN CODE: 0 ===
+++diff --git a/spec/.executor-logs/TASK-002-review-20260304-132943.log b/spec/.executor-logs/TASK-002-review-20260304-132943.log
+++new file mode 100644
+++index 0000000..aa96819
+++--- /dev/null
++++++ b/spec/.executor-logs/TASK-002-review-20260304-132943.log
+++@@ -0,0 +1,1146 @@
++++=== REVIEW PROMPT ===
++++# Code Review Request
++++
++++## Task Completed: TASK-002 — Core Models (Event, Task, Envelope)
++++
++++## Changed Files:
++++.gitignore
++++spec/.executor-logs/TASK-100-20260304-132457.log
++++spec/.executor-logs/TASK-100-review-20260304-132614.log
++++spec/.executor-logs/run-20260304-130754.log
++++spec/.executor-logs/run-20260304-132457.log
++++spec/.executor-progress.txt
++++spec/.executor-state.db-shm
++++spec/.executor-state.db-wal
++++spec/.task-history.log
++++spec/tasks.md
++++tests/test_scaffold.py
++++
++++## Full Diff:
++++diff --git a/.gitignore b/.gitignore
++++index 94f0eb9..2ad83d7 100644
++++--- a/.gitignore
+++++++ b/.gitignore
++++@@ -12,6 +12,8 @@ wheels/
++++ # Data and databases
++++ data/
++++ *.db
+++++*.db-shm
+++++*.db-wal
++++ 
++++ # Secrets
++++ *.age
++++diff --git a/spec/.executor-logs/TASK-100-20260304-132457.log b/spec/.executor-logs/TASK-100-20260304-132457.log
++++new file mode 100644
++++index 0000000..998c161
++++--- /dev/null
+++++++ b/spec/.executor-logs/TASK-100-20260304-132457.log
++++@@ -0,0 +1,86 @@
+++++=== PROMPT ===
+++++# Task Execution Request
+++++
+++++## Task: TASK-100 — Test Infrastructure Setup
+++++
+++++**Priority:** P0
+++++**Estimate:** 1h
+++++**Milestone:** Milestone 1: Foundation (Phase 0)
+++++
+++++## Checklist (implement ALL items):
+++++
+++++- [ ] pytest discovers and runs tests from `tests/`
+++++- [ ] `@pytest.mark.asyncio` tests work with anyio backend
+++++- [ ] conftest.py provides `anyio_backend` fixture
+++++- [ ] ruff lint and format configured and passing
+++++
+++++## Related Requirements:
+++++
+++++See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/requirements.md
+++++
+++++## Related Design:
+++++
+++++See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++++
+++++## Instructions:
+++++
+++++1. Implement ALL checklist items for this task
+++++2. Write unit tests for new code (coverage ≥80%)
+++++3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+++++4. Use existing code style and conventions
+++++5. Create/update files as needed
+++++
+++++## Dependencies:
+++++
+++++- To add a new dependency: `uv add <package>`
+++++- To add a dev dependency: `uv add --dev <package>`
+++++- NEVER edit pyproject.toml manually for dependencies
+++++- After adding dependencies, they are available immediately
+++++
+++++## Success Criteria:
+++++
+++++- All checklist items implemented
+++++- All tests pass (`uv run pytest`)
+++++- No lint errors (`uv run ruff check .`)
+++++- Code follows project conventions
+++++
+++++## Output:
+++++
+++++When complete, respond with:
+++++- Summary of changes made
+++++- Files created/modified
+++++- Any issues or notes
+++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++++
+++++
+++++Begin implementation:
+++++
+++++
+++++=== OUTPUT ===
+++++All checklist items verified and working.
+++++
+++++## Summary
+++++
+++++The test infrastructure was already largely in place from TASK-001. I added one verification:
+++++
+++++**Files modified:**
+++++- `tests/test_scaffold.py` — Added `test_async_anyio_backend` that confirms `@pytest.mark.asyncio` + `anyio_backend` fixture runs on both asyncio and trio
+++++
+++++**Checklist results:**
+++++- **pytest discovers and runs tests from `tests/`** — 7 tests discovered and passing
+++++- **`@pytest.mark.asyncio` tests work with anyio backend** — Verified with new test running on both asyncio and trio
+++++- **conftest.py provides `anyio_backend` fixture** — Fixture params `["asyncio", "trio"]`, working correctly
+++++- **ruff lint and format configured and passing** — Rules `E, F, I, UP, B, SIM` with line-length=88, all passing
+++++
+++++**Configuration details:**
+++++- `pyproject.toml`: `asyncio_mode = "strict"`, `testpaths = ["tests"]`
+++++- `conftest.py`: `anyio_backend` fixture parametrized for asyncio + trio
+++++- Dev deps: `pytest>=9.0.2`, `pytest-asyncio>=1.3.0`, `anyio[trio]>=4.12.1`, `ruff>=0.15.4`
+++++
+++++TASK_COMPLETE
+++++
+++++
+++++=== STDERR ===
+++++
+++++
+++++=== RETURN CODE: 0 ===
++++diff --git a/spec/.executor-logs/TASK-100-review-20260304-132614.log b/spec/.executor-logs/TASK-100-review-20260304-132614.log
++++new file mode 100644
++++index 0000000..7caa452
++++--- /dev/null
+++++++ b/spec/.executor-logs/TASK-100-review-20260304-132614.log
++++@@ -0,0 +1,1228 @@
+++++=== REVIEW PROMPT ===
+++++# Code Review Request
+++++
+++++## Task Completed: TASK-100 — Test Infrastructure Setup
+++++
+++++## Changed Files:
+++++.claude/skills/spec-generator-skill/SKILL.md
+++++.claude/skills/spec-generator-skill/templates/Makefile.template
+++++.claude/skills/spec-generator-skill/templates/design.template.md
+++++.claude/skills/spec-generator-skill/templates/executor.config.yaml
+++++.claude/skills/spec-generator-skill/templates/executor.py
+++++.claude/skills/spec-generator-skill/templates/phase-design.template.md
+++++.claude/skills/spec-generator-skill/templates/phase-requirements.template.md
+++++.claude/skills/spec-generator-skill/templates/phase-tasks.template.md
+++++.claude/skills/spec-generator-skill/templates/prompts/review.claude.md
+++++.claude/skills/spec-generator-skill/templates/prompts/review.codex.md
+++++.claude/skills/spec-generator-skill/templates/prompts/review.llama.md
+++++.claude/skills/spec-generator-skill/templates/prompts/review.md
+++++.claude/skills/spec-generator-skill/templates/prompts/review.ollama.md
+++++.claude/skills/spec-generator-skill/templates/requirements.template.md
+++++.claude/skills/spec-generator-skill/templates/task.py
+++++.claude/skills/spec-generator-skill/templates/tasks.template.md
+++++.claude/skills/spec-generator-skill/templates/workflow.template.md
+++++.gitignore
+++++.python-version
+++++CLAUDE.md
+++++README.md
+++++pyproject.toml
+++++spec/.executor-logs/TASK-001-20260304-130754.log
+++++spec/.executor-logs/TASK-001-review-20260304-131102.log
+++++spec/.executor-logs/run-20260304-125528.log
+++++spec/.executor-logs/run-20260304-130754.log
+++++spec/.executor-progress.txt
+++++spec/.executor-state.db-shm
+++++spec/.executor-state.db-wal
+++++spec/design.md
+++++spec/requirements.md
+++++spec/tasks.md
+++++src/proctor/__init__.py
+++++src/proctor/__main__.py
+++++tests/__init__.py
+++++tests/conftest.py
+++++tests/test_scaffold.py
+++++uv.lock
+++++
+++++## Full Diff:
+++++diff --git a/.claude/skills/spec-generator-skill/SKILL.md b/.claude/skills/spec-generator-skill/SKILL.md
+++++new file mode 100644
+++++index 0000000..f033e7c
+++++--- /dev/null
++++++++ b/.claude/skills/spec-generator-skill/SKILL.md
+++++@@ -0,0 +1,504 @@
++++++# Spec Generator Skill
++++++
++++++## Overview
++++++
++++++Skill for creating project specifications in Kiro-style format: three linked documents with requirements-to-tasks traceability.
++++++
++++++## When to Use
++++++
++++++- Starting a new project — creating a full specification
++++++- Documenting an existing project
++++++- Requests like: "create a spec", "write requirements", "document the project"
++++++
++++++## Structure
++++++
++++++The specification consists of 3 core files in the `spec/` directory, with optional phase-specific documents as the project grows:
++++++
++++++```
++++++project/
++++++└── spec/
++++++    ├── requirements.md           # Phase 1: WHAT we do
++++++    ├── design.md                 # Phase 1: HOW we do it
++++++    ├── tasks.md                  # Phase 1: WHEN we do it
++++++    │
++++++    ├── phase2-requirements.md    # Phase 2: new requirements
++++++    ├── phase2-design.md          # Phase 2: new/extended design
++++++    ├── phase2-tasks.md           # Phase 2: new tasks
++++++    │
++++++    ├── phase3-requirements.md    # Phase 3: ...
++++++    ├── phase3-design.md
++++++    └── phase3-tasks.md
++++++```
++++++
++++++The initial `requirements.md`, `design.md`, `tasks.md` cover Phase 1 (MVP). As the project evolves, each new phase gets its own set of 3 documents.
++++++
++++++See [Phases](#phases) for details.
++++++
++++++## Files
++++++
++++++### 1. requirements.md
++++++
++++++**Contains:**
++++++- Project context and goals
++++++- Stakeholders
++++++- Out of Scope (explicitly!)
++++++- Functional requirements (REQ-XXX) in User Story + GIVEN-WHEN-THEN format
++++++- Non-functional requirements (NFR-XXX)
++++++- Constraints and tech stack
++++++- Acceptance criteria by milestones
++++++
++++++**Requirement format:**
++++++```markdown
++++++#### REQ-001: Title
++++++**As a** <role>
++++++**I want** <action>
++++++**So that** <value>
++++++
++++++**Acceptance Criteria:**
++++++\```gherkin
++++++GIVEN <precondition>
++++++WHEN <action>
++++++THEN <result>
++++++AND <additional result>
++++++\```
++++++
++++++**Priority:** P0 | P1 | P2 | P3
++++++**Traces to:** [TASK-XXX], [DESIGN-XXX]
++++++```
++++++
++++++### 2. design.md
++++++
++++++**Contains:**
++++++- Architectural principles
++++++- High-level diagram (ASCII)
++++++- System components (DESIGN-XXX)
++++++- APIs and interfaces
++++++- Data schemas
++++++- Key decisions (ADR)
++++++- Directory structure
++++++
++++++**Component format:**
++++++```markdown
++++++### DESIGN-001: Component Name
++++++
++++++#### Description
++++++...
++++++
++++++#### Interface
++++++\```python
++++++class Component(ABC):
++++++    @abstractmethod
++++++    def method(self, param: Type) -> ReturnType:
++++++        pass
++++++\```
++++++
++++++#### Configuration
++++++\```yaml
++++++component:
++++++  option: value
++++++\```
++++++
++++++**Traces to:** [REQ-XXX]
++++++```
++++++
++++++### 3. tasks.md
++++++
++++++**Contains:**
++++++- Priority and status legend
++++++- Tasks (TASK-XXX) with checklists
++++++- Dependencies between tasks
++++++- Traceability to requirements
++++++- Dependency graph
++++++- Summary by milestones
++++++
++++++**Task format:**
++++++```markdown
++++++### TASK-001: Title
++++++🔴 P0 | ⬜ TODO | Est: 3d
++++++
++++++**Description:**
++++++Brief description of the task.
++++++
++++++**Checklist:**
++++++- [ ] Subtask 1
++++++- [ ] Subtask 2
++++++- [ ] Subtask 3
++++++
++++++**Traces to:** [REQ-XXX], [REQ-YYY]
++++++**Depends on:** [TASK-ZZZ]
++++++**Blocks:** [TASK-AAA]
++++++```
++++++
++++++## Phases
++++++
++++++Projects evolve in phases. Each phase is a self-contained increment with its own requirements, design, and tasks.
++++++
++++++### When to Create a New Phase
++++++
++++++- **Initial project setup** → Phase 1 (MVP) uses the base 3 files
++++++- **Project grows significantly** → new phase when adding a major capability that needs its own requirements, design decisions, and task breakdown
++++++- **Existing spec is complete** → all Phase N tasks are DONE or in progress, and new work doesn't fit existing milestones
++++++
++++++### Phase Convention
++++++
++++++| Aspect | Convention |
++++++|--------|-----------|
++++++| Files | `phaseN-requirements.md`, `phaseN-design.md`, `phaseN-tasks.md` |
++++++| Task IDs | Phase 1: TASK-0xx, Phase 2: TASK-1xx..2xx, Phase 3: TASK-3xx..4xx, etc. Or use milestone-based ranges (M1: 001-099, M2: 101-199) |
++++++| Requirement IDs | Phase 1: REQ-0xx, Phase 2: use prefix (e.g., `GE-FR-001` for a sub-package, `AG-FR-001` for a plugin) |
++++++| Design IDs | Phase 1: DESIGN-0xx, Phase N: DESIGN-P{N}-0xx |
++++++| ADRs | Cumulative in `docs/adr/`, numbered sequentially across phases |
++++++| Milestones | Continuous numbering: Phase 1 = M1-M3, Phase 2 = M4-M6, Phase 3 = M7-M9, etc. |
++++++
++++++### Phase Document Structure
++++++
++++++Each phase document follows the same format as the base templates but:
++++++
++++++1. **References the base spec** — "Per ADR-002", "Extends DESIGN-003"
++++++2. **Has its own scope** — In Scope / Out of Scope specific to this phase
++++++3. **Has its own milestones** — Not reusing Phase 1 milestones
++++++4. **Cross-references previous phases** — "Depends on TASK-012 (Phase 1)"
++++++5. **Has its own exit criteria** — When is this phase done?
++++++
++++++### Phase vs Milestone
++++++
++++++| | Phase | Milestone |
++++++|---|---|---|
++++++| **Scope** | Major capability / project evolution | Grouping of related tasks within a phase |
++++++| **Documents** | Own requirements + design + tasks | Section within tasks.md |
++++++| **Size** | Weeks to months | Days to weeks |
++++++| **Example** | Phase 5: Game-Theoretic Evaluation | M9: game-environments Core |
++++++
++++++A phase contains 2-4 milestones. A milestone contains 3-10 tasks.
++++++
++++++### Roadmap & ADRs
++++++
++++++For multi-phase projects, also maintain:
++++++- `docs/07-roadmap.md` — overview of all phases with status (✅/📋)
++++++- `docs/adr/` — Architecture Decision Records, numbered across phases
++++++
++++++The roadmap is the "bird's eye view"; phase documents are the detailed specs.
++++++
++++++### Example: Adding Phase 5 to ATP Platform
++++++
++++++```
++++++atp-platform/
++++++├── spec/
++++++│   ├── requirements.md              # Phase 4 (Growth)
++++++│   ├── design.md                     # Phase 4
++++++│   ├── tasks.md                      # Phase 4: TASK-101..808
++++++│   ├── phase5-requirements.md        # Phase 5 (Game-Theoretic)
++++++│   ├── phase5-design.md              # Phase 5
++++++│   └── phase5-tasks.md               # Phase 5: TASK-901..922
++++++├── docs/
++++++│   ├── 07-roadmap.md                 # All phases overview
++++++│   └── adr/
++++++│       ├── 001-framework-agnostic.md # Phase 1 decision
++++++│       └── 002-game-theoretic.md     # Phase 5 decision
++++++```
++++++
++++++---
++++++
++++++## Traceability
++++++
++++++The key feature is the linkage between documents:
++++++
++++++```
++++++REQ-001 ──────► DESIGN-001
++++++    │               │
++++++    │               ▼
++++++    └─────────► TASK-001
++++++```
++++++
++++++- Each requirement references design and tasks
++++++- Each design references requirements
++++++- Each task references requirements and design
++++++- Use the format `[REQ-XXX]`, `[DESIGN-XXX]`, `[TASK-XXX]`
++++++
++++++## Priorities
++++++
++++++| Emoji | Code | Description |
++++++|-------|------|-------------|
++++++| 🔴 | P0 | Critical — blocks the release |
++++++| 🟠 | P1 | High — needed for full usability |
++++++| 🟡 | P2 | Medium — experience improvement |
++++++| 🟢 | P3 | Low — nice to have |
++++++
++++++## Statuses
++++++
++++++| Emoji | Status | Description |
++++++|-------|--------|-------------|
++++++| ⬜ | TODO | Not started |
++++++| 🔄 | IN PROGRESS | In progress |
++++++| ✅ | DONE | Completed |
++++++| ⏸️ | BLOCKED | Blocked |
++++++
++++++## Creation Process
++++++
++++++### New Project (Phase 1)
++++++
++++++1. **Gather context:**
++++++   - What problem are we solving?
++++++   - Who are the users?
++++++   - What are the constraints?
++++++
++++++2. **Start with requirements.md:**
++++++   - Goals and success metrics
++++++   - Out of scope (important!)
++++++   - Requirements in user story format
++++++   - Acceptance criteria in GIVEN-WHEN-THEN
++++++
++++++3. **Then design.md:**
++++++   - Architecture derived from requirements
++++++   - Components and interfaces
++++++   - ADRs for key decisions
++++++   - References to requirements
++++++
++++++4. **Finish with tasks.md:**
++++++   - Decompose design into tasks
++++++   - Dependencies between tasks
++++++   - Estimates and priorities
++++++   - Milestones
++++++
++++++### Adding a Phase (Phase N, N ≥ 2)
++++++
++++++1. **Review existing spec:**
++++++   - Read current requirements, design, tasks
++++++   - Identify what's already done vs planned
++++++   - Understand existing architecture and constraints
++++++
++++++2. **Create ADR (if architectural change):**
++++++   - Write `docs/adr/NNN-decision-title.md`
++++++   - Document context, decision, consequences, alternatives
++++++
++++++3. **Create phase requirements** (`phaseN-requirements.md`):
++++++   - Scope: what's IN and OUT for this phase
++++++   - New functional requirements with new ID prefix
++++++   - New NFRs or updates to existing
++++++   - Traceability to new tasks
++++++   - Phase exit criteria
++++++
++++++4. **Create phase design** (`phaseN-design.md`):
++++++   - Reference existing architecture (don't repeat)
++++++   - New components and their interfaces
++++++   - Integration points with existing system
++++++   - Data models for new functionality
++++++   - Data flow diagrams
++++++
++++++5. **Create phase tasks** (`phaseN-tasks.md`):
++++++   - New milestone numbers (continue from previous phase)
++++++   - Tasks with new ID range
++++++   - Dependencies (can reference tasks from previous phases)
++++++   - Dependency graph, critical path, summary
++++++   - Recommended execution order
++++++
++++++6. **Update roadmap** (`docs/07-roadmap.md`):
++++++   - Add new phase with deliverables
++++++   - Update timeline
++++++   - Update exit criteria
++++++
++++++## Templates
++++++
++++++File templates are located in `templates/`:
++++++- `requirements.template.md` — requirements template (Phase 1 / new project)
++++++- `design.template.md` — design template (Phase 1 / new project)
++++++- `tasks.template.md` — tasks template (Phase 1 / new project)
++++++- `phase-requirements.template.md` — phase requirements template (Phase N, N ≥ 2)
++++++- `phase-design.template.md` — phase design template (Phase N, N ≥ 2)
++++++- `phase-tasks.template.md` — phase tasks template (Phase N, N ≥ 2)
++++++- `workflow.template.md` — workflow guide
++++++- `task.py` — CLI for task management
++++++- `executor.py` — auto-execution via Claude CLI
++++++- `executor.config.yaml` — executor configuration
++++++- `Makefile.template` — Make targets for the project
++++++
++++++## Examples
++++++
++++++See examples in `examples/`:
++++++- `atp-platform/` — Agent Test Platform
++++++
++++++## Task Management
++++++
++++++The specification includes a CLI for task management:
++++++
++++++```bash
++++++# === Manual mode ===
++++++python task.py list              # List tasks
++++++python task.py next              # Next tasks
++++++python task.py start TASK-001    # Start
++++++python task.py done TASK-001     # Complete
++++++
++++++# === Automatic mode (Claude CLI) ===
++++++python executor.py run           # Execute the next task
++++++python executor.py run --all     # Execute all ready tasks
++++++python executor.py status        # Status
++++++python executor.py retry TASK-001
++++++```
++++++
++++++**Automatic execution:**
++++++- Generates a prompt from spec/* for Claude
++++++- Runs `claude -p "<prompt>"`
++++++- Validates the result (tests, lint)
++++++- On failure — retry with a limit
++++++- Protection: max_retries=3, max_consecutive_failures=2
++++++
++++++A `Makefile` is also created with targets:
++++++- `make exec` — execute the next task
++++++- `make exec-all` — execute all ready tasks
++++++- `make exec-mvp` — MVP milestone only
++++++
++++++More details in `spec/WORKFLOW.md`.
++++++
++++++## TASK-000: Project Scaffolding
++++++
++++++**IMPORTANT:** When creating a specification for a **new projec
+... (diff truncated)
+
+## Diff Summary:
+spec/.executor-logs/TASK-003-20260304-132750.log   |   26 +
+ .../TASK-003-review-20260304-133214.log            | 1035 ++++++++++++++++++++
+ spec/.executor-logs/TASK-010-20260304-133101.log   |   43 +
+ spec/.executor-logs/run-20260304-132457.log        |   18 +
+ spec/.executor-progress.txt                        |    4 +
+ spec/.executor-state.db-wal                        |  Bin 74192 -> 127752 bytes
+ spec/.task-history.log                             |    4 +
+ spec/tasks.md                                      |   48 +-
+ src/proctor/workers/runtime.py                     |    7 +-
+ tests/test_workers/__init__.py                     |    0
+ tests/test_workers/test_runtime.py                 |  435 ++++++++
+ tests/test_workflow/test_spec.py                   |    6 +-
+ 12 files changed, 1594 insertions(+), 32 deletions(-)
+
+## Task Checklist
+- Create `src/proctor/workers/__init__.py`
+- Implement `ToolDef`, `ToolResult`, `AgentResult` models
+- Implement `AgentRuntime.__init__` with llm_fn, tools, max_turns
+- Implement `AgentRuntime.run()` — the main loop
+- Implement `_call_tool()` — execute tool with error handling
+- Handle unknown tool names gracefully
+- Handle max_turns limit
+- Write tests: no-tools completion, tool call + response, max turns, unknown tool
+- [TEST] Unit tests: simple completion without tools
+- [TEST] Unit tests: tool call and response
+- [TEST] Unit tests: max turns limit
+- [TEST] Unit tests: unknown tool returns error
+- [TEST] Coverage >= 80%
+
+## Test Results
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-9.0.2, pluggy-1.6.0 -- /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 108 items
+
+tests/test_core/test_config.py::TestLLMConfig::test_defaults PASSED      [  0%]
+tests/test_core/test_config.py::TestLLMConfig::test_custom_values PASSED [  1%]
+tests/test_core/test_config.py::TestNATSConfig::test_defaults PASSED     [  2%]
+tests/test_core/test_config.py::TestNATSConfig::test_custom_values PASSED [  3%]
+tests/test_core/test_config.py::TestSchedulerConfig::test_defaults PASSED [  4%]
+tests/test_core/test_config.py::TestSchedulerConfig::test_disabled PASSED [  5%]
+tests/test_core/test_config.py::TestSchedulerConfig::test_custom_interval PASSED [  6%]
+tests/test_core/test_config.py::TestProctorConfig::test_defaults PASSED  [  7%]
+tests/test_core/test_config.py::TestProctorConfig::test_nested_llm_defaults PASSED [  8%]
+tests/test_core/test_config.py::TestProctorConfig::test_nested_nats_defaults PASSED [  9%]
+tests/test_core/test_config.py::TestProctorConfig::test_nested_scheduler_defaults PASSED [ 10%]
+tests/test_core/test_config.py::TestProctorConfig::test_custom_top_level PASSED [ 11%]
+tests/test_core/test_config.py::TestProctorConfig::test_data_dir_as_string PASSED [ 12%]
+tests/test_core/test_config.py::TestProctorConfig::test_partial_nested_override PASSED [ 12%]
+tests/test_core/test_config.py::TestLoadConfig::test_none_path_returns_defaults PASSED [ 13%]
+tests/test_core/test_config.py::TestLoadConfig::test_missing_file_returns_defaults PASSED [ 14%]
+tests/test_core/test_config.py::TestLoadConfig::test_load_from_yaml PASSED [ 15%]
+tests/test_core/test_config.py::TestLo
+
+## Lint Status
+clean
+
+## Review Instructions:
+
+Launch the following review agents in parallel using the Task tool:
+
+### 1. Quality Agent
+Review the code changes for:
+- Bugs and logic errors
+- Security vulnerabilities
+- Error handling gaps
+
+### 2. Implementation Agent
+Verify the implementation:
+- Code achieves the stated task goals
+- All checklist items are properly implemented
+- Edge cases are handled
+
+### 3. Testing Agent
+Review test coverage:
+- New code has adequate test coverage
+- Tests are meaningful and not trivial
+
+## Output:
+
+For each issue found, describe it briefly.
+If issues are found, fix them and respond with: "REVIEW_FIXED"
+If no issues found, respond with: "REVIEW_PASSED"
+
+
+=== OUTPUT ===
+All 116 tests pass, lint and formatting clean.
+
+## Review Result
+
+**Implementation:** Correct and complete — all DESIGN-009 interfaces match, all checklist items implemented.
+
+**Code quality:** Clean — proper async patterns, good error handling with logging, no security issues.
+
+**Issues fixed:** Added 4 missing test cases covering previously untested code paths:
+- `test_unknown_response_type_treated_as_text` — covers the fallback at lines 115-120
+- `test_empty_instruction` — validates empty input edge case
+- `test_max_turns_one_with_tool_call` — boundary condition for minimal turns
+- `test_llm_exception_propagates` — documents that LLM errors propagate to caller
+
+REVIEW_FIXED
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
