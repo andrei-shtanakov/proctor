@@ -79,24 +79,24 @@ Verify test infrastructure works: pytest discovers tests, anyio backend is confi
 ---
 
 ### TASK-002: Core Models (Event, Task, Envelope)
-🔴 P0 | 🔄 IN_PROGRESS | Est: 2h
+🔴 P0 | ✅ DONE | Est: 2h
 
 **Description:**
 Implement pydantic models for Event, Task, TaskStatus, and Envelope in `src/proctor/core/models.py`. All models auto-generate UUID ids and UTC timestamps.
 
 **Checklist:**
-- [ ] Create `src/proctor/core/__init__.py`
-- [ ] Implement `TaskStatus` StrEnum with PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED
-- [ ] Implement `Event` model with auto id, type, source, payload, timestamp
-- [ ] Implement `Task` model with status machine, spec dict, optional fields
-- [ ] Implement `Envelope` model with reply_to, correlation_id, ttl_seconds
-- [ ] Write tests: creation, serialization, unique IDs, status values
+- [x] Create `src/proctor/core/__init__.py`
+- [x] Implement `TaskStatus` StrEnum with PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED
+- [x] Implement `Event` model with auto id, type, source, payload, timestamp
+- [x] Implement `Task` model with status machine, spec dict, optional fields
+- [x] Implement `Envelope` model with reply_to, correlation_id, ttl_seconds
+- [x] Write tests: creation, serialization, unique IDs, status values
 
 **Tests (Definition of Done):**
-- [ ] Unit tests: Event creation and uniqueness
-- [ ] Unit tests: Task defaults and status transitions
-- [ ] Unit tests: Envelope with all optional fields
-- [ ] Coverage >= 80%
+- [x] Unit tests: Event creation and uniqueness
+- [x] Unit tests: Task defaults and status transitions
+- [x] Unit tests: Envelope with all optional fields
+- [x] Coverage >= 80%
 
 **Traces to:** [REQ-001]
 **Depends on:** [TASK-001], [TASK-100]
@@ -308,7 +308,7 @@ Implement WorkflowEngine that dispatches WorkflowSpec to the correct executor ba
 ---
 
 ### TASK-010: Agent Runtime (LLM Loop)
-🔴 P0 | ⬜ TODO | Est: 4h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 4h
 
 **Description:**
 Implement the Agent Runtime: an LLM agent loop that alternates between calling the LLM and executing tool calls until a text response is returned or max_turns is reached.

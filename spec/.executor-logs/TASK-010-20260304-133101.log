@@ -1,0 +1,96 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-010 — Agent Runtime (LLM Loop)
+
+**Priority:** P0
+**Estimate:** 4h
+**Milestone:** Milestone 2: MVP (Phase 1)
+
+## Checklist (implement ALL items):
+
+- [ ] Create `src/proctor/workers/__init__.py`
+- [ ] Implement `ToolDef`, `ToolResult`, `AgentResult` models
+- [ ] Implement `AgentRuntime.__init__` with llm_fn, tools, max_turns
+- [ ] Implement `AgentRuntime.run()` — the main loop
+- [ ] Implement `_call_tool()` — execute tool with error handling
+- [ ] Handle unknown tool names gracefully
+- [ ] Handle max_turns limit
+- [ ] Write tests: no-tools completion, tool call + response, max turns, unknown tool
+- [ ] [TEST] Unit tests: simple completion without tools
+- [ ] [TEST] Unit tests: tool call and response
+- [ ] [TEST] Unit tests: max turns limit
+- [ ] [TEST] Unit tests: unknown tool returns error
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-009: LLM Agent Loop with Tool Calling
+**As a** system developer
+**I want** an agent runtime that loops between LLM calls and tool executions
+**So that** agents can use external tools to accomplish tasks
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN an AgentRuntime with no tools and a mock LLM that returns text
+WHEN run() is called with an instruction
+THEN it returns the text result in 1 turn
+
+GIVEN an AgentRuntime with a tool and a mock LLM that first calls the tool then returns text
+WHEN run() is called
+THEN the tool is executed, its result is fed back to the LLM, and the final text is returned in 2 turns
+
+GIVEN an AgentRuntime with max_turns=3 and a mock LLM that always requests tool calls
+WHEN run() is called
+THEN it stops after 3 turns and returns the last known state
+
+GIVEN a tool call for an unknown tool
+WHEN the agent processes it
+THEN an error ToolResult is created and the LLM continues to the next turn
+```
+
+**Priority:** P0
+**Traces to:** [TASK-010], [DESIGN-009]
+
+---
+
+### 2.4 Triggers
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+

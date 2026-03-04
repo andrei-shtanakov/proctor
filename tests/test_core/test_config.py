@@ -160,9 +160,7 @@ class TestLoadConfig:
         cfg = load_config(config_file)
         assert cfg == ProctorConfig()
 
-    def test_nested_config_defaults_preserved(
-        self, tmp_path: Path
-    ) -> None:
+    def test_nested_config_defaults_preserved(self, tmp_path: Path) -> None:
         """Unspecified nested configs get defaults."""
         config_file = tmp_path / "minimal.yaml"
         config_file.write_text(yaml.dump({"node_id": "minimal"}))

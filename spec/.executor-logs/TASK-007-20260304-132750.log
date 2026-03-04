@@ -87,3 +87,28 @@ When complete, respond with:
 Begin implementation:
 
 
+=== OUTPUT ===
+## Summary
+
+**Files created:**
+- `src/proctor/workflow/__init__.py` — package with public exports
+- `src/proctor/workflow/spec.py` — all models: `WorkflowMode`, `StepType`, `StepRetry`, `Step`, `WorkflowPolicies`, `WorkflowSpec`
+- `tests/test_workflow/__init__.py` — test package
+- `tests/test_workflow/test_spec.py` — 21 tests covering all checklist items
+
+**Checklist results:**
+- `WorkflowMode` and `StepType` StrEnums — implemented
+- `Step` model with id, type, description, inputs, outputs, depends_on, retry — implemented
+- `StepRetry` and `WorkflowPolicies` models — implemented with design-specified defaults (max_retries=2, max_runtime=900s)
+- `WorkflowSpec` with mode-specific fields and shared policies — implemented
+- Tests: simple spec, DAG spec with steps, policies defaults, serialization roundtrip, step inputs/outputs — all 21 pass
+- Lint: clean
+- All 51 project tests pass
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

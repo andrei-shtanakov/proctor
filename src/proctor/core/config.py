@@ -54,9 +54,7 @@ def load_config(path: Path | str | None = None) -> ProctorConfig:
 
     config_path = Path(path)
     if not config_path.exists():
-        logger.info(
-            "Config file %s not found, using defaults", config_path
-        )
+        logger.info("Config file %s not found, using defaults", config_path)
         return ProctorConfig()
 
     with open(config_path) as f:
