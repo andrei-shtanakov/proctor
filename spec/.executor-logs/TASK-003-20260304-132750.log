@@ -1,0 +1,87 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-003 — Config Loading
+
+**Priority:** P0
+**Estimate:** 2h
+**Milestone:** Milestone 1: Foundation (Phase 0)
+
+## Checklist (implement ALL items):
+
+- [ ] Implement `LLMConfig`, `NATSConfig`, `SchedulerConfig` models
+- [ ] Implement `ProctorConfig` root model with nested configs
+- [ ] Implement `load_config(path)` that returns defaults if file missing
+- [ ] Create `config/proctor.yaml` example
+- [ ] Write tests: default config, YAML loading, missing file, nested config defaults
+- [ ] [TEST] Unit tests: default config values
+- [ ] [TEST] Unit tests: YAML file loading
+- [ ] [TEST] Unit tests: missing file returns defaults
+- [ ] [TEST] Unit tests: nested LLM config defaults
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-002: Configuration Loading
+**As an** operator
+**I want** YAML-based configuration with sensible defaults
+**So that** I can customize Proctor without editing code
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a YAML config file exists at the specified path
+WHEN I call load_config with that path
+THEN a ProctorConfig pydantic model is returned with all values from the file
+
+GIVEN no config file exists at the specified path
+WHEN I call load_config
+THEN a ProctorConfig with default values is returned
+
+GIVEN a ProctorConfig
+WHEN I access nested configs (llm, nats, scheduler)
+THEN each has sensible defaults (e.g., default_model="claude-sonnet-4-20250514")
+```
+
+**Priority:** P0
+**Traces to:** [TASK-003], [DESIGN-002]
+
+---
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+

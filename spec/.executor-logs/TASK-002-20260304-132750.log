@@ -1,0 +1,114 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-002 — Core Models (Event, Task, Envelope)
+
+**Priority:** P0
+**Estimate:** 2h
+**Milestone:** Milestone 1: Foundation (Phase 0)
+
+## Checklist (implement ALL items):
+
+- [ ] Create `src/proctor/core/__init__.py`
+- [ ] Implement `TaskStatus` StrEnum with PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED
+- [ ] Implement `Event` model with auto id, type, source, payload, timestamp
+- [ ] Implement `Task` model with status machine, spec dict, optional fields
+- [ ] Implement `Envelope` model with reply_to, correlation_id, ttl_seconds
+- [ ] Write tests: creation, serialization, unique IDs, status values
+- [ ] [TEST] Unit tests: Event creation and uniqueness
+- [ ] [TEST] Unit tests: Task defaults and status transitions
+- [ ] [TEST] Unit tests: Envelope with all optional fields
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-001: Core Data Models
+**As a** system developer
+**I want** typed pydantic models for Event, Task, and Envelope
+**So that** all inter-component communication is validated and serializable
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN the core module is imported
+WHEN I create an Event with type, source, and payload
+THEN it has an auto-generated UUID id and UTC timestamp
+AND it can be serialized to JSON and deserialized back
+
+GIVEN the core module is imported
+WHEN I create a Task with a spec dict
+THEN its status defaults to PENDING and retries defaults to 0
+
+GIVEN the core module is imported
+WHEN I create an Envelope with type, source, and payload
+THEN it supports optional reply_to, correlation_id, target, and ttl_seconds
+```
+
+**Priority:** P0
+**Traces to:** [TASK-002], [DESIGN-001]
+
+---
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+**Files created:**
+- `src/proctor/core/__init__.py` — public exports for `Event`, `Task`, `Envelope`, `TaskStatus`
+- `src/proctor/core/models.py` — all four core models per DESIGN-001
+- `tests/test_core/__init__.py` — test package init
+- `tests/test_core/test_models.py` — 23 unit tests
+
+**Implementation details:**
+- `TaskStatus` — StrEnum with 5 states (PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED)
+- `Event` — auto-generated UUID `id` and UTC `timestamp`, required `type`/`source`, optional `payload`
+- `Task` — defaults to PENDING status, retries=0, auto timestamps, optional `trigger_event`/`worker_id`/`result`/`deadline`
+- `Envelope` — NATS wrapper with optional `reply_to`, `correlation_id`, `target`, `ttl_seconds`
+
+**Tests cover:** creation, defaults, auto-generated IDs, uniqueness (100 UUIDs), timestamp accuracy, serialization roundtrips, all optional fields, public exports. All models exercise every field path.
+
+**Results:** 51/51 tests pass, 0 lint errors, formatting clean.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

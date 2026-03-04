@@ -79,7 +79,7 @@ Verify test infrastructure works: pytest discovers tests, anyio backend is confi
 ---
 
 ### TASK-002: Core Models (Event, Task, Envelope)
-🔴 P0 | ⬜ TODO | Est: 2h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 2h
 
 **Description:**
 Implement pydantic models for Event, Task, TaskStatus, and Envelope in `src/proctor/core/models.py`. All models auto-generate UUID ids and UTC timestamps.
@@ -105,7 +105,7 @@ Implement pydantic models for Event, Task, TaskStatus, and Envelope in `src/proc
 ---
 
 ### TASK-003: Config Loading
-🔴 P0 | ⬜ TODO | Est: 2h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 2h
 
 **Description:**
 Implement YAML config loading with nested pydantic models (LLMConfig, NATSConfig, SchedulerConfig, ProctorConfig). Provide sensible defaults and graceful handling of missing config files.
@@ -222,7 +222,7 @@ Implement Application class that owns all core components (EventBus, StateManage
 ## Milestone 2: MVP (Phase 1)
 
 ### TASK-007: WorkflowSpec Model
-🔴 P0 | ⬜ TODO | Est: 2h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 2h
 
 **Description:**
 Implement the universal WorkflowSpec pydantic model with support for simple, DAG, FSM (placeholder), and orchestrator (placeholder) modes. Includes Step, StepType, StepRetry, WorkflowPolicies models.

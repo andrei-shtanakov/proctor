@@ -1,0 +1,89 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-007 — WorkflowSpec Model
+
+**Priority:** P0
+**Estimate:** 2h
+**Milestone:** Milestone 2: MVP (Phase 1)
+
+## Checklist (implement ALL items):
+
+- [ ] Create `src/proctor/workflow/__init__.py`
+- [ ] Implement `WorkflowMode` and `StepType` StrEnums
+- [ ] Implement `Step` model with id, type, description, inputs, outputs, depends_on, retry
+- [ ] Implement `StepRetry` and `WorkflowPolicies` models
+- [ ] Implement `WorkflowSpec` with mode-specific fields and shared policies
+- [ ] Write tests: simple spec, DAG spec with steps, serialization roundtrip
+- [ ] [TEST] Unit tests: simple spec creation
+- [ ] [TEST] Unit tests: DAG spec with step dependencies
+- [ ] [TEST] Unit tests: policies defaults
+- [ ] [TEST] Unit tests: serialization roundtrip
+- [ ] [TEST] Unit tests: step inputs/outputs
+- [ ] [TEST] Coverage >= 80%
+
+## Related Requirements:
+
+#### REQ-006: WorkflowSpec Model
+**As a** system developer
+**I want** a universal workflow specification model
+**So that** all pipeline types (simple, DAG, FSM, orchestrator) share a common format
+
+**Acceptance Criteria:**
+```gherkin
+GIVEN a WorkflowSpec with mode=SIMPLE and a prompt
+WHEN I serialize and deserialize it
+THEN all fields are preserved
+
+GIVEN a WorkflowSpec with mode=DAG and a list of Steps
+WHEN Steps have depends_on references, inputs, and outputs
+THEN the model validates and all references are accessible
+
+GIVEN a WorkflowPolicies instance with defaults
+WHEN I inspect max_retries and max_runtime_seconds
+THEN they have reasonable default values (e.g., max_retries=2, max_runtime=900s)
+```
+
+**Priority:** P0
+**Traces to:** [TASK-007], [DESIGN-006]
+
+---
+
+## Related Design:
+
+See /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /Users/Andrei_Shtanakov/labs/all_ai_orchestrators/proctor-a/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+

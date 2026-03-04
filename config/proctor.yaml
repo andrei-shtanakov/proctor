@@ -1,0 +1,22 @@
+# Proctor configuration
+node_role: standalone
+node_id: node-local
+nats_url: nats://localhost:4222
+data_dir: data
+log_level: INFO
+
+llm:
+  default_model: claude-sonnet-4-20250514
+  fallback_model: ollama/llama3.2
+  max_tokens: 4096
+  temperature: 0.7
+
+nats:
+  url: nats://localhost:4222
+  connect_timeout: 5.0
+  reconnect_time_wait: 2.0
+  max_reconnect_attempts: 60
+
+scheduler:
+  poll_interval_seconds: 30
+  enabled: true
