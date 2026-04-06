@@ -88,7 +88,7 @@ Create `tests/test_core/test_memory.py` with tests for Episode model creation, E
 **Depends on:** TASK-004
 
 ### TASK-007: Tests for CRUD Operations
-🔴 P0 | ⬜ TODO | Est: 1-2h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1-2h
 
 Test save_episode, get_episode, list_episodes, and search_episodes. Cover happy paths, not-found cases, ordering, limits, and search matching.
 
