@@ -1,0 +1,81 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-001 — Define Episode Pydantic Model
+
+**Priority:** P0
+**Estimate:** 
+**Milestone:** Milestone 1: Episode Model & Schema
+
+## Checklist (implement ALL items):
+
+- [ ] Define `Episode(BaseModel)` with all required fields
+- [ ] Add sensible defaults (uuid4 for id, utcnow for timestamp)
+- [ ] Ensure JSON-serializable (workflow_result as dict | None)
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 286 tests pass (up from 277, with 9 new Episode tests added).
+
+## Summary
+
+**Files modified:**
+- `src/proctor/core/models.py` — Added `Episode(BaseModel)` with fields: `id` (UUID default), `timestamp` (UTC default), `trigger_type`, `user_input`, `agent_response`, `workflow_result` (dict | None, default None)
+- `src/proctor/core/__init__.py` — Added `Episode` to public exports
+- `tests/test_core/test_models.py` — Added 9 tests in `TestEpisode` class covering: creation with required fields, auto-generated id/timestamp, workflow_result with value and None, explicit fields, JSON serialization roundtrip, and uniqueness
+
+**Checklist:**
+- [x] Define `Episode(BaseModel)` with all required fields
+- [x] Add sensible defaults (uuid4 for id, utcnow for timestamp)
+- [x] Ensure JSON-serializable (workflow_result as dict | None)
+
+**Notes:** The `spec-runner` dev dependency in pyproject.toml references `../executor` which doesn't exist in this worktree. Tests run fine with the already-synced venv using `--no-sync`.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

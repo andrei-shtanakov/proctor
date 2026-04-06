@@ -33,7 +33,7 @@ Create `src/proctor/core/memory.py` with the SQLite DDL and DML constants follow
 ## Milestone 2: EpisodicMemory Class
 
 ### TASK-003: Implement EpisodicMemory Init and Lifecycle
-🔴 P0 | ⬜ TODO | Est: 1h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
 
 Implement `EpisodicMemory` class with `__init__(db_path)`, `initialize()`, and `close()` methods. Follow `StateManager` patterns: WAL mode, `aiosqlite.Row` row factory, parent dir creation, assert-based connection guards.
 

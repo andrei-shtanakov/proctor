@@ -1,0 +1,8 @@
+2026-04-06T19:03:07.121939 | TASK-001 | status -> in_progress
+2026-04-06T19:05:24.408989 | TASK-001 | status -> in_progress
+2026-04-06T19:07:18.307272 | TASK-001 | status -> blocked
+2026-04-06T19:07:18.449818 | TASK-002 | status -> in_progress
+2026-04-06T19:10:20.647216 | TASK-002 | status -> in_progress
+2026-04-06T19:13:20.959021 | TASK-002 | status -> blocked
+2026-04-06T19:13:21.088155 | TASK-003 | status -> in_progress
+2026-04-06T19:16:09.766682 | TASK-003 | status -> in_progress

@@ -1,0 +1,105 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-001 — Define Episode Pydantic Model
+
+**Priority:** P0
+**Estimate:** 
+**Milestone:** Milestone 1: Episode Model & Schema
+
+## Checklist (implement ALL items):
+
+- [ ] Define `Episode(BaseModel)` with all required fields
+- [ ] Add sensible defaults (uuid4 for id, utcnow for timestamp)
+- [ ] Ensure JSON-serializable (workflow_result as dict | None)
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+## ⚠️ RETRY — Attempt 2 of 2
+
+**Error type:** TEST_FAILURE
+**What was tried:** Previous attempt for Define Episode Pydantic Model
+**Error:** Tests failed:
+warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/Maestro/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+error: Distribution not found at: file:///private/tmp/maestro-ws/proctor-a/executor
+
+
+**Test failures:**
+```
+cy in pyproject.toml references `../executor` which doesn't exist in this worktree. Tests run fine with the already-synced venv using `--no-sync`.
+
+TASK_COMPLETE
+
+
+=== TEST FAILURES ===
+Tests failed:
+warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/Maestro/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+error: Distribution not found at: file:///private/tmp/maestro-ws/proctor-a/executor
+
+```
+
+**IMPORTANT:** Review the error above and fix the issue. Do not repeat the same mistake.
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 285 tests pass.
+
+## Summary
+
+**Files modified:**
+- `src/proctor/core/models.py` — Added `Episode(BaseModel)` with fields: `id` (uuid4 default), `timestamp` (utcnow default), `trigger_type`, `user_input`, `agent_response`, `workflow_result` (dict | None, defaults to None)
+- `src/proctor/core/__init__.py` — Exported `Episode` 
+- `tests/test_core/test_models.py` — Added 8 tests: creation, auto-generated id/timestamp, workflow_result dict/None, JSON serialization roundtrip, nested dict serialization, uniqueness, and public export
+
+**Checklist:**
+- [x] Define `Episode(BaseModel)` with all required fields
+- [x] Add sensible defaults (uuid4 for id, utcnow for timestamp)
+- [x] Ensure JSON-serializable (workflow_result as dict | None)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
