@@ -1,8 +1,8 @@
 """Integration tests: terminal event -> workflow -> task persistence."""
 
-import asyncio
 from pathlib import Path
 
+import anyio
 import pytest
 
 from proctor.core.bootstrap import Application
@@ -240,7 +240,7 @@ class TestSchedulerTriggerIntegration:
         trigger = SchedulerTrigger(schedules=[item])
         await trigger.start(bus)
 
-        await asyncio.sleep(0.55)
+        await anyio.sleep(0.55)
         await trigger.stop()
 
         # At least 2 events in ~0.5s with 0.1s interval
@@ -274,7 +274,7 @@ class TestSchedulerTriggerIntegration:
         trigger = SchedulerTrigger(schedules=[item])
         await trigger.start(bus)
 
-        await asyncio.sleep(0.15)
+        await anyio.sleep(0.15)
         await trigger.stop()
 
         # Record count at stop
@@ -282,8 +282,8 @@ class TestSchedulerTriggerIntegration:
         assert count_at_stop >= 1
 
         # Wait and verify no new events arrive
-        await asyncio.sleep(0.15)
+        await anyio.sleep(0.15)
         assert len(received) == count_at_stop
 
-        # Internal tasks list is cleared
-        assert trigger._tasks == []
+        # Internal task group is cleared
+        assert trigger._task_group is None

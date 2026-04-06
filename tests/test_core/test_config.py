@@ -97,9 +97,9 @@ class TestTelegramConfig:
         with pytest.raises(ValueError):
             TelegramConfig(allowed_chat_ids=[1])  # type: ignore[call-arg]
 
-    def test_missing_allowed_chat_ids_raises(self) -> None:
-        with pytest.raises(ValueError):
-            TelegramConfig(bot_token="tok")  # type: ignore[call-arg]
+    def test_allowed_chat_ids_defaults_to_empty(self) -> None:
+        config = TelegramConfig(bot_token="tok")
+        assert config.allowed_chat_ids == []
 
 
 class TestScheduleItemConfig:
