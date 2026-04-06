@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from proctor.core.bus import EventBus
 from proctor.core.config import ProctorConfig
+from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Event, Task, TaskStatus
 from proctor.core.state import StateManager
 from proctor.workflow.engine import WorkflowEngine
@@ -27,6 +28,7 @@ class Application:
         self.config = config
         self.bus = EventBus()
         self.state = StateManager(config.data_dir / "state.db")
+        self.memory = EpisodicMemory(config.data_dir / "episodes.db")
         self.is_running = False
         self._llm_call: LLMCall | None = None
         self._engine: WorkflowEngine | None = None
@@ -37,16 +39,18 @@ class Application:
         self._engine = WorkflowEngine(llm_call)
 
     async def start(self) -> None:
-        """Initialize state, subscribe handlers, set running."""
+        """Initialize state and memory, subscribe handlers, set running."""
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
         await self.state.initialize()
+        await self.memory.initialize()
         self.bus.subscribe("trigger.terminal", self._handle_terminal)
         self.is_running = True
         logger.info("Application started (node=%s)", self.config.node_id)
 
     async def stop(self) -> None:
-        """Close state, unset running."""
+        """Close state and memory, unset running."""
         self.is_running = False
+        await self.memory.close()
         await self.state.close()
         logger.info("Application stopped")
 

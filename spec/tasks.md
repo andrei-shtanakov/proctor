@@ -107,7 +107,7 @@ Test save_episode, get_episode, list_episodes, and search_episodes. Cover happy 
 ## Milestone 4: Integration
 
 ### TASK-008: Wire EpisodicMemory into Bootstrap
-🟠 P1 | ⬜ TODO | Est: 30m
+🟠 P1 | 🔄 IN_PROGRESS | Est: 30m
 
 Add EpisodicMemory initialization and shutdown to the application bootstrap sequence. Decide whether to use a separate `memory.db` or share `state.db` — follow existing config patterns.
 

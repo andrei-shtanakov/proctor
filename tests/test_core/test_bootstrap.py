@@ -4,7 +4,8 @@ import pytest
 
 from proctor.core.bootstrap import Application
 from proctor.core.config import ProctorConfig
-from proctor.core.models import Event
+from proctor.core.memory import EpisodicMemory
+from proctor.core.models import Episode, Event
 
 # aiosqlite is asyncio-only; override the anyio_backend fixture
 pytestmark = pytest.mark.anyio
@@ -30,6 +31,11 @@ class TestInit:
         assert app.bus is not None
         assert app.state is not None
         assert app.is_running is False
+
+    def test_creates_memory(self, tmp_config: ProctorConfig) -> None:
+        app = Application(tmp_config)
+        assert app.memory is not None
+        assert isinstance(app.memory, EpisodicMemory)
 
     def test_config_stored(self, tmp_config: ProctorConfig) -> None:
         app = Application(tmp_config)
@@ -82,6 +88,40 @@ class TestStartStop:
             assert "config_overrides" in tables
         finally:
             await app.stop()
+
+    @pytest.mark.anyio
+    async def test_episodes_db_created(self, tmp_config: ProctorConfig) -> None:
+        app = Application(tmp_config)
+        await app.start()
+        try:
+            db_path = tmp_config.data_dir / "episodes.db"
+            assert db_path.exists()
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_memory_usable_after_start(self, tmp_config: ProctorConfig) -> None:
+        app = Application(tmp_config)
+        await app.start()
+        try:
+            episode = Episode(
+                trigger_type="terminal",
+                user_input="hello",
+                agent_response="world",
+            )
+            await app.memory.save_episode(episode)
+            fetched = await app.memory.get_episode(episode.id)
+            assert fetched is not None
+            assert fetched.user_input == "hello"
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_memory_closed_after_stop(self, tmp_config: ProctorConfig) -> None:
+        app = Application(tmp_config)
+        await app.start()
+        await app.stop()
+        assert app.memory._db is None
 
     @pytest.mark.anyio
     async def test_double_stop_is_safe(self, tmp_config: ProctorConfig) -> None:
