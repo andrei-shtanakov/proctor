@@ -1,0 +1,89 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-004 — Register SchedulerTrigger in Bootstrap
+
+**Priority:** P1
+**Estimate:** 1h
+**Milestone:** Milestone 2: Core Implementation
+
+## Checklist (implement ALL items):
+
+- [ ] Import `SchedulerTrigger` in bootstrap module
+- [ ] Instantiate `SchedulerTrigger` from `config.schedules` if list is non-empty and `config.scheduler.enabled`
+- [ ] Call `scheduler_trigger.start(bus)` during startup
+- [ ] Call `scheduler_trigger.stop()` during shutdown
+- [ ] Export `SchedulerTrigger` from `src/proctor/triggers/__init__.py`
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 315 tests pass, 0 failures, lint clean.
+
+## Summary
+
+**Files modified:**
+- `src/proctor/core/bootstrap.py` — Added `SchedulerTrigger` import, `_scheduler` attribute, start/stop lifecycle integration
+- `tests/test_core/test_bootstrap.py` — Added 5 new tests in `TestSchedulerIntegration` class
+
+**Changes:**
+1. Imported `SchedulerTrigger` in bootstrap module
+2. Added `_scheduler` instance attribute (initially `None`)
+3. In `start()`: instantiates `SchedulerTrigger` from `config.schedules` when `config.scheduler.enabled` is `True` and schedules list is non-empty, then calls `start(bus)`
+4. In `stop()`: calls `scheduler.stop()` and resets to `None`
+5. `SchedulerTrigger` was already exported from `src/proctor/triggers/__init__.py`
+
+**Tests added (5):**
+- `test_scheduler_not_created_when_no_schedules` — no scheduler when schedules list is empty
+- `test_scheduler_not_created_when_disabled` — no scheduler when `scheduler.enabled=False`
+- `test_scheduler_started_with_schedules` — scheduler created and tasks launched
+- `test_scheduler_stopped_on_app_stop` — scheduler cleaned up on stop
+- `test_scheduler_publishes_events` — end-to-end: scheduler fires events on the bus
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

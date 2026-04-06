@@ -48,7 +48,7 @@ Create `src/proctor/triggers/scheduler.py` implementing `SchedulerTrigger(Trigge
 **Depends on:** TASK-001, TASK-002
 
 ### TASK-004: Register SchedulerTrigger in Bootstrap
-🟠 P1 | ⬜ TODO | Est: 1h
+🟠 P1 | 🔄 IN_PROGRESS | Est: 1h
 
 Wire `SchedulerTrigger` into the application bootstrap so it starts alongside `TerminalTrigger` when schedules are configured.
 
