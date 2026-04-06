@@ -46,7 +46,7 @@ Implement `EpisodicMemory` class with `__init__(db_path)`, `initialize()`, and `
 **Depends on:** TASK-002
 
 ### TASK-004: Implement save_episode and get_episode
-🔴 P0 | ⬜ TODO | Est: 1h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
 
 Implement `save_episode(episode: Episode) -> None` and `get_episode(episode_id: str) -> Episode | None`. Save serializes the model to SQL params and commits. Get fetches by id and returns None if not found.
 
