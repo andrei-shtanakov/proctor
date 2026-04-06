@@ -6,6 +6,7 @@ from proctor.core.config import (
     LLMConfig,
     NATSConfig,
     ProctorConfig,
+    ScheduleItemConfig,
     SchedulerConfig,
     load_config,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "LLMConfig",
     "NATSConfig",
     "ProctorConfig",
+    "ScheduleItemConfig",
     "SchedulerConfig",
     "StateManager",
     "Task",

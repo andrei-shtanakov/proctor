@@ -9,6 +9,7 @@ from proctor.core.config import (
     LLMConfig,
     NATSConfig,
     ProctorConfig,
+    ScheduleItemConfig,
     SchedulerConfig,
     load_config,
 )
@@ -69,6 +70,56 @@ class TestSchedulerConfig:
         assert cfg.poll_interval_seconds == 60
 
 
+class TestScheduleItemConfig:
+    def test_cron_schedule(self) -> None:
+        item = ScheduleItemConfig(name="daily", cron="0 9 * * *")
+        assert item.name == "daily"
+        assert item.cron == "0 9 * * *"
+        assert item.interval_seconds is None
+        assert item.payload == {}
+        assert item.enabled is True
+
+    def test_interval_schedule(self) -> None:
+        item = ScheduleItemConfig(
+            name="heartbeat", interval_seconds=60.0
+        )
+        assert item.name == "heartbeat"
+        assert item.cron is None
+        assert item.interval_seconds == 60.0
+
+    def test_with_payload(self) -> None:
+        item = ScheduleItemConfig(
+            name="check",
+            cron="*/5 * * * *",
+            payload={"target": "api", "timeout": 30},
+        )
+        assert item.payload == {"target": "api", "timeout": 30}
+
+    def test_disabled(self) -> None:
+        item = ScheduleItemConfig(
+            name="off", cron="0 0 * * *", enabled=False
+        )
+        assert item.enabled is False
+
+    def test_neither_cron_nor_interval_raises(self) -> None:
+        with pytest.raises(ValueError, match="Exactly one"):
+            ScheduleItemConfig(name="bad")
+
+    def test_both_cron_and_interval_raises(self) -> None:
+        with pytest.raises(ValueError, match="Exactly one"):
+            ScheduleItemConfig(
+                name="bad",
+                cron="0 * * * *",
+                interval_seconds=60.0,
+            )
+
+    def test_interval_float_precision(self) -> None:
+        item = ScheduleItemConfig(
+            name="precise", interval_seconds=0.5
+        )
+        assert item.interval_seconds == 0.5
+
+
 class TestProctorConfig:
     def test_defaults(self) -> None:
         cfg = ProctorConfig()
@@ -115,6 +166,20 @@ class TestProctorConfig:
         )
         assert cfg.llm.max_tokens == 2048
         assert cfg.llm.default_model == "claude-sonnet-4-20250514"
+
+    def test_schedules_default_empty(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.schedules == []
+
+    def test_schedules_with_items(self) -> None:
+        items = [
+            ScheduleItemConfig(name="a", cron="0 * * * *"),
+            ScheduleItemConfig(name="b", interval_seconds=120),
+        ]
+        cfg = ProctorConfig(schedules=items)
+        assert len(cfg.schedules) == 2
+        assert cfg.schedules[0].name == "a"
+        assert cfg.schedules[1].interval_seconds == 120
 
 
 class TestLoadConfig:
@@ -207,6 +272,40 @@ class TestLoadConfig:
         assert cfg.nats.max_reconnect_attempts == 120
         assert cfg.scheduler.poll_interval_seconds == 60
 
+    def test_load_with_schedules(self, tmp_path: Path) -> None:
+        data = {
+            "node_id": "sched-node",
+            "schedules": [
+                {"name": "backup", "cron": "0 2 * * *"},
+                {
+                    "name": "poll",
+                    "interval_seconds": 300,
+                    "payload": {"url": "https://example.com"},
+                    "enabled": False,
+                },
+            ],
+        }
+        config_file = tmp_path / "sched.yaml"
+        config_file.write_text(yaml.dump(data))
+
+        cfg = load_config(config_file)
+        assert len(cfg.schedules) == 2
+        assert cfg.schedules[0].name == "backup"
+        assert cfg.schedules[0].cron == "0 2 * * *"
+        assert cfg.schedules[1].interval_seconds == 300
+        assert cfg.schedules[1].enabled is False
+        assert cfg.schedules[1].payload == {
+            "url": "https://example.com"
+        }
+
+    def test_load_no_schedules_key(self, tmp_path: Path) -> None:
+        """Config without schedules key still works."""
+        config_file = tmp_path / "no_sched.yaml"
+        config_file.write_text(yaml.dump({"node_id": "test"}))
+
+        cfg = load_config(config_file)
+        assert cfg.schedules == []
+
     def test_invalid_yaml_raises(self, tmp_path: Path) -> None:
         config_file = tmp_path / "bad.yaml"
         config_file.write_text(":\n  :\n- {\n")
@@ -229,6 +328,7 @@ class TestPublicExports:
             LLMConfig,
             NATSConfig,
             ProctorConfig,
+            ScheduleItemConfig,
             SchedulerConfig,
             load_config,
         )
@@ -236,5 +336,6 @@ class TestPublicExports:
         assert LLMConfig is not None
         assert NATSConfig is not None
         assert ProctorConfig is not None
+        assert ScheduleItemConfig is not None
         assert SchedulerConfig is not None
         assert load_config is not None

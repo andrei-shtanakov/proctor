@@ -1,0 +1,81 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-001 — Add Schedule Item Config Model
+
+**Priority:** P0
+**Estimate:** 1h
+**Milestone:** Milestone 1: Config & Models
+
+## Checklist (implement ALL items):
+
+- [ ] Define `ScheduleItemConfig` model with fields: `name` (str), `cron` (str | None), `interval_seconds` (float | None), `payload` (dict), `enabled` (bool, default True)
+- [ ] Add pydantic validator ensuring exactly one of `cron` or `interval_seconds` is set
+- [ ] Add `schedules: list[ScheduleItemConfig] = []` to `ProctorConfig`
+- [ ] Verify existing config loading still works with no schedules defined
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+**Files modified:**
+- `src/proctor/core/config.py` — Added `ScheduleItemConfig` model with `name`, `cron`, `interval_seconds`, `payload`, `enabled` fields and a `model_validator` ensuring exactly one of `cron`/`interval_seconds` is set. Added `schedules: list[ScheduleItemConfig] = []` to `ProctorConfig`.
+- `src/proctor/core/__init__.py` — Exported `ScheduleItemConfig`.
+- `tests/test_core/test_config.py` — Added 9 new tests: 5 for `ScheduleItemConfig` (cron, interval, payload+disabled, neither-set error, both-set error), 2 for `ProctorConfig.schedules` (default empty, with items), 2 for YAML loading (with schedules, backward compat without schedules).
+
+**Checklist:**
+- [x] `ScheduleItemConfig` model with all required fields
+- [x] Pydantic validator ensuring exactly one of `cron` or `interval_seconds`
+- [x] `schedules: list[ScheduleItemConfig] = []` on `ProctorConfig`
+- [x] Existing config loading works with no schedules defined
+
+**Results:** 286 tests pass, 0 lint errors.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
