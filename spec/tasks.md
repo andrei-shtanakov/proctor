@@ -3,7 +3,7 @@
 ## Milestone 1: Config & Models
 
 ### TASK-001: Add Schedule Item Config Model
-🔴 P0 | ⬜ TODO | Est: 1h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
 
 Add a `ScheduleItemConfig` pydantic model to `src/proctor/core/config.py` representing a single scheduled job entry. Update `ProctorConfig` to include a `schedules: list[ScheduleItemConfig]` field. Each item specifies a name, a cron expression OR a fixed interval (seconds), the event payload to emit, and an enabled flag.
 
