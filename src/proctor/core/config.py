@@ -34,6 +34,14 @@ class SchedulerConfig(BaseModel):
     enabled: bool = True
 
 
+class TelegramConfig(BaseModel):
+    """Telegram trigger configuration."""
+
+    bot_token: str
+    allowed_chat_ids: list[int]
+    poll_timeout: int = 30
+
+
 class ProctorConfig(BaseModel):
     """Root configuration model with nested configs."""
 
@@ -45,6 +53,7 @@ class ProctorConfig(BaseModel):
     llm: LLMConfig = LLMConfig()
     nats: NATSConfig = NATSConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
+    telegram: TelegramConfig | None = None
 
 
 def load_config(path: Path | str | None = None) -> ProctorConfig:

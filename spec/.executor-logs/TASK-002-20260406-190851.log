@@ -1,0 +1,98 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-002 — Implement TelegramTrigger core
+
+**Priority:** P0
+**Estimate:** 1-2h
+**Milestone:** Milestone 2: TelegramTrigger Implementation
+
+## Checklist (implement ALL items):
+
+- [ ] Create `TelegramTrigger(Trigger)` with `__init__(self, config: TelegramConfig)`
+- [ ] Implement `start(self, bus: EventBus)` — create `aiohttp.ClientSession`, launch polling task
+- [ ] Implement `stop(self)` — cancel task, close aiohttp session
+- [ ] Implement `_poll_loop(self, bus: EventBus)` — call `getUpdates` with `offset` and `timeout`, handle HTTP errors with retry/backoff
+- [ ] Filter messages: skip if `chat_id` not in `allowed_chat_ids` (when list is non-empty)
+- [ ] Extract message text and publish `Event(type="trigger.telegram", source="telegram", payload={"text": ..., "chat_id": ..., "message_id": ...})`
+- [ ] Track `_offset` to avoid reprocessing messages
+- [ ] Add logging at debug/info/error levels
+- [ ] Run `uv run ruff format .` and `uv run ruff check .`
+- [ ] Run `pyrefly check` and fix any type errors
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Files created:
+- **`src/proctor/triggers/telegram.py`** — `TelegramTrigger(Trigger)` implementation
+- **`tests/test_triggers/test_telegram.py`** — 41 tests (21 unique, most run on both asyncio+trio)
+
+### Files modified:
+- **`src/proctor/triggers/__init__.py`** — Added `TelegramTrigger` export
+- **`pyproject.toml`** — Added `python-interpreter` to pyrefly config (fixes wrong venv detection)
+
+### Checklist completion:
+- [x] `TelegramTrigger(Trigger)` with `__init__(self, config: TelegramConfig)`
+- [x] `start(self, bus)` — creates `aiohttp.ClientSession`, launches polling task
+- [x] `stop(self)` — cancels task, closes session
+- [x] `_poll_loop(self, bus)` — calls `getUpdates` with offset/timeout, retry/backoff on HTTP errors
+- [x] Filter messages: skip if `chat_id` not in `allowed_chat_ids` (when non-empty)
+- [x] Extract text and publish `Event(type="trigger.telegram", source="telegram", payload={text, chat_id, message_id})`
+- [x] Track `_offset` to avoid reprocessing
+- [x] Logging at debug/info/error levels
+- [x] `ruff format` and `ruff check` — all clean
+- [x] `pyrefly check` — 0 errors on new code (2 pre-existing errors in other files)
+
+### Test results:
+- **327/327 tests pass** (full suite)
+- **41/41 telegram tests pass** covering: init state, handle_update filtering, getUpdates HTTP mocking, poll_loop retry/backoff, start/stop lifecycle, public exports
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

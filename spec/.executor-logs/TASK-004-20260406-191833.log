@@ -1,0 +1,100 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-004 — Unit tests for TelegramTrigger
+
+**Priority:** P0
+**Estimate:** 1-2h
+**Milestone:** Milestone 3: Tests
+
+## Checklist (implement ALL items):
+
+- [ ] Test `start` creates session and launches polling task
+- [ ] Test `stop` cancels task and closes session
+- [ ] Test successful message polling publishes `trigger.telegram` event with correct payload
+- [ ] Test `allowed_chat_ids` filtering — messages from disallowed chats are skipped
+- [ ] Test empty `allowed_chat_ids` allows all chats
+- [ ] Test offset tracking — subsequent polls use updated offset
+- [ ] Test HTTP error handling (non-200 response) — trigger retries without crashing
+- [ ] Test malformed API response (missing `result` key) is handled gracefully
+- [ ] Test messages without `text` field are skipped
+- [ ] Use `anyio` for async tests (not asyncio), following project conventions
+- [ ] Run full test suite: `uv run pytest`
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 332 tests pass (1 skipped - the trio skip for asyncio.create_task), no lint errors.
+
+Let me verify checklist coverage:
+
+- [x] **Test `start` creates session and launches polling task** — `TestStartStop::test_start_creates_session_and_task`
+- [x] **Test `stop` cancels task and closes session** — `test_start_creates_session_and_task` (stop part) + `test_stop_closes_session` + `test_stop_when_not_started`
+- [x] **Test successful message polling publishes `trigger.telegram` event** — `test_publishes_text_message` + `test_processes_updates_from_get_updates`
+- [x] **Test `allowed_chat_ids` filtering** — `test_filters_by_allowed_chat_ids` + `test_allows_matching_chat_id`
+- [x] **Test empty `allowed_chat_ids` allows all chats** — `test_empty_allowed_list_accepts_all`
+- [x] **Test offset tracking** — `test_updates_offset` + `test_multiple_updates_advance_offset` + `test_includes_offset_when_set` + `test_no_offset_param_when_zero`
+- [x] **Test HTTP error handling** — `test_retries_on_client_error` + `test_backoff_increases_on_repeated_errors` + `test_retry_resets_after_success`
+- [x] **Test malformed API response** — `test_returns_empty_on_not_ok` + **NEW** `test_returns_empty_on_missing_result_key`
+- [x] **Test messages without `text` field are skipped** — `test_skips_non_text_message`
+- [x] **Use `anyio` for async tests** — Fixed `@pytest.mark.asyncio` → `@pytest.mark.anyio` with trio skip
+- [x] **Run full test suite** — 332 passed, 1 skipped, 0 failed
+
+## Summary
+
+**Files modified:**
+- `tests/test_triggers/test_telegram.py`
+
+**Changes made:**
+1. Fixed `@pytest.mark.asyncio` → `@pytest.mark.anyio` on `test_start_creates_session_and_task` with a `pytest.skip` for trio backend (since `TelegramTrigger.start()` uses `asyncio.create_task`)
+2. Added `test_returns_empty_on_missing_result_key` — tests that a response with `{"ok": True}` but no `result` key returns an empty list gracefully
+
+**Results:** 332 passed, 1 skipped, 0 lint errors.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

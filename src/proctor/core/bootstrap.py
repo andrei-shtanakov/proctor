@@ -9,6 +9,7 @@ from proctor.core.config import ProctorConfig
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Event, Task, TaskStatus
 from proctor.core.state import StateManager
+from proctor.triggers.telegram import TelegramTrigger
 from proctor.workflow.engine import WorkflowEngine
 from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
@@ -32,6 +33,7 @@ class Application:
         self.is_running = False
         self._llm_call: LLMCall | None = None
         self._engine: WorkflowEngine | None = None
+        self._telegram_trigger: TelegramTrigger | None = None
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -44,12 +46,21 @@ class Application:
         await self.state.initialize()
         await self.memory.initialize()
         self.bus.subscribe("trigger.terminal", self._handle_terminal)
+
+        if self.config.telegram is not None:
+            self._telegram_trigger = TelegramTrigger(self.config.telegram)
+            await self._telegram_trigger.start(self.bus)
+            logger.info("TelegramTrigger enabled")
+
         self.is_running = True
         logger.info("Application started (node=%s)", self.config.node_id)
 
     async def stop(self) -> None:
-        """Close state and memory, unset running."""
+        """Close state and memory, stop triggers, unset running."""
         self.is_running = False
+        if self._telegram_trigger is not None:
+            await self._telegram_trigger.stop()
+            self._telegram_trigger = None
         await self.memory.close()
         await self.state.close()
         logger.info("Application stopped")

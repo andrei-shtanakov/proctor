@@ -10,6 +10,7 @@ from proctor.core.config import (
     NATSConfig,
     ProctorConfig,
     SchedulerConfig,
+    TelegramConfig,
     load_config,
 )
 
@@ -69,6 +70,37 @@ class TestSchedulerConfig:
         assert cfg.poll_interval_seconds == 60
 
 
+class TestTelegramConfig:
+    def test_required_fields(self) -> None:
+        cfg = TelegramConfig(
+            bot_token="123:ABC",
+            allowed_chat_ids=[111, 222],
+        )
+        assert cfg.bot_token == "123:ABC"
+        assert cfg.allowed_chat_ids == [111, 222]
+        assert cfg.poll_timeout == 30
+
+    def test_custom_poll_timeout(self) -> None:
+        cfg = TelegramConfig(
+            bot_token="tok",
+            allowed_chat_ids=[1],
+            poll_timeout=60,
+        )
+        assert cfg.poll_timeout == 60
+
+    def test_empty_allowed_chat_ids(self) -> None:
+        cfg = TelegramConfig(bot_token="tok", allowed_chat_ids=[])
+        assert cfg.allowed_chat_ids == []
+
+    def test_missing_bot_token_raises(self) -> None:
+        with pytest.raises(ValueError):
+            TelegramConfig(allowed_chat_ids=[1])  # type: ignore[call-arg]
+
+    def test_missing_allowed_chat_ids_raises(self) -> None:
+        with pytest.raises(ValueError):
+            TelegramConfig(bot_token="tok")  # type: ignore[call-arg]
+
+
 class TestProctorConfig:
     def test_defaults(self) -> None:
         cfg = ProctorConfig()
@@ -108,6 +140,22 @@ class TestProctorConfig:
     def test_data_dir_as_string(self) -> None:
         cfg = ProctorConfig(data_dir="/tmp/proctor")
         assert cfg.data_dir == Path("/tmp/proctor")
+
+    def test_telegram_none_by_default(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.telegram is None
+
+    def test_telegram_config_set(self) -> None:
+        cfg = ProctorConfig(
+            telegram=TelegramConfig(
+                bot_token="123:ABC",
+                allowed_chat_ids=[111],
+            ),
+        )
+        assert cfg.telegram is not None
+        assert cfg.telegram.bot_token == "123:ABC"
+        assert cfg.telegram.allowed_chat_ids == [111]
+        assert cfg.telegram.poll_timeout == 30
 
     def test_partial_nested_override(self) -> None:
         cfg = ProctorConfig(
@@ -207,11 +255,33 @@ class TestLoadConfig:
         assert cfg.nats.max_reconnect_attempts == 120
         assert cfg.scheduler.poll_interval_seconds == 60
 
+    def test_load_telegram_from_yaml(self, tmp_path: Path) -> None:
+        config_file = tmp_path / "tg.yaml"
+        data = {
+            "telegram": {
+                "bot_token": "123:ABC",
+                "allowed_chat_ids": [111, 222],
+                "poll_timeout": 45,
+            },
+        }
+        config_file.write_text(yaml.dump(data))
+        cfg = load_config(config_file)
+        assert cfg.telegram is not None
+        assert cfg.telegram.bot_token == "123:ABC"
+        assert cfg.telegram.allowed_chat_ids == [111, 222]
+        assert cfg.telegram.poll_timeout == 45
+
+    def test_load_without_telegram_yaml(self, tmp_path: Path) -> None:
+        config_file = tmp_path / "no_tg.yaml"
+        config_file.write_text(yaml.dump({"node_id": "no-tg"}))
+        cfg = load_config(config_file)
+        assert cfg.telegram is None
+
     def test_invalid_yaml_raises(self, tmp_path: Path) -> None:
         config_file = tmp_path / "bad.yaml"
         config_file.write_text(":\n  :\n- {\n")
 
-        with pytest.raises((yaml.YAMLError, Exception)):
+        with pytest.raises(yaml.YAMLError):
             load_config(config_file)
 
     def test_example_config_loads(self) -> None:
@@ -230,6 +300,7 @@ class TestPublicExports:
             NATSConfig,
             ProctorConfig,
             SchedulerConfig,
+            TelegramConfig,
             load_config,
         )
 
@@ -237,4 +308,5 @@ class TestPublicExports:
         assert NATSConfig is not None
         assert ProctorConfig is not None
         assert SchedulerConfig is not None
+        assert TelegramConfig is not None
         assert load_config is not None

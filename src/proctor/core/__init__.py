@@ -7,6 +7,7 @@ from proctor.core.config import (
     NATSConfig,
     ProctorConfig,
     SchedulerConfig,
+    TelegramConfig,
     load_config,
 )
 from proctor.core.memory import EpisodicMemory
@@ -26,6 +27,7 @@ __all__ = [
     "NATSConfig",
     "ProctorConfig",
     "SchedulerConfig",
+    "TelegramConfig",
     "StateManager",
     "Task",
     "TaskStatus",

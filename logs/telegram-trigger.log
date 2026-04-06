@@ -1,0 +1,193 @@
+[2m2026-04-06T15:02:22.607285Z[0m [[32m[1minfo     [0m] [1mvalidation_complete           [0m [36merrors[0m=[35m0[0m [36mfile[0m=[35m/private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/tasks.md[0m [36mmodule[0m=[35mvalidate[0m [36mrun_id[0m=[35ma830cd13[0m [36mwarnings[0m=[35m10[0m
+[2m2026-04-06T15:02:22.608158Z[0m [[32m[1minfo     [0m] [1mTasks to execute              [0m [36mcount[0m=[35m6[0m [36mmodule[0m=[35mcli[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:02:22.608253Z[0m [[32m[1minfo     [0m] [1mQueued task                   [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Add TelegramConfig to ProctorConfig'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:02:22.608300Z[0m [[32m[1minfo     [0m] [1mQueued task                   [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Implement TelegramTrigger core'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:02:22.608336Z[0m [[32m[1minfo     [0m] [1mQueued task                   [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Register TelegramTrigger in triggers module'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:02:22.608365Z[0m [[32m[1minfo     [0m] [1mQueued task                   [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Unit tests for TelegramTrigger'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:02:22.608395Z[0m [[32m[1minfo     [0m] [1mQueued task                   [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Config tests for TelegramConfig'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:02:22.608418Z[0m [[32m[1minfo     [0m] [1mQueued task                   [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Lint, format, and type-check pass'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:02:22.608621Z[0m [[32m[1minfo     [0m] [1mNext ready task               [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Add TelegramConfig to ProctorConfig'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:02:22.608823Z[0m [[32m[1minfo     [0m] [1m📍 Attempt 1/2                 [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:02:22.609062Z[0m [[32m[1minfo     [0m] [1m🚀 Starting: Add TelegramConfig to ProctorConfig[0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:02:22.609269Z[0m [[32m[1minfo     [0m] [1mExecuting task                [0m [36mmodule[0m=[35mexecution[0m [36mname[0m=[35m'Add TelegramConfig to ProctorConfig'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:02:22.609330Z[0m [[32m[1minfo     [0m] [1mPre-start hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:02:22.609368Z[0m [[32m[1minfo     [0m] [1mSyncing dependencies          [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:02:22.668505Z[0m [[33m[1mwarning  [0m] [1muv sync warning               [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mstderr[0m=[35m'warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/Maestro/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active envi'[0m
+[2m2026-04-06T15:02:22.798017Z[0m [[32m[1minfo     [0m] [1mCreated branch                [0m [36mbranch[0m=[35mtask/task-001-add-telegramconfig-to-proctorc[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:02:22.799663Z[0m [[32m[1minfo     [0m] [1mRunning CLI command           [0m [36mcommand[0m=[35mclaude[0m [36mmodel[0m=[35m(default)[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mskip_permissions[0m=[35mTrue[0m
+[2m2026-04-06T15:05:23.886324Z[0m [[32m[1minfo     [0m] [1mTask completed by Claude      [0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:23.887018Z[0m [[32m[1minfo     [0m] [1mPost-done hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msuccess[0m=[35mTrue[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:23.887077Z[0m [[32m[1minfo     [0m] [1mRunning tests                 [0m [36mcommand[0m=[35m'uv run pytest tests/ -v'[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:05:23.912429Z[0m [[31m[1merror    [0m] [1mTests failed                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:05:23.912736Z[0m [[31m[1merror    [0m] [1mTest stderr                   [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mstderr[0m=[35m'warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/Maestro/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead\nerror: Distribution not found at: file:///private/tmp/maestro-ws/proctor-a/executor\n'[0m
+[2m2026-04-06T15:05:23.914150Z[0m [[32m[1minfo     [0m] [1m❌ Failed: tests/lint check    [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:23.914265Z[0m [[32m[1minfo     [0m] [1mWaiting before retry          [0m [36mdelay_seconds[0m=[35m5.0[0m [36merror_code[0m=[35mTEST_FAILURE[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mstrategy[0m=[35mbackoff_linear[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:28.920496Z[0m [[32m[1minfo     [0m] [1m📍 Attempt 2/2                 [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:28.921679Z[0m [[32m[1minfo     [0m] [1m🚀 Starting: Add TelegramConfig to ProctorConfig[0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:28.921944Z[0m [[32m[1minfo     [0m] [1mExecuting task                [0m [36mmodule[0m=[35mexecution[0m [36mname[0m=[35m'Add TelegramConfig to ProctorConfig'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:28.922147Z[0m [[32m[1minfo     [0m] [1mPre-start hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:05:28.922280Z[0m [[32m[1minfo     [0m] [1mSyncing dependencies          [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:05:28.942542Z[0m [[33m[1mwarning  [0m] [1muv sync warning               [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mstderr[0m=[35m'warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/Maestro/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active envi'[0m
+[2m2026-04-06T15:05:29.035566Z[0m [[32m[1minfo     [0m] [1mSwitched to existing branch   [0m [36mbranch[0m=[35mtask/task-001-add-telegramconfig-to-proctorc[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:05:29.037603Z[0m [[32m[1minfo     [0m] [1mRunning CLI command           [0m [36mcommand[0m=[35mclaude[0m [36mmodel[0m=[35m(default)[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mskip_permissions[0m=[35mTrue[0m
+[2m2026-04-06T15:08:04.039801Z[0m [[32m[1minfo     [0m] [1mTask completed by Claude      [0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:08:04.040744Z[0m [[32m[1minfo     [0m] [1mPost-done hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msuccess[0m=[35mTrue[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:08:04.040814Z[0m [[32m[1minfo     [0m] [1mRunning tests                 [0m [36mcommand[0m=[35m'uv run pytest tests/ -v'[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:07.641437Z[0m [[32m[1minfo     [0m] [1mTests passed                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:07.641961Z[0m [[32m[1minfo     [0m] [1mRunning lint                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:07.737807Z[0m [[32m[1minfo     [0m] [1mLint passed                   [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:07.744119Z[0m [[32m[1minfo     [0m] [1mRunning code review           [0m [36mmodule[0m=[35mhooks[0m [36mparallel[0m=[35mFalse[0m [36mroles[0m=[35mNone[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:07.744642Z[0m [[32m[1minfo     [0m] [1m🔍 Starting code review        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:08:07.805670Z[0m [[32m[1minfo     [0m] [1m🔍 Review using: claude        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:08:51.131686Z[0m [[32m[1minfo     [0m] [1m✅ Code review passed          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[task/task-001-add-telegramconfig-to-proctorc be59440] TASK-001: Add TelegramConfig to ProctorConfig
+ 12 files changed, 1161 insertions(+), 115 deletions(-)
+ create mode 100644 spec/.executor-logs/TASK-001-20260406-190222.log
+ create mode 100644 spec/.executor-logs/TASK-001-20260406-190529.log
+ create mode 100644 spec/.executor-logs/TASK-001-review-20260406-190807.log
+ create mode 100644 spec/.executor-progress.txt
+ create mode 100644 spec/.executor-state.lock
+ create mode 100644 spec/.task-history.log
+[2m2026-04-06T15:08:51.204477Z[0m [[32m[1minfo     [0m] [1mCommitted changes             [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:51.267762Z[0m [[32m[1minfo     [0m] [1mMerged branch                 [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msource[0m=[35mtask/task-001-add-telegramconfig-to-proctorc[0m [36mtarget[0m=[35mfeature/telegram-trigger[0m
+[2m2026-04-06T15:08:51.280003Z[0m [[32m[1minfo     [0m] [1mDeleted branch                [0m [36mbranch[0m=[35mtask/task-001-add-telegramconfig-to-proctorc[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:51.282225Z[0m [[32m[1minfo     [0m] [1m✅ Completed in 155.0s         [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-001[0m
+[2m2026-04-06T15:08:51.282510Z[0m [[32m[1minfo     [0m] [1mNext ready task               [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Implement TelegramTrigger core'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:08:51.282626Z[0m [[32m[1minfo     [0m] [1m📍 Attempt 1/2                 [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:08:51.282704Z[0m [[32m[1minfo     [0m] [1m🚀 Starting: Implement TelegramTrigger core[0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:08:51.282874Z[0m [[32m[1minfo     [0m] [1mExecuting task                [0m [36mmodule[0m=[35mexecution[0m [36mname[0m=[35m'Implement TelegramTrigger core'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:08:51.282913Z[0m [[32m[1minfo     [0m] [1mPre-start hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:08:51.282939Z[0m [[32m[1minfo     [0m] [1mSyncing dependencies          [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:51.520617Z[0m [[32m[1minfo     [0m] [1mDependencies synced           [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:51.609404Z[0m [[32m[1minfo     [0m] [1mCreated branch                [0m [36mbranch[0m=[35mtask/task-002-implement-telegramtrigger-core[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:08:51.610949Z[0m [[32m[1minfo     [0m] [1mRunning CLI command           [0m [36mcommand[0m=[35mclaude[0m [36mmodel[0m=[35m(default)[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mskip_permissions[0m=[35mTrue[0m
+[2m2026-04-06T15:14:47.943000Z[0m [[32m[1minfo     [0m] [1mTask completed by Claude      [0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:14:47.943828Z[0m [[32m[1minfo     [0m] [1mPost-done hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msuccess[0m=[35mTrue[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:14:47.943892Z[0m [[32m[1minfo     [0m] [1mRunning tests                 [0m [36mcommand[0m=[35m'uv run pytest tests/ -v'[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:14:51.203396Z[0m [[32m[1minfo     [0m] [1mTests passed                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:14:51.203687Z[0m [[32m[1minfo     [0m] [1mRunning lint                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:14:51.303659Z[0m [[32m[1minfo     [0m] [1mLint passed                   [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:14:51.307463Z[0m [[32m[1minfo     [0m] [1mRunning code review           [0m [36mmodule[0m=[35mhooks[0m [36mparallel[0m=[35mFalse[0m [36mroles[0m=[35mNone[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:14:51.307951Z[0m [[32m[1minfo     [0m] [1m🔍 Starting code review        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:14:51.364591Z[0m [[32m[1minfo     [0m] [1m🔍 Review using: claude        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:15:49.836100Z[0m [[32m[1minfo     [0m] [1m✅ Code review passed          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[task/task-002-implement-telegramtrigger-core a527199] TASK-002: Implement TelegramTrigger core
+ 9 files changed, 1653 insertions(+), 1 deletion(-)
+ create mode 100644 spec/.executor-logs/TASK-002-20260406-190851.log
+ create mode 100644 spec/.executor-logs/TASK-002-review-20260406-191451.log
+ create mode 100644 src/proctor/triggers/telegram.py
+ create mode 100644 tests/test_triggers/test_telegram.py
+[2m2026-04-06T15:15:49.910313Z[0m [[32m[1minfo     [0m] [1mCommitted changes             [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:15:49.969312Z[0m [[32m[1minfo     [0m] [1mMerged branch                 [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msource[0m=[35mtask/task-002-implement-telegramtrigger-core[0m [36mtarget[0m=[35mfeature/telegram-trigger[0m
+[2m2026-04-06T15:15:49.980836Z[0m [[32m[1minfo     [0m] [1mDeleted branch                [0m [36mbranch[0m=[35mtask/task-002-implement-telegramtrigger-core[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:15:49.983146Z[0m [[32m[1minfo     [0m] [1m✅ Completed in 356.3s         [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-002[0m
+[2m2026-04-06T15:15:49.983477Z[0m [[32m[1minfo     [0m] [1mNext ready task               [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Register TelegramTrigger in triggers module'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:15:49.983598Z[0m [[32m[1minfo     [0m] [1m📍 Attempt 1/2                 [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:15:49.983681Z[0m [[32m[1minfo     [0m] [1m🚀 Starting: Register TelegramTrigger in triggers module[0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:15:49.983924Z[0m [[32m[1minfo     [0m] [1mExecuting task                [0m [36mmodule[0m=[35mexecution[0m [36mname[0m=[35m'Register TelegramTrigger in triggers module'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:15:49.983962Z[0m [[32m[1minfo     [0m] [1mPre-start hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:15:49.983989Z[0m [[32m[1minfo     [0m] [1mSyncing dependencies          [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:15:50.214769Z[0m [[32m[1minfo     [0m] [1mDependencies synced           [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:15:50.303433Z[0m [[32m[1minfo     [0m] [1mCreated branch                [0m [36mbranch[0m=[35mtask/task-003-register-telegramtrigger-in-tr[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:15:50.305323Z[0m [[32m[1minfo     [0m] [1mRunning CLI command           [0m [36mcommand[0m=[35mclaude[0m [36mmodel[0m=[35m(default)[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mskip_permissions[0m=[35mTrue[0m
+[2m2026-04-06T15:17:11.983267Z[0m [[32m[1minfo     [0m] [1mTask completed by Claude      [0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:17:11.984565Z[0m [[32m[1minfo     [0m] [1mPost-done hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msuccess[0m=[35mTrue[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:17:11.984797Z[0m [[32m[1minfo     [0m] [1mRunning tests                 [0m [36mcommand[0m=[35m'uv run pytest tests/ -v'[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:17:15.082379Z[0m [[32m[1minfo     [0m] [1mTests passed                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:17:15.082643Z[0m [[32m[1minfo     [0m] [1mRunning lint                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:17:15.182109Z[0m [[32m[1minfo     [0m] [1mLint passed                   [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:17:15.186696Z[0m [[32m[1minfo     [0m] [1mRunning code review           [0m [36mmodule[0m=[35mhooks[0m [36mparallel[0m=[35mFalse[0m [36mroles[0m=[35mNone[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:17:15.187230Z[0m [[32m[1minfo     [0m] [1m🔍 Starting code review        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:17:15.238778Z[0m [[32m[1minfo     [0m] [1m🔍 Review using: claude        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:18:33.341724Z[0m [[32m[1minfo     [0m] [1m✅ Code review passed          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[task/task-003-register-telegramtrigger-in-tr a007547] TASK-003: Register TelegramTrigger in triggers module
+ 7 files changed, 1060 insertions(+), 3 deletions(-)
+ create mode 100644 spec/.executor-logs/TASK-003-20260406-191550.log
+ create mode 100644 spec/.executor-logs/TASK-003-review-20260406-191715.log
+[2m2026-04-06T15:18:33.411548Z[0m [[32m[1minfo     [0m] [1mCommitted changes             [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:18:33.472018Z[0m [[32m[1minfo     [0m] [1mMerged branch                 [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msource[0m=[35mtask/task-003-register-telegramtrigger-in-tr[0m [36mtarget[0m=[35mfeature/telegram-trigger[0m
+[2m2026-04-06T15:18:33.484387Z[0m [[32m[1minfo     [0m] [1mDeleted branch                [0m [36mbranch[0m=[35mtask/task-003-register-telegramtrigger-in-tr[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:18:33.486318Z[0m [[32m[1minfo     [0m] [1m✅ Completed in 81.7s          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-003[0m
+[2m2026-04-06T15:18:33.486640Z[0m [[32m[1minfo     [0m] [1mNext ready task               [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Unit tests for TelegramTrigger'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:18:33.486765Z[0m [[32m[1minfo     [0m] [1m📍 Attempt 1/2                 [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:18:33.486854Z[0m [[32m[1minfo     [0m] [1m🚀 Starting: Unit tests for TelegramTrigger[0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:18:33.486919Z[0m [[32m[1minfo     [0m] [1mExecuting task                [0m [36mmodule[0m=[35mexecution[0m [36mname[0m=[35m'Unit tests for TelegramTrigger'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:18:33.486987Z[0m [[32m[1minfo     [0m] [1mPre-start hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:18:33.487025Z[0m [[32m[1minfo     [0m] [1mSyncing dependencies          [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:18:33.516506Z[0m [[32m[1minfo     [0m] [1mDependencies synced           [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:18:33.598201Z[0m [[32m[1minfo     [0m] [1mCreated branch                [0m [36mbranch[0m=[35mtask/task-004-unit-tests-for-telegramtrigger[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:18:33.599773Z[0m [[32m[1minfo     [0m] [1mRunning CLI command           [0m [36mcommand[0m=[35mclaude[0m [36mmodel[0m=[35m(default)[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mskip_permissions[0m=[35mTrue[0m
+[2m2026-04-06T15:21:41.087796Z[0m [[32m[1minfo     [0m] [1mTask completed by Claude      [0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:21:41.088574Z[0m [[32m[1minfo     [0m] [1mPost-done hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msuccess[0m=[35mTrue[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:21:41.088650Z[0m [[32m[1minfo     [0m] [1mRunning tests                 [0m [36mcommand[0m=[35m'uv run pytest tests/ -v'[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:21:44.799747Z[0m [[32m[1minfo     [0m] [1mTests passed                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:21:44.800153Z[0m [[32m[1minfo     [0m] [1mRunning lint                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:21:45.150747Z[0m [[32m[1minfo     [0m] [1mLint passed                   [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:21:45.153226Z[0m [[32m[1minfo     [0m] [1mRunning code review           [0m [36mmodule[0m=[35mhooks[0m [36mparallel[0m=[35mFalse[0m [36mroles[0m=[35mNone[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:21:45.153734Z[0m [[32m[1minfo     [0m] [1m🔍 Starting code review        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:21:45.209380Z[0m [[32m[1minfo     [0m] [1m🔍 Review using: claude        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:22:28.294415Z[0m [[32m[1minfo     [0m] [1m✅ Code review passed          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[task/task-004-unit-tests-for-telegramtrigger 21557a4] TASK-004: Unit tests for TelegramTrigger
+ 6 files changed, 1088 insertions(+), 3 deletions(-)
+ create mode 100644 spec/.executor-logs/TASK-004-20260406-191833.log
+ create mode 100644 spec/.executor-logs/TASK-004-review-20260406-192145.log
+[2m2026-04-06T15:22:28.392910Z[0m [[32m[1minfo     [0m] [1mCommitted changes             [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:22:28.456507Z[0m [[32m[1minfo     [0m] [1mMerged branch                 [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msource[0m=[35mtask/task-004-unit-tests-for-telegramtrigger[0m [36mtarget[0m=[35mfeature/telegram-trigger[0m
+[2m2026-04-06T15:22:28.474750Z[0m [[32m[1minfo     [0m] [1mDeleted branch                [0m [36mbranch[0m=[35mtask/task-004-unit-tests-for-telegramtrigger[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:22:28.477022Z[0m [[32m[1minfo     [0m] [1m✅ Completed in 187.5s         [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-004[0m
+[2m2026-04-06T15:22:28.477352Z[0m [[32m[1minfo     [0m] [1mNext ready task               [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Config tests for TelegramConfig'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:22:28.477486Z[0m [[32m[1minfo     [0m] [1m📍 Attempt 1/2                 [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:22:28.477583Z[0m [[32m[1minfo     [0m] [1m🚀 Starting: Config tests for TelegramConfig[0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:22:28.477766Z[0m [[32m[1minfo     [0m] [1mExecuting task                [0m [36mmodule[0m=[35mexecution[0m [36mname[0m=[35m'Config tests for TelegramConfig'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:22:28.477804Z[0m [[32m[1minfo     [0m] [1mPre-start hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:22:28.477832Z[0m [[32m[1minfo     [0m] [1mSyncing dependencies          [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:22:28.511923Z[0m [[32m[1minfo     [0m] [1mDependencies synced           [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:22:28.599368Z[0m [[32m[1minfo     [0m] [1mCreated branch                [0m [36mbranch[0m=[35mtask/task-005-config-tests-for-telegramconfi[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:22:28.601132Z[0m [[32m[1minfo     [0m] [1mRunning CLI command           [0m [36mcommand[0m=[35mclaude[0m [36mmodel[0m=[35m(default)[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mskip_permissions[0m=[35mTrue[0m
+[2m2026-04-06T15:23:16.251766Z[0m [[32m[1minfo     [0m] [1mTask completed by Claude      [0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:23:16.253541Z[0m [[32m[1minfo     [0m] [1mPost-done hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msuccess[0m=[35mTrue[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:23:16.253771Z[0m [[32m[1minfo     [0m] [1mRunning tests                 [0m [36mcommand[0m=[35m'uv run pytest tests/ -v'[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:19.446085Z[0m [[32m[1minfo     [0m] [1mTests passed                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:19.446356Z[0m [[32m[1minfo     [0m] [1mRunning lint                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:19.543213Z[0m [[32m[1minfo     [0m] [1mLint passed                   [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:19.549097Z[0m [[32m[1minfo     [0m] [1mRunning code review           [0m [36mmodule[0m=[35mhooks[0m [36mparallel[0m=[35mFalse[0m [36mroles[0m=[35mNone[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:19.549531Z[0m [[32m[1minfo     [0m] [1m🔍 Starting code review        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:23:19.608649Z[0m [[32m[1minfo     [0m] [1m🔍 Review using: claude        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:23:56.692568Z[0m [[32m[1minfo     [0m] [1m✅ Code review passed          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[task/task-005-config-tests-for-telegramconfi 90cce08] TASK-005: Config tests for TelegramConfig
+ 5 files changed, 996 insertions(+), 1 deletion(-)
+ create mode 100644 spec/.executor-logs/TASK-005-20260406-192228.log
+ create mode 100644 spec/.executor-logs/TASK-005-review-20260406-192319.log
+[2m2026-04-06T15:23:56.764472Z[0m [[32m[1minfo     [0m] [1mCommitted changes             [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:56.844074Z[0m [[32m[1minfo     [0m] [1mMerged branch                 [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msource[0m=[35mtask/task-005-config-tests-for-telegramconfi[0m [36mtarget[0m=[35mfeature/telegram-trigger[0m
+[2m2026-04-06T15:23:56.859082Z[0m [[32m[1minfo     [0m] [1mDeleted branch                [0m [36mbranch[0m=[35mtask/task-005-config-tests-for-telegramconfi[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:56.861698Z[0m [[32m[1minfo     [0m] [1m✅ Completed in 47.6s          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-005[0m
+[2m2026-04-06T15:23:56.863490Z[0m [[32m[1minfo     [0m] [1mNext ready task               [0m [36mmodule[0m=[35mcli[0m [36mname[0m=[35m'Lint, format, and type-check pass'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:23:56.863673Z[0m [[32m[1minfo     [0m] [1m📍 Attempt 1/2                 [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:23:56.863769Z[0m [[32m[1minfo     [0m] [1m🚀 Starting: Lint, format, and type-check pass[0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:23:56.863828Z[0m [[32m[1minfo     [0m] [1mExecuting task                [0m [36mmodule[0m=[35mexecution[0m [36mname[0m=[35m'Lint, format, and type-check pass'[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:23:56.863866Z[0m [[32m[1minfo     [0m] [1mPre-start hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:23:56.863892Z[0m [[32m[1minfo     [0m] [1mSyncing dependencies          [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:56.899305Z[0m [[32m[1minfo     [0m] [1mDependencies synced           [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:56.995212Z[0m [[32m[1minfo     [0m] [1mCreated branch                [0m [36mbranch[0m=[35mtask/task-006-lint,-format,-and-type-check-p[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:23:56.996935Z[0m [[32m[1minfo     [0m] [1mRunning CLI command           [0m [36mcommand[0m=[35mclaude[0m [36mmodel[0m=[35m(default)[0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mskip_permissions[0m=[35mTrue[0m
+[2m2026-04-06T15:24:59.506167Z[0m [[32m[1minfo     [0m] [1mTask completed by Claude      [0m [36mmodule[0m=[35mexecution[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:24:59.507014Z[0m [[32m[1minfo     [0m] [1mPost-done hook                [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msuccess[0m=[35mTrue[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:24:59.507076Z[0m [[32m[1minfo     [0m] [1mRunning tests                 [0m [36mcommand[0m=[35m'uv run pytest tests/ -v'[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:02.666161Z[0m [[32m[1minfo     [0m] [1mTests passed                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:02.666436Z[0m [[32m[1minfo     [0m] [1mRunning lint                  [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:02.788665Z[0m [[32m[1minfo     [0m] [1mLint passed                   [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:02.790861Z[0m [[32m[1minfo     [0m] [1mRunning code review           [0m [36mmodule[0m=[35mhooks[0m [36mparallel[0m=[35mFalse[0m [36mroles[0m=[35mNone[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:02.791347Z[0m [[32m[1minfo     [0m] [1m🔍 Starting code review        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:25:02.838029Z[0m [[32m[1minfo     [0m] [1m🔍 Review using: claude        [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:25:38.979662Z[0m [[32m[1minfo     [0m] [1m✅ Code review passed          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[task/task-006-lint,-format,-and-type-check-p a375385] TASK-006: Lint, format, and type-check pass
+ 8 files changed, 1023 insertions(+), 6 deletions(-)
+ create mode 100644 spec/.executor-logs/TASK-006-20260406-192356.log
+ create mode 100644 spec/.executor-logs/TASK-006-review-20260406-192502.log
+[2m2026-04-06T15:25:39.047495Z[0m [[32m[1minfo     [0m] [1mCommitted changes             [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:39.106804Z[0m [[32m[1minfo     [0m] [1mMerged branch                 [0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m [36msource[0m=[35mtask/task-006-lint,-format,-and-type-check-p[0m [36mtarget[0m=[35mfeature/telegram-trigger[0m
+[2m2026-04-06T15:25:39.119472Z[0m [[32m[1minfo     [0m] [1mDeleted branch                [0m [36mbranch[0m=[35mtask/task-006-lint,-format,-and-type-check-p[0m [36mmodule[0m=[35mhooks[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:39.120972Z[0m [[32m[1minfo     [0m] [1m✅ Completed in 62.5s          [0m [36mmodule[0m=[35mrunner[0m [36mrun_id[0m=[35ma830cd13[0m [36mtask_id[0m=[35mTASK-006[0m
+[2m2026-04-06T15:25:39.121414Z[0m [[32m[1minfo     [0m] [1mAll tasks completed           [0m [36mmodule[0m=[35mcli[0m [36mrun_id[0m=[35ma830cd13[0m
+[2m2026-04-06T15:25:39.132747Z[0m [[32m[1minfo     [0m] [1mExecution summary             [0m [36mcompleted[0m=[35m6[0m [36mfailed[0m=[35m0[0m [36mfailed_attempts[0m=[35m1[0m [36mmodule[0m=[35mcli[0m [36mremaining[0m=[35m0[0m [36mrun_id[0m=[35ma830cd13[0m

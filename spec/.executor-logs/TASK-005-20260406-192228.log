@@ -1,0 +1,84 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-005 — Config tests for TelegramConfig
+
+**Priority:** P1
+**Estimate:** 
+**Milestone:** Milestone 3: Tests
+
+## Checklist (implement ALL items):
+
+- [ ] Test `ProctorConfig` with no `telegram` section yields `None`
+- [ ] Test `ProctorConfig` with valid `telegram` section parses `bot_token` and `allowed_chat_ids`
+- [ ] Test `TelegramConfig` defaults (`poll_timeout=30`)
+- [ ] Run `uv run pytest`
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All checklist items are already implemented and passing. Here's the summary:
+
+## Summary
+
+All required tests for `TelegramConfig` already exist in `tests/test_core/test_config.py` from a previous task:
+
+| Checklist Item | Test(s) |
+|---|---|
+| `ProctorConfig` with no `telegram` → `None` | `test_telegram_none_by_default` (L144), `test_load_without_telegram_yaml` (L274) |
+| `ProctorConfig` with valid `telegram` parses fields | `test_telegram_config_set` (L148), `test_load_telegram_from_yaml` (L258) |
+| `TelegramConfig` defaults (`poll_timeout=30`) | `test_required_fields` (L74) |
+
+**Additional coverage already present:** missing required fields raise `ValueError`, empty `allowed_chat_ids`, custom `poll_timeout`, YAML round-trip with telegram section, and public exports.
+
+- **Files modified:** None (no changes needed)
+- **Tests:** 332 passed, 1 skipped
+- **Lint:** All checks passed
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

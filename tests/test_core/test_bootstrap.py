@@ -1,9 +1,11 @@
 """Tests for Application bootstrap: lifecycle, state, and event wiring."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from proctor.core.bootstrap import Application
-from proctor.core.config import ProctorConfig
+from proctor.core.config import ProctorConfig, TelegramConfig
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event
 
@@ -269,6 +271,65 @@ class TestHandleTerminal:
             assert len(results) == 1
             assert results[0].type == "task.failed"
             assert "LLM down" in results[0].payload["error"]
+        finally:
+            await app.stop()
+
+
+class TestTelegramTriggerBootstrap:
+    """Test TelegramTrigger integration in Application lifecycle."""
+
+    @pytest.fixture
+    def telegram_config(self, tmp_path: object) -> ProctorConfig:
+        from pathlib import Path
+
+        return ProctorConfig(
+            data_dir=Path(str(tmp_path)) / "proctor_data",
+            telegram=TelegramConfig(
+                bot_token="test-token",
+                allowed_chat_ids=[],
+            ),
+        )
+
+    @pytest.mark.anyio
+    async def test_telegram_trigger_started_when_configured(
+        self, telegram_config: ProctorConfig
+    ) -> None:
+        app = Application(telegram_config)
+        mock_trigger = AsyncMock()
+        with patch(
+            "proctor.core.bootstrap.TelegramTrigger",
+            return_value=mock_trigger,
+        ):
+            await app.start()
+            try:
+                mock_trigger.start.assert_called_once_with(app.bus)
+                assert app._telegram_trigger is mock_trigger
+            finally:
+                await app.stop()
+
+    @pytest.mark.anyio
+    async def test_telegram_trigger_stopped_on_shutdown(
+        self, telegram_config: ProctorConfig
+    ) -> None:
+        app = Application(telegram_config)
+        mock_trigger = AsyncMock()
+        with patch(
+            "proctor.core.bootstrap.TelegramTrigger",
+            return_value=mock_trigger,
+        ):
+            await app.start()
+            await app.stop()
+            mock_trigger.stop.assert_called_once()
+            assert app._telegram_trigger is None
+
+    @pytest.mark.anyio
+    async def test_no_telegram_trigger_when_not_configured(
+        self, tmp_config: ProctorConfig
+    ) -> None:
+        app = Application(tmp_config)
+        await app.start()
+        try:
+            assert app._telegram_trigger is None
         finally:
             await app.stop()
 
