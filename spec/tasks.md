@@ -64,7 +64,7 @@ Wire `SchedulerTrigger` into the application bootstrap so it starts alongside `T
 ## Milestone 3: Testing
 
 ### TASK-005: Unit Tests for ScheduleItemConfig Validation
-🔴 P0 | ⬜ TODO | Est: 1h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
 
 Test the config model validation: valid cron, valid interval, both set (error), neither set (error), disabled items.
 
