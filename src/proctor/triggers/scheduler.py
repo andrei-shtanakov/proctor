@@ -69,8 +69,9 @@ class SchedulerTrigger(Trigger):
 
     async def _run_interval(self, item: ScheduleItemConfig, bus: EventBus) -> None:
         """Loop with fixed interval sleep, then publish."""
+        assert item.interval_seconds is not None
         while True:
-            await asyncio.sleep(item.interval_seconds)  # type: ignore[arg-type]
+            await asyncio.sleep(item.interval_seconds)
             await self._publish(item, bus)
 
     async def _publish(self, item: ScheduleItemConfig, bus: EventBus) -> None:

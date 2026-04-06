@@ -1,6 +1,8 @@
 """Tests for SchedulerTrigger: cron, interval, start/stop, edge cases."""
 
 import asyncio
+from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -126,11 +128,11 @@ class TestIntervalScheduling:
 
         bus.subscribe("trigger.scheduler", handler)
 
-        item = _interval_item(interval_seconds=0.02)
+        item = _interval_item(interval_seconds=0.01)
         trigger = SchedulerTrigger(schedules=[item])
         await trigger.start(bus)
 
-        await asyncio.sleep(0.08)
+        await asyncio.sleep(0.1)
         await trigger.stop()
 
         assert len(received) >= 2
@@ -150,13 +152,13 @@ class TestIntervalScheduling:
         bus.subscribe("trigger.scheduler", handler)
 
         items = [
-            _interval_item(name="a", interval_seconds=0.02),
-            _interval_item(name="b", interval_seconds=0.02),
+            _interval_item(name="a", interval_seconds=0.01),
+            _interval_item(name="b", interval_seconds=0.01),
         ]
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)
 
-        await asyncio.sleep(0.06)
+        await asyncio.sleep(0.1)
         await trigger.stop()
 
         sources = {e.source for e in received}
@@ -169,6 +171,7 @@ class TestIntervalScheduling:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("_asyncio_only")
 class TestCronScheduling:
     @pytest.mark.anyio
     async def test_cron_publishes_correct_event_type(self) -> None:
@@ -191,6 +194,79 @@ class TestCronScheduling:
         assert received[0].type == "trigger.scheduler"
         assert received[0].source == "scheduler:cron-job"
         assert received[0].payload == {"key": "val"}
+
+    @pytest.mark.anyio
+    async def test_cron_fires_event_via_start(self) -> None:
+        """Cron schedule publishes an event on the bus after firing."""
+        bus = EventBus()
+        received: list[Event] = []
+
+        async def handler(e: Event) -> None:
+            received.append(e)
+
+        bus.subscribe("trigger.scheduler", handler)
+
+        item = _cron_item(
+            name="fast-cron",
+            payload={"action": "cron-fired"},
+        )
+        trigger = SchedulerTrigger(schedules=[item])
+
+        # Patch croniter.get_next to return a time 0.01s in the
+        # future so the cron loop fires almost immediately.
+        def _fake_get_next(self: object, ret_type: type) -> datetime:
+            return datetime.now(UTC) + timedelta(seconds=0.01)
+
+        with patch(
+            "proctor.triggers.scheduler.croniter.get_next",
+            _fake_get_next,
+        ):
+            await trigger.start(bus)
+            await asyncio.sleep(0.08)
+            await trigger.stop()
+
+        assert len(received) >= 1
+        ev = received[0]
+        assert ev.type == "trigger.scheduler"
+        assert ev.source == "scheduler:fast-cron"
+        assert ev.payload == {"action": "cron-fired"}
+
+    @pytest.mark.anyio
+    async def test_cron_event_has_correct_fields(self) -> None:
+        """Event from cron has correct type, source, and payload."""
+        bus = EventBus()
+        received: list[Event] = []
+
+        async def handler(e: Event) -> None:
+            received.append(e)
+
+        bus.subscribe("trigger.scheduler", handler)
+
+        item = _cron_item(
+            name="field-check",
+            payload={"env": "test", "tier": 1},
+        )
+        trigger = SchedulerTrigger(schedules=[item])
+
+        def _fake_get_next(self: object, ret_type: type) -> datetime:
+            return datetime.now(UTC) + timedelta(seconds=0.01)
+
+        with patch(
+            "proctor.triggers.scheduler.croniter.get_next",
+            _fake_get_next,
+        ):
+            await trigger.start(bus)
+            await asyncio.sleep(0.05)
+            await trigger.stop()
+
+        assert len(received) >= 1
+        ev = received[0]
+        assert ev.type == "trigger.scheduler"
+        assert ev.source == "scheduler:field-check"
+        assert ev.payload == {"env": "test", "tier": 1}
+        # Event should have auto-generated id and timestamp
+        assert ev.id
+        assert ev.timestamp
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +316,40 @@ class TestLifecycle:
         items = [
             _interval_item(name="a", interval_seconds=0.02),
             _interval_item(name="b", interval_seconds=0.02),
+        ]
+        trigger = SchedulerTrigger(schedules=items)
+        await trigger.start(bus)
+
+        assert len(trigger._tasks) == 2
+        await trigger.stop()
+        assert trigger._tasks == []
+
+    @pytest.mark.anyio
+    async def test_stop_cancels_cron_tasks_without_errors(self) -> None:
+        """stop() cleanly cancels cron tasks without errors."""
+        bus = EventBus()
+        items = [
+            _cron_item(name="cron-a"),
+            _cron_item(name="cron-b"),
+        ]
+        trigger = SchedulerTrigger(schedules=items)
+        await trigger.start(bus)
+
+        assert len(trigger._tasks) == 2
+        # All tasks should be running (waiting on sleep)
+        for task in trigger._tasks:
+            assert not task.done()
+
+        await trigger.stop()
+        assert trigger._tasks == []
+
+    @pytest.mark.anyio
+    async def test_stop_cancels_mixed_tasks(self) -> None:
+        """stop() cleanly cancels a mix of cron and interval tasks."""
+        bus = EventBus()
+        items = [
+            _cron_item(name="cron-mix"),
+            _interval_item(name="interval-mix", interval_seconds=10),
         ]
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)

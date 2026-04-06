@@ -80,7 +80,7 @@ Test the config model validation: valid cron, valid interval, both set (error), 
 **Depends on:** TASK-001
 
 ### TASK-006: Unit Tests for SchedulerTrigger Cron Mode
-🔴 P0 | ⬜ TODO | Est: 1-2h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1-2h
 
 Test that cron-based schedules fire events at the correct times. Use time mocking or short cron expressions to keep tests fast.
 
