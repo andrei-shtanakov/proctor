@@ -38,7 +38,7 @@ Create `src/proctor/triggers/telegram.py` following the TerminalTrigger pattern.
 **Depends on:** TASK-001
 
 ### TASK-003: Register TelegramTrigger in triggers module
-🔴 P0 | ⬜ TODO | Est: 15m
+🔴 P0 | 🔄 IN_PROGRESS | Est: 15m
 
 Export `TelegramTrigger` from `src/proctor/triggers/__init__.py` and wire it into bootstrap if `config.telegram` is set.
 
