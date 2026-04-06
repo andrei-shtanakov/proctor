@@ -1,0 +1,83 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-005 — Implement list_episodes and search_episodes
+
+**Priority:** P1
+**Estimate:** 1h
+**Milestone:** Milestone 2: EpisodicMemory Class
+
+## Checklist (implement ALL items):
+
+- [ ] `list_episodes` returns episodes ordered by timestamp DESC with limit
+- [ ] `search_episodes` uses SQL LIKE with `%query%` on user_input and agent_response
+- [ ] Both methods return `list[Episode]`
+- [ ] Default limits are sensible (50 for list, 20 for search)
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 296 tests pass and lint is clean. The implementation is already complete. Here's the summary:
+
+## Summary
+
+TASK-005 is already fully implemented. All checklist items are satisfied:
+
+**Implementation** (`src/proctor/core/memory.py`):
+- `list_episodes(limit=50)` — returns episodes ordered by `timestamp DESC` with configurable limit (default 50)
+- `search_episodes(query, limit=20)` — uses SQL `LIKE` with `%query%` on both `user_input` and `agent_response` columns, default limit 20
+- Both return `list[Episode]`
+
+**Tests** (`tests/test_core/test_memory.py`):
+- `TestListEpisodes` — 3 tests: empty list, newest-first ordering, limit enforcement
+- `TestSearchEpisodes` — 4 tests: match on user_input, match on agent_response, no-match returns empty, limit enforcement
+
+**Results**: 296/296 tests pass, no lint errors.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

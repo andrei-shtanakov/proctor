@@ -59,7 +59,7 @@ Implement `save_episode(episode: Episode) -> None` and `get_episode(episode_id: 
 **Depends on:** TASK-003
 
 ### TASK-005: Implement list_episodes and search_episodes
-🟠 P1 | ⬜ TODO | Est: 1h
+🟠 P1 | 🔄 IN_PROGRESS | Est: 1h
 
 Implement `list_episodes(limit: int = 50) -> list[Episode]` (most recent first) and `search_episodes(query: str, limit: int = 20) -> list[Episode]` (LIKE search on user_input and agent_response).
 
