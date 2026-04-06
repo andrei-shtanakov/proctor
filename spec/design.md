@@ -769,10 +769,11 @@ proctor/
 │       ├── __main__.py          # CLI entrypoint
 │       ├── core/
 │       │   ├── __init__.py
-│       │   ├── models.py        # Event, Task, Envelope, TaskStatus
+│       │   ├── models.py        # Event, Task, Episode, Envelope, TaskStatus
 │       │   ├── config.py        # ProctorConfig, load_config
 │       │   ├── bus.py           # EventBus
 │       │   ├── state.py         # StateManager (SQLite)
+│       │   ├── memory.py        # EpisodicMemory (SQLite)
 │       │   └── bootstrap.py     # Application lifecycle
 │       ├── workflow/
 │       │   ├── __init__.py
@@ -785,6 +786,8 @@ proctor/
 │       └── triggers/
 │           ├── __init__.py
 │           ├── base.py          # Trigger ABC
+│           ├── scheduler.py     # SchedulerTrigger (cron/interval)
+│           ├── telegram.py      # TelegramTrigger (Bot API polling)
 │           └── terminal.py      # TerminalTrigger
 ├── tests/
 │   ├── __init__.py
@@ -806,6 +809,8 @@ proctor/
 │   │   └── test_runtime.py
 │   ├── test_triggers/
 │   │   ├── __init__.py
+│   │   ├── test_scheduler.py
+│   │   ├── test_telegram.py
 │   │   └── test_terminal.py
 │   └── test_integration.py
 ├── config/

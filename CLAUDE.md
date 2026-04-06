@@ -44,8 +44,8 @@ pyrefly check                        # Type check (run after every change)
 
 | Module | Purpose |
 |--------|---------|
-| `core/` | Kernel — internal asyncio EventBus, SQLite state manager, config (YAML→pydantic), bootstrap, core models (Event, Task, Envelope) |
-| `triggers/` | Input adapters — Trigger ABC and TerminalTrigger (stdin→events). Future: Telegram, webhook, filesystem, email, heartbeat |
+| `core/` | Kernel — internal asyncio EventBus, SQLite state manager, config (YAML→pydantic), bootstrap, EpisodicMemory, core models (Event, Task, Episode, Envelope) |
+| `triggers/` | Input adapters — Trigger ABC, TerminalTrigger (stdin→events), TelegramTrigger (Bot API polling), SchedulerTrigger (cron/interval). Future: webhook, filesystem, email, heartbeat |
 | `workflow/` | Pipeline engine — WorkflowSpec model, DAG executor (topo-sort + parallel), WorkflowEngine dispatcher. Supports simple and DAG modes |
 | `workers/` | Agent Runtime (LLM loop: prompt→tool calls→result). Future: worker registry, local/Docker/SSH workers |
 
@@ -53,9 +53,7 @@ pyrefly check                        # Type check (run after every change)
 
 | Module | Purpose | Phase |
 |--------|---------|-------|
-| `scheduler/` | Cron/at/interval schedules stored in SQLite | Phase 2 |
 | `router/` | Two-layer task routing: capability scoring + safety invariants | Phase 2 |
-| `memory/` | Three-layer: working (RAM), episodic (SQLite), semantic (FTS5) | Phases 2, 4 |
 | `mcp/` | MCP client/server/controller/registry/proxy | Phase 3 |
 | `infra/` | Thin wrappers: Docker SDK, asyncssh, Vagrant CLI, Ansible runner, tmux | Phase 3 |
 | `a2a/` | A2A Gateway for external agent interop | Phase 6 |
@@ -63,30 +61,30 @@ pyrefly check                        # Type check (run after every change)
 
 **Data flow:** Trigger → Event → EventBus → Router (score + invariants) → NATS → Worker (Agent Runtime: LiteLLM + MCP tools) → Result → State.
 
-**Core model:** `Event` (typed messages), `Task` (status machine: pending→assigned→running→completed/failed), `Envelope` (NATS message wrapper with correlation_id, reply_to, TTL).
+**Core model:** `Event` (typed messages), `Task` (status machine: pending→assigned→running→completed/failed), `Episode` (agent interaction record for episodic memory), `Envelope` (NATS message wrapper with correlation_id, reply_to, TTL).
 
 **NATS topics:** `proctor.events.>` (pub/sub), `proctor.tasks.{submit,assign,result}` (request/reply + queue), `proctor.agents.{id}.inbox` (direct), `proctor.mcp.proxy.{id}.call` (tool calls), `proctor.operator.{notify,ask,command}`.
 
 ## Tech Stack
 
-- Python 3.12, pydantic 2.x, asyncio, aiosqlite, nats-py, litellm, tiktoken, mcp SDK, aiohttp, pyyaml
+- Python 3.12, pydantic 2.x, asyncio, anyio, aiosqlite, nats-py, litellm, tiktoken, mcp SDK, aiohttp, croniter, pyyaml
 - Dev: pytest + anyio (NOT asyncio for async tests), ruff, pyrefly
 - Uses `src/` layout with hatchling build backend
 
 ## Implementation Status
 
-Phase 0 (Foundation) and Phase 1 (MVP) are complete. All 12 tasks are DONE — see `spec/tasks.md` for details.
+Phase 0 (Foundation) and Phase 1 (MVP) are complete. Phase 2 is partially complete.
 
-**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration.
+**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration, SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), EpisodicMemory (SQLite-backed interaction history).
 
-**Current phase:** Post-Phase 1. The system accepts terminal input, executes simple and DAG workflows via LLM, and persists task state in SQLite.
+**Current phase:** Phase 2 (partially complete). The system accepts terminal input, Telegram messages, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite.
 
-**Next:** Phase 2 — NATS real messaging, scheduler, router, additional triggers (Telegram, webhook), episodic memory.
+**Next:** Remaining Phase 2 work — NATS real messaging, router, additional triggers (webhook). Then Phase 3+.
 
 ## Key Conventions
 
 - All models use pydantic `BaseModel`
-- Async everywhere (asyncio, aiosqlite, nats-py async client)
+- Async everywhere (anyio for triggers/tests, aiosqlite, nats-py async client)
 - EventBus handles all intra-process communication (NATS stubbed for Phase 2)
 - LLM calls abstracted behind `Callable[[str], Awaitable[str]]` interface (mock in tests, real LiteLLM in future)
 - Agent Runtime uses tool definitions (`ToolDef`) — tools are dynamic, not hardcoded

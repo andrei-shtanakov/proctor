@@ -6,7 +6,7 @@ Proctor orchestrates LLM-powered agents that execute workflows (simple prompts, 
 
 ## Status
 
-Phase 0 (Foundation) and Phase 1 (MVP) complete. The system accepts terminal input, executes simple and DAG workflows via LLM, and persists task state in SQLite. NATS messaging, scheduler, and additional triggers are planned for Phase 2+.
+Phase 0 (Foundation) and Phase 1 (MVP) complete. Phase 2 partially complete: SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), and EpisodicMemory are implemented. The system accepts terminal input, Telegram messages, and scheduled events; executes simple and DAG workflows via LLM; and persists task state and episodic history in SQLite. NATS messaging, router, and webhook trigger are planned for remaining Phase 2 work.
 
 ## Requirements
 
@@ -58,6 +58,19 @@ nats:
 scheduler:
   poll_interval_seconds: 30
   enabled: true
+
+telegram:
+  bot_token: "your-bot-token"
+  allowed_chat_ids: []          # empty = accept all chats
+  poll_timeout: 30
+
+schedules:
+  - name: heartbeat
+    interval_seconds: 3600
+    payload: { type: ping }
+  - name: daily-report
+    cron: "0 9 * * *"
+    payload: { action: report }
 ```
 
 ### Node Roles
@@ -121,10 +134,13 @@ proctor/
 │   │   ├── bootstrap.py          # Application lifecycle + event wiring
 │   │   ├── bus.py                # Async EventBus with fnmatch wildcard subscriptions
 │   │   ├── config.py             # YAML config loading with pydantic models
-│   │   ├── models.py             # Core models: Event, Task, Envelope, TaskStatus
+│   │   ├── memory.py             # EpisodicMemory: SQLite store for interaction history
+│   │   ├── models.py             # Core models: Event, Task, Episode, Envelope, TaskStatus
 │   │   └── state.py              # SQLite state manager (tasks, schedules, config_overrides)
 │   ├── triggers/
 │   │   ├── base.py               # Trigger ABC
+│   │   ├── scheduler.py          # SchedulerTrigger: cron/interval event firing
+│   │   ├── telegram.py           # TelegramTrigger: Bot API long-polling
 │   │   └── terminal.py           # TerminalTrigger: stdin reader with /quit command
 │   ├── workers/
 │   │   └── runtime.py            # AgentRuntime: LLM loop with tool calling
@@ -135,7 +151,7 @@ proctor/
 └── tests/
     ├── conftest.py               # anyio backend fixture
     ├── test_core/                # Unit tests: models, config, bus, state, bootstrap
-    ├── test_triggers/            # TerminalTrigger tests
+    ├── test_triggers/            # TerminalTrigger, TelegramTrigger, SchedulerTrigger tests
     ├── test_workers/             # AgentRuntime tests
     ├── test_workflow/            # WorkflowSpec, DAG, engine tests
     └── test_integration.py       # End-to-end: terminal -> workflow -> DB persistence
@@ -148,13 +164,15 @@ proctor/
 All components communicate through an internal `EventBus` with async pub/sub and `fnmatch` wildcard pattern matching. The `Application` class wires everything together:
 
 ```
-TerminalTrigger (stdin)
+TerminalTrigger (stdin)  ─┐
+TelegramTrigger (Bot API) ├─▶ Event(type="trigger.*")
+SchedulerTrigger (cron)  ─┘
     │
-    ▼ Event(type="trigger.terminal")
+    ▼
   EventBus
     │
     ▼ Application._handle_terminal()
-Task(PENDING) → StateManager.save_task() → SQLite
+Task(PENDING) → StateManager.save_task() → SQLite (state.db)
     │
     ▼ Task(RUNNING)
 WorkflowEngine.execute(spec)
@@ -162,7 +180,8 @@ WorkflowEngine.execute(spec)
     └── DAG mode: DAGExecutor (topo-sort + parallel steps via llm_call)
     │
     ▼
-Task(COMPLETED) → StateManager.save_task() → SQLite
+Task(COMPLETED) → StateManager.save_task() → SQLite (state.db)
+Episode → EpisodicMemory.save_episode() → SQLite (episodes.db)
     │
     ▼ Event(type="task.completed")
   EventBus → print result
@@ -174,6 +193,7 @@ Task(COMPLETED) → StateManager.save_task() → SQLite
 |-------|---------|
 | `Event` | Typed message with auto UUID, source, payload dict, UTC timestamp |
 | `Task` | Status machine (PENDING→ASSIGNED→RUNNING→COMPLETED/FAILED), spec, result, retries, deadline |
+| `Episode` | Agent interaction record: trigger type, user input, agent response, workflow result |
 | `Envelope` | NATS message wrapper with correlation_id, reply_to, TTL (for Phase 2+) |
 | `TaskStatus` | StrEnum: PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED |
 
@@ -226,15 +246,23 @@ Note: in the current simple/DAG workflow modes, the engine calls `llm_call` dire
 
 ### SQLite State
 
-Three tables in `data/state.db`:
+Two databases with WAL mode for concurrent access:
+
+**`data/state.db`** — operational state:
 
 | Table | Purpose |
 |-------|---------|
 | `tasks` | Task state persistence with status, spec, result, timestamps |
-| `schedules` | Cron/interval schedule definitions (schema ready, Phase 2) |
+| `schedules` | Cron/interval schedule definitions (schema ready) |
 | `config_overrides` | Runtime configuration overrides (key-value) |
 
-WAL mode enabled for concurrent access. Tasks are saved at every state transition.
+**`data/episodes.db`** — interaction history:
+
+| Table | Purpose |
+|-------|---------|
+| `episodes` | Agent interaction records (trigger type, input, response, workflow result) |
+
+Tasks are saved at every state transition. Episodes are saved after each workflow execution (success or failure).
 
 ## Tech Stack
 
@@ -246,6 +274,7 @@ WAL mode enabled for concurrent access. Tasks are saved at every state transitio
 | Messaging | nats-py (installed, Phase 2 integration) |
 | Protocols | mcp SDK (installed, Phase 3+ integration) |
 | HTTP | aiohttp |
+| Scheduling | croniter |
 | Config | pyyaml |
 | Dev | pytest + anyio (NOT asyncio), ruff, pyrefly |
 
@@ -255,7 +284,7 @@ WAL mode enabled for concurrent access. Tasks are saved at every state transitio
 |-------|-------|--------|
 | 0 | Foundation (models, config, bus, state, bootstrap) | Done |
 | 1 | MVP (workflow engine, DAG, agent runtime, terminal trigger) | Done |
-| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory) | Planned |
+| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory) | Partial (scheduler, Telegram, episodic memory done; router, webhook pending) |
 | 3 | Distribution (NATS transport, worker pool, task queue, MCP tools) | Planned |
 | 4 | Advanced orchestration (FSM, multi-agent, self-modification) | Planned |
 | 5 | Observability & control (OpenTelemetry, dashboards, audit log, TUI) | Planned |

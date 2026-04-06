@@ -3,7 +3,7 @@
 ## Milestone 1: Config & Models
 
 ### TASK-001: Add Schedule Item Config Model
-🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
+🔴 P0 | ✅ DONE | Est: 1h
 
 Add a `ScheduleItemConfig` pydantic model to `src/proctor/core/config.py` representing a single scheduled job entry. Update `ProctorConfig` to include a `schedules: list[ScheduleItemConfig]` field. Each item specifies a name, a cron expression OR a fixed interval (seconds), the event payload to emit, and an enabled flag.
 
@@ -16,7 +16,7 @@ Add a `ScheduleItemConfig` pydantic model to `src/proctor/core/config.py` repres
 **Depends on:**
 
 ### TASK-002: Add croniter Dependency
-🔴 P0 | 🔄 IN_PROGRESS | Est: 30m
+🔴 P0 | ✅ DONE | Est: 30m
 
 Add `croniter` as a runtime dependency for cron expression parsing. Verify it installs cleanly and is importable.
 
@@ -30,7 +30,7 @@ Add `croniter` as a runtime dependency for cron expression parsing. Verify it in
 ## Milestone 2: Core Implementation
 
 ### TASK-003: Implement SchedulerTrigger Class
-🔴 P0 | 🔄 IN_PROGRESS | Est: 2-3h
+🔴 P0 | ✅ DONE | Est: 2-3h
 
 Create `src/proctor/triggers/scheduler.py` implementing `SchedulerTrigger(Trigger)`. The trigger accepts a list of `ScheduleItemConfig` items, starts an asyncio task per schedule, and publishes `trigger.scheduler` events on the EventBus when each schedule fires.
 
@@ -48,7 +48,7 @@ Create `src/proctor/triggers/scheduler.py` implementing `SchedulerTrigger(Trigge
 **Depends on:** TASK-001, TASK-002
 
 ### TASK-004: Register SchedulerTrigger in Bootstrap
-🟠 P1 | 🔄 IN_PROGRESS | Est: 1h
+🟠 P1 | ✅ DONE | Est: 1h
 
 Wire `SchedulerTrigger` into the application bootstrap so it starts alongside `TerminalTrigger` when schedules are configured.
 
@@ -64,7 +64,7 @@ Wire `SchedulerTrigger` into the application bootstrap so it starts alongside `T
 ## Milestone 3: Testing
 
 ### TASK-005: Unit Tests for ScheduleItemConfig Validation
-🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
+🔴 P0 | ✅ DONE | Est: 1h
 
 Test the config model validation: valid cron, valid interval, both set (error), neither set (error), disabled items.
 
@@ -80,7 +80,7 @@ Test the config model validation: valid cron, valid interval, both set (error), 
 **Depends on:** TASK-001
 
 ### TASK-006: Unit Tests for SchedulerTrigger Cron Mode
-🔴 P0 | 🔄 IN_PROGRESS | Est: 1-2h
+🔴 P0 | ✅ DONE | Est: 1-2h
 
 Test that cron-based schedules fire events at the correct times. Use time mocking or short cron expressions to keep tests fast.
 
@@ -94,7 +94,7 @@ Test that cron-based schedules fire events at the correct times. Use time mockin
 **Depends on:** TASK-003
 
 ### TASK-007: Unit Tests for SchedulerTrigger Interval Mode
-🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
+🔴 P0 | ✅ DONE | Est: 1h
 
 Test that interval-based schedules fire events repeatedly at the configured interval.
 
@@ -108,7 +108,7 @@ Test that interval-based schedules fire events repeatedly at the configured inte
 **Depends on:** TASK-003
 
 ### TASK-008: Integration Test — SchedulerTrigger with EventBus
-🟠 P1 | 🔄 IN_PROGRESS | Est: 1h
+🟠 P1 | ✅ DONE | Est: 1h
 
 End-to-end test: create a real EventBus, start SchedulerTrigger with a short interval, verify events arrive on the bus via a subscriber.
 
@@ -124,7 +124,7 @@ End-to-end test: create a real EventBus, start SchedulerTrigger with a short int
 ## Milestone 4: Quality
 
 ### TASK-009: Lint, Format, and Type Check
-🟠 P1 | 🔄 IN_PROGRESS | Est: 30m
+🟠 P1 | ✅ DONE | Est: 30m
 
 Run all code quality tools on new and modified files, fix any issues.
 
