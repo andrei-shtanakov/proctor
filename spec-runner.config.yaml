@@ -1,0 +1,16 @@
+executor:
+  auto_commit: true
+  claude_command: claude
+  commands:
+    lint: uv run ruff check .
+    test: uv run pytest tests/ -v
+  hooks:
+    post_done:
+      auto_commit: true
+      run_lint: true
+      run_tests: true
+    pre_start:
+      create_git_branch: true
+  main_branch: feature/scheduler-trigger
+  max_retries: 2
+  task_timeout_minutes: 30

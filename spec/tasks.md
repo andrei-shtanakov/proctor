@@ -1,473 +1,137 @@
-# Tasks
+# Implement SchedulerTrigger (cron/interval) — Tasks Specification
 
-> Tasks with priorities, dependencies, and traceability to requirements
+## Milestone 1: Config & Models
 
-## Legend
+### TASK-001: Add Schedule Item Config Model
+🔴 P0 | ⬜ TODO | Est: 1h
 
-**Priority:**
-- P0 — Critical, blocks the release
-- P1 — High, needed for full usability
-- P2 — Medium, experience improvement
-- P3 — Low, nice to have
-
-**Status:**
-- TODO
-- IN PROGRESS
-- DONE
-- BLOCKED
-
-**Estimate:**
-- Use days (d) or hours (h)
-- A range is preferred: 3-5d
-
----
-
-## Definition of Done (for EVERY task)
-
-> A task is NOT considered complete without fulfilling these items:
-
-- [ ] **Unit tests** — coverage >= 80% of new code
-- [ ] **Tests pass** — `uv run pytest` all green
-- [ ] **Lint** — `uv run ruff check src/ tests/` passes
-- [ ] **Format** — `uv run ruff format --check src/ tests/` passes
-- [ ] **Types** — `pyrefly check` passes
-- [ ] **Integration test** — if public interfaces are changed
-
----
-
-## Milestone 1: Foundation (Phase 0)
-
-### TASK-001: Project Scaffold and Dependencies
-🔴 P0 | ✅ DONE | Est: 2h
-
-**Description:**
-Set up `pyproject.toml` with src layout, hatchling build backend, core runtime and dev dependencies. Create package structure with `__init__.py` and `__main__.py`. Configure ruff and pytest.
+Add a `ScheduleItemConfig` pydantic model to `src/proctor/core/config.py` representing a single scheduled job entry. Update `ProctorConfig` to include a `schedules: list[ScheduleItemConfig]` field. Each item specifies a name, a cron expression OR a fixed interval (seconds), the event payload to emit, and an enabled flag.
 
 **Checklist:**
-- [x] Update `pyproject.toml` with all dependencies (pydantic, aiosqlite, nats-py, litellm, tiktoken, mcp, aiohttp, pyyaml)
-- [x] Add dev dependencies (pytest, anyio[trio], pytest-asyncio, ruff)
-- [x] Configure hatchling build, pytest, and ruff sections
-- [x] Create `src/proctor/__init__.py` with `__version__`
-- [x] Create `src/proctor/__main__.py` with async placeholder
-- [x] Create `tests/__init__.py` and `tests/conftest.py` with anyio_backend fixture
-- [x] Update `.gitignore` (add data/, *.db, *.age)
-- [x] Run `uv sync` and verify
-- [x] Run `uv run ruff check` — no errors
+- [ ] Define `ScheduleItemConfig` model with fields: `name` (str), `cron` (str | None), `interval_seconds` (float | None), `payload` (dict), `enabled` (bool, default True)
+- [ ] Add pydantic validator ensuring exactly one of `cron` or `interval_seconds` is set
+- [ ] Add `schedules: list[ScheduleItemConfig] = []` to `ProctorConfig`
+- [ ] Verify existing config loading still works with no schedules defined
 
-**Traces to:** [NFR-003]
-**Depends on:** —
-**Blocks:** [TASK-002], [TASK-003], [TASK-004], [TASK-005], [TASK-006], [TASK-100]
+**Depends on:**
 
----
+### TASK-002: Add croniter Dependency
+🔴 P0 | ⬜ TODO | Est: 30m
 
-### TASK-100: Test Infrastructure Setup
-🔴 P0 | ✅ DONE | Est: 1h
-
-**Description:**
-Verify test infrastructure works: pytest discovers tests, anyio backend is configured, async tests run.
+Add `croniter` as a runtime dependency for cron expression parsing. Verify it installs cleanly and is importable.
 
 **Checklist:**
-- [x] pytest discovers and runs tests from `tests/`
-- [x] `@pytest.mark.asyncio` tests work with anyio backend
-- [x] conftest.py provides `anyio_backend` fixture
-- [x] ruff lint and format configured and passing
+- [ ] Run `uv add croniter`
+- [ ] Verify `uv sync` succeeds
+- [ ] Verify `from croniter import croniter` works in a quick script
 
-**Traces to:** [NFR-000]
-**Depends on:** [TASK-001]
-**Blocks:** [TASK-002], [TASK-003], [TASK-004], [TASK-005], [TASK-006]
+**Depends on:**
 
----
+## Milestone 2: Core Implementation
 
-### TASK-002: Core Models (Event, Task, Envelope)
-🔴 P0 | ✅ DONE | Est: 2h
+### TASK-003: Implement SchedulerTrigger Class
+🔴 P0 | ⬜ TODO | Est: 2-3h
 
-**Description:**
-Implement pydantic models for Event, Task, TaskStatus, and Envelope in `src/proctor/core/models.py`. All models auto-generate UUID ids and UTC timestamps.
+Create `src/proctor/triggers/scheduler.py` implementing `SchedulerTrigger(Trigger)`. The trigger accepts a list of `ScheduleItemConfig` items, starts an asyncio task per schedule, and publishes `trigger.scheduler` events on the EventBus when each schedule fires.
 
 **Checklist:**
-- [x] Create `src/proctor/core/__init__.py`
-- [x] Implement `TaskStatus` StrEnum with PENDING, ASSIGNED, RUNNING, COMPLETED, FAILED
-- [x] Implement `Event` model with auto id, type, source, payload, timestamp
-- [x] Implement `Task` model with status machine, spec dict, optional fields
-- [x] Implement `Envelope` model with reply_to, correlation_id, ttl_seconds
-- [x] Write tests: creation, serialization, unique IDs, status values
+- [ ] Create `src/proctor/triggers/scheduler.py`
+- [ ] Implement `SchedulerTrigger.__init__(self, schedules: list[ScheduleItemConfig])` storing schedules and internal state
+- [ ] Implement `start(self, bus: EventBus)` — launch one asyncio task per enabled schedule item
+- [ ] Implement `stop(self)` — cancel all running tasks with proper cleanup (suppress CancelledError, like TerminalTrigger)
+- [ ] Implement `_run_cron(self, item, bus)` — loop using croniter to compute next fire time, asyncio.sleep until then, publish event
+- [ ] Implement `_run_interval(self, item, bus)` — loop with fixed asyncio.sleep, publish event
+- [ ] Publish `Event(type="trigger.scheduler", source=f"scheduler:{item.name}", payload=item.payload)` on each fire
+- [ ] Add logging at DEBUG (each fire) and INFO (start/stop) levels
+- [ ] Handle edge case: if next cron time is in the past (e.g. after long sleep), skip to next future occurrence
 
-**Tests (Definition of Done):**
-- [x] Unit tests: Event creation and uniqueness
-- [x] Unit tests: Task defaults and status transitions
-- [x] Unit tests: Envelope with all optional fields
-- [x] Coverage >= 80%
+**Depends on:** TASK-001, TASK-002
 
-**Traces to:** [REQ-001]
-**Depends on:** [TASK-001], [TASK-100]
-**Blocks:** [TASK-004], [TASK-005]
+### TASK-004: Register SchedulerTrigger in Bootstrap
+🟠 P1 | ⬜ TODO | Est: 1h
 
----
-
-### TASK-003: Config Loading
-🔴 P0 | ✅ DONE | Est: 2h
-
-**Description:**
-Implement YAML config loading with nested pydantic models (LLMConfig, NATSConfig, SchedulerConfig, ProctorConfig). Provide sensible defaults and graceful handling of missing config files.
+Wire `SchedulerTrigger` into the application bootstrap so it starts alongside `TerminalTrigger` when schedules are configured.
 
 **Checklist:**
-- [x] Implement `LLMConfig`, `NATSConfig`, `SchedulerConfig` models
-- [x] Implement `ProctorConfig` root model with nested configs
-- [x] Implement `load_config(path)` that returns defaults if file missing
-- [x] Create `config/proctor.yaml` example
-- [x] Write tests: default config, YAML loading, missing file, nested config defaults
+- [ ] Import `SchedulerTrigger` in bootstrap module
+- [ ] Instantiate `SchedulerTrigger` from `config.schedules` if list is non-empty and `config.scheduler.enabled`
+- [ ] Call `scheduler_trigger.start(bus)` during startup
+- [ ] Call `scheduler_trigger.stop()` during shutdown
+- [ ] Export `SchedulerTrigger` from `src/proctor/triggers/__init__.py`
 
-**Tests (Definition of Done):**
-- [x] Unit tests: default config values
-- [x] Unit tests: YAML file loading
-- [x] Unit tests: missing file returns defaults
-- [x] Unit tests: nested LLM config defaults
-- [x] Coverage >= 80%
+**Depends on:** TASK-003
 
-**Traces to:** [REQ-002]
-**Depends on:** [TASK-001], [TASK-100]
-**Blocks:** [TASK-006]
+## Milestone 3: Testing
 
----
+### TASK-005: Unit Tests for ScheduleItemConfig Validation
+🔴 P0 | ⬜ TODO | Est: 1h
 
-### TASK-004: EventBus (Internal Async Pub/Sub)
-🔴 P0 | ✅ DONE | Est: 3h
-
-**Description:**
-Implement async EventBus with fnmatch wildcard pattern matching, multiple subscriber support, error isolation, and unsubscribe capability.
+Test the config model validation: valid cron, valid interval, both set (error), neither set (error), disabled items.
 
 **Checklist:**
-- [x] Implement `_Subscription` with pattern, handler, UUID id
-- [x] Implement `EventBus.subscribe(pattern, handler)` returning sub_id
-- [x] Implement `EventBus.unsubscribe(sub_id)`
-- [x] Implement `EventBus.publish(event)` with `asyncio.create_task` per handler
-- [x] Implement `_safe_call` for exception isolation
-- [x] Write tests: exact match, wildcard, multiple subscribers, unsubscribe, error isolation
+- [ ] Create `tests/test_triggers/test_scheduler.py`
+- [ ] Test valid cron-based config (`cron="*/5 * * * *"`, no interval)
+- [ ] Test valid interval-based config (`interval_seconds=60`, no cron)
+- [ ] Test validation error when both `cron` and `interval_seconds` are set
+- [ ] Test validation error when neither `cron` nor `interval_seconds` is set
+- [ ] Test `enabled=False` is accepted
+- [ ] Test config loads from YAML with schedules section
 
-**Tests (Definition of Done):**
-- [x] Unit tests: subscribe and publish exact topic
-- [x] Unit tests: wildcard pattern matching (trigger.*)
-- [x] Unit tests: multiple subscribers on same pattern
-- [x] Unit tests: unsubscribe stops delivery
-- [x] Unit tests: handler error doesn't crash bus
-- [x] Coverage >= 80%
+**Depends on:** TASK-001
 
-**Traces to:** [REQ-003]
-**Depends on:** [TASK-002]
-**Blocks:** [TASK-006], [TASK-011]
+### TASK-006: Unit Tests for SchedulerTrigger Cron Mode
+🔴 P0 | ⬜ TODO | Est: 1-2h
 
----
-
-### TASK-005: StateManager (SQLite Wrapper)
-🔴 P0 | ✅ DONE | Est: 4h
-
-**Description:**
-Implement async SQLite wrapper with aiosqlite for task persistence, config overrides, and schedule storage. Schema: tasks (with status index), schedules, config_overrides tables.
+Test that cron-based schedules fire events at the correct times. Use time mocking or short cron expressions to keep tests fast.
 
 **Checklist:**
-- [x] Implement SQLite schema with 3 tables and index
-- [x] Implement `initialize()` — open DB, create tables, enable WAL
-- [x] Implement `close()` — close connection
-- [x] Implement `save_task()` — upsert by id
-- [x] Implement `get_task()` — by id, returns None if not found
-- [x] Implement `list_tasks(status?)` — filtered query
-- [x] Implement `_row_to_task()` — SQLite row to pydantic Task
-- [x] Implement `set_config()` / `get_config()` — key-value config overrides
-- [x] Implement `list_tables()` — for testing
-- [x] Write tests: table creation, CRUD, status filter, config overrides
+- [ ] Test that a cron schedule publishes an event on the bus after firing
+- [ ] Test that `stop()` cleanly cancels cron tasks without errors
+- [ ] Test that disabled schedule items are not started
+- [ ] Test that the event has correct `type`, `source`, and `payload` fields
+- [ ] Use `anyio` for async tests (not asyncio), per project conventions
 
-**Tests (Definition of Done):**
-- [x] Unit tests: tables created on initialize
-- [x] Unit tests: save and get task roundtrip
-- [x] Unit tests: update task status
-- [x] Unit tests: list tasks by status
-- [x] Unit tests: get nonexistent returns None
-- [x] Unit tests: config override set/get/update
-- [x] Unit tests: config get with default
-- [x] Coverage >= 80%
+**Depends on:** TASK-003
 
-**Traces to:** [REQ-004]
-**Depends on:** [TASK-002]
-**Blocks:** [TASK-006]
+### TASK-007: Unit Tests for SchedulerTrigger Interval Mode
+🔴 P0 | ⬜ TODO | Est: 1h
 
----
-
-### TASK-006: Bootstrap (Application Startup/Shutdown)
-🔴 P0 | ✅ DONE | Est: 3h
-
-**Description:**
-Implement Application class that owns all core components (EventBus, StateManager), manages lifecycle, and wires event handlers. Update `__main__.py` with signal handling.
+Test that interval-based schedules fire events repeatedly at the configured interval.
 
 **Checklist:**
-- [x] Implement `Application.__init__` — create bus, state
-- [x] Implement `Application.start()` — init state, subscribe handlers, set running
-- [x] Implement `Application.stop()` — close state, unset running
-- [x] Implement `Application.set_llm_call()` — inject LLM function
-- [x] Subscribe `_handle_terminal` to `trigger.terminal` on start
-- [x] Update `__main__.py` with signal handling (SIGINT, SIGTERM)
-- [x] Write tests: start/stop lifecycle, db created, event bus works
+- [ ] Test that an interval schedule publishes events on the bus
+- [ ] Test that multiple intervals fire multiple events (with short interval like 0.1s)
+- [ ] Test that `stop()` cleanly cancels interval tasks
+- [ ] Test event payload matches config
+- [ ] Use `anyio` for async tests
 
-**Tests (Definition of Done):**
-- [x] Unit tests: app starts and stops cleanly
-- [x] Unit tests: state.db file created
-- [x] Unit tests: event bus functional after start
-- [x] Coverage >= 80%
+**Depends on:** TASK-003
 
-**Traces to:** [REQ-005]
-**Depends on:** [TASK-003], [TASK-004], [TASK-005]
-**Blocks:** [TASK-012]
+### TASK-008: Integration Test — SchedulerTrigger with EventBus
+🟠 P1 | ⬜ TODO | Est: 1h
 
----
-
-## Milestone 2: MVP (Phase 1)
-
-### TASK-007: WorkflowSpec Model
-🔴 P0 | ✅ DONE | Est: 2h
-
-**Description:**
-Implement the universal WorkflowSpec pydantic model with support for simple, DAG, FSM (placeholder), and orchestrator (placeholder) modes. Includes Step, StepType, StepRetry, WorkflowPolicies models.
+End-to-end test: create a real EventBus, start SchedulerTrigger with a short interval, verify events arrive on the bus via a subscriber.
 
 **Checklist:**
-- [x] Create `src/proctor/workflow/__init__.py`
-- [x] Implement `WorkflowMode` and `StepType` StrEnums
-- [x] Implement `Step` model with id, type, description, inputs, outputs, depends_on, retry
-- [x] Implement `StepRetry` and `WorkflowPolicies` models
-- [x] Implement `WorkflowSpec` with mode-specific fields and shared policies
-- [x] Write tests: simple spec, DAG spec with steps, serialization roundtrip
+- [ ] Subscribe to `trigger.scheduler` on a real EventBus instance
+- [ ] Start SchedulerTrigger with a 0.1s interval schedule
+- [ ] Collect published events for ~0.5s, verify at least 2 events received
+- [ ] Stop trigger, verify clean shutdown
+- [ ] Use `anyio` for async tests
 
-**Tests (Definition of Done):**
-- [x] Unit tests: simple spec creation
-- [x] Unit tests: DAG spec with step dependencies
-- [x] Unit tests: policies defaults
-- [x] Unit tests: serialization roundtrip
-- [x] Unit tests: step inputs/outputs
-- [x] Coverage >= 80%
+**Depends on:** TASK-006, TASK-007
 
-**Traces to:** [REQ-006]
-**Depends on:** [TASK-001], [TASK-100]
-**Blocks:** [TASK-008], [TASK-009]
+## Milestone 4: Quality
 
----
+### TASK-009: Lint, Format, and Type Check
+🟠 P1 | ⬜ TODO | Est: 30m
 
-### TASK-008: DAG Executor
-🔴 P0 | ✅ DONE | Est: 4h
-
-**Description:**
-Implement topological sort with cycle detection and parallel DAG execution using asyncio.TaskGroup. Steps wait for their dependencies via asyncio.Event signaling.
+Run all code quality tools on new and modified files, fix any issues.
 
 **Checklist:**
-- [x] Implement `topo_sort()` with DFS-based cycle detection
-- [x] Implement `StepResult` model
-- [x] Implement `DAGExecutor.__init__` with steps and step_runner
-- [x] Implement `DAGExecutor.execute()` with TaskGroup-based parallel execution
-- [x] Handle dependency failure propagation (skip dependents)
-- [x] Handle step execution errors
-- [x] Write tests: linear chain, parallel branches, cycle detection, failure propagation
+- [ ] Run `uv run ruff format .` and fix formatting
+- [ ] Run `uv run ruff check .` and fix lint issues
+- [ ] Run `pyrefly check` and fix type errors
+- [ ] Verify all existing tests still pass with `uv run pytest`
 
-**Tests (Definition of Done):**
-- [x] Unit tests: topo_sort linear chain
-- [x] Unit tests: topo_sort parallel steps
-- [x] Unit tests: cycle detection raises ValueError
-- [x] Unit tests: single step execution
-- [x] Unit tests: execute linear DAG with mock runner
-- [x] Unit tests: execute parallel DAG with mock runner
-- [x] Unit tests: step failure stops dependents
-- [x] Coverage >= 80%
-
-**Traces to:** [REQ-007]
-**Depends on:** [TASK-007]
-**Blocks:** [TASK-009]
-
----
-
-### TASK-009: Workflow Engine (Dispatcher)
-🔴 P0 | ✅ DONE | Est: 3h
-
-**Description:**
-Implement WorkflowEngine that dispatches WorkflowSpec to the correct executor based on mode. Supports simple (direct LLM call) and DAG (via DAGExecutor) modes.
-
-**Checklist:**
-- [x] Implement `WorkflowResult` model
-- [x] Implement `WorkflowEngine.__init__` with LLM call function
-- [x] Implement `execute()` with match/case dispatch
-- [x] Implement `_execute_simple()` — LLM call with prompt
-- [x] Implement `_execute_dag()` — build step_runner, execute via DAGExecutor
-- [x] Return error for unsupported modes (FSM, orchestrator)
-- [x] Write tests: simple workflow, DAG workflow, unsupported mode
-
-**Tests (Definition of Done):**
-- [x] Unit tests: simple workflow execution
-- [x] Unit tests: DAG workflow execution
-- [x] Unit tests: unsupported mode returns error
-- [x] Coverage >= 80%
-
-**Traces to:** [REQ-008]
-**Depends on:** [TASK-007], [TASK-008]
-**Blocks:** [TASK-012]
-
----
-
-### TASK-010: Agent Runtime (LLM Loop)
-🔴 P0 | ✅ DONE | Est: 4h
-
-**Description:**
-Implement the Agent Runtime: an LLM agent loop that alternates between calling the LLM and executing tool calls until a text response is returned or max_turns is reached.
-
-**Checklist:**
-- [x] Create `src/proctor/workers/__init__.py`
-- [x] Implement `ToolDef`, `ToolResult`, `AgentResult` models
-- [x] Implement `AgentRuntime.__init__` with llm_fn, tools, max_turns
-- [x] Implement `AgentRuntime.run()` — the main loop
-- [x] Implement `_call_tool()` — execute tool with error handling
-- [x] Handle unknown tool names gracefully
-- [x] Handle max_turns limit
-- [x] Write tests: no-tools completion, tool call + response, max turns, unknown tool
-
-**Tests (Definition of Done):**
-- [x] Unit tests: simple completion without tools
-- [x] Unit tests: tool call and response
-- [x] Unit tests: max turns limit
-- [x] Unit tests: unknown tool returns error
-- [x] Coverage >= 80%
-
-**Traces to:** [REQ-009]
-**Depends on:** [TASK-001], [TASK-100]
-**Blocks:** [TASK-012]
-
----
-
-### TASK-011: Terminal Trigger
-🟠 P1 | ✅ DONE | Est: 2h
-
-**Description:**
-Implement the terminal trigger that reads lines from stdin and publishes them as events. Includes the Trigger ABC and TerminalTrigger implementation.
-
-**Checklist:**
-- [x] Create `src/proctor/triggers/__init__.py`
-- [x] Implement `Trigger` ABC with `start(bus)` and `stop()` methods
-- [x] Implement `TerminalTrigger` with stdin reading via asyncio.StreamReader
-- [x] Implement `_process_line()` — empty lines ignored, quit commands, event publishing
-- [x] Write tests: process line publishes event, empty lines ignored, quit command
-
-**Tests (Definition of Done):**
-- [x] Unit tests: non-empty line publishes trigger.terminal event
-- [x] Unit tests: empty and whitespace lines ignored
-- [x] Unit tests: /quit returns "quit" signal
-- [x] Coverage >= 80%
-
-**Traces to:** [REQ-010]
-**Depends on:** [TASK-004]
-**Blocks:** [TASK-012]
-
----
-
-### TASK-012: Integration — Wire Everything Together
-🔴 P0 | ✅ DONE | Est: 3h
-
-**Description:**
-Wire terminal trigger events to workflow engine execution in the Application bootstrap. Add `_handle_terminal` that creates a simple WorkflowSpec from terminal text, executes it, and publishes the result event. Write end-to-end integration test.
-
-**Checklist:**
-- [x] Update `Application.set_llm_call()` to create WorkflowEngine
-- [x] Implement `_handle_terminal()` — create WorkflowSpec, execute, publish result event
-- [x] Subscribe `_handle_terminal` to "trigger.terminal" in `start()`
-- [x] Write integration test: terminal event -> workflow -> task.completed event
-- [x] Run all tests: `uv run pytest tests/ -v`
-- [x] Run lint: `uv run ruff check src/ tests/`
-- [x] Run format: `uv run ruff format --check src/ tests/`
-
-**Tests (Definition of Done):**
-- [x] Integration test: terminal command executes simple workflow and emits result
-- [x] All existing unit tests still pass
-- [x] Coverage >= 80%
-
-**Traces to:** [REQ-011]
-**Depends on:** [TASK-006], [TASK-009], [TASK-010], [TASK-011]
-**Blocks:** —
-
----
-
-## Dependency Graph
-
-```
-TASK-001 (Project Scaffold)
-    │
-    ├──► TASK-100 (Test Infrastructure)
-    │        │
-    │        ├──► TASK-002 (Core Models)
-    │        │        │
-    │        │        ├──► TASK-004 (EventBus)
-    │        │        │        │
-    │        │        │        └──► TASK-011 (Terminal Trigger) ──┐
-    │        │        │                                          │
-    │        │        └──► TASK-005 (StateManager) ──┐           │
-    │        │                                       │           │
-    │        ├──► TASK-003 (Config Loading) ──────────┤           │
-    │        │                                       │           │
-    │        │                                       ▼           │
-    │        │                              TASK-006 (Bootstrap) ─┤
-    │        │                                                    │
-    │        ├──► TASK-007 (WorkflowSpec)                        │
-    │        │        │                                          │
-    │        │        ├──► TASK-008 (DAG Executor)               │
-    │        │        │        │                                 │
-    │        │        │        └──► TASK-009 (Workflow Engine) ───┤
-    │        │                                                    │
-    │        └──► TASK-010 (Agent Runtime) ───────────────────────┤
-    │                                                             │
-    │                                                             ▼
-    └─────────────────────────────────────────────────► TASK-012 (Integration)
-```
-
----
-
-## Summary by Milestone
-
-### Milestone 1: Foundation (Phase 0)
-
-| Priority | Count | Est. Total |
-|----------|-------|------------|
-| P0 | 6 | ~14h |
-| **Total** | **6** | **~14h** |
-
-Tasks: TASK-001, TASK-100, TASK-002, TASK-003, TASK-004, TASK-005, TASK-006
-
-### Milestone 2: MVP (Phase 1)
-
-| Priority | Count | Est. Total |
-|----------|-------|------------|
-| P0 | 5 | ~16h |
-| P1 | 1 | ~2h |
-| **Total** | **6** | **~18h** |
-
-Tasks: TASK-007, TASK-008, TASK-009, TASK-010, TASK-011, TASK-012
-
-### Overall
-
-| Priority | Count | Est. Total |
-|----------|-------|------------|
-| P0 | 11 | ~30h |
-| P1 | 1 | ~2h |
-| **Total** | **12** | **~32h** |
-
----
-
-## Risk Register
-
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| aiosqlite WAL mode issues on macOS | Medium | Low | Test on macOS early; fallback to journal mode |
-| asyncio.TaskGroup error handling complexity | Medium | Medium | Thorough tests for DAG failure propagation |
-| LiteLLM API changes | Low | Low | Phase 1 uses mocks; real integration deferred |
-| MCP SDK breaking changes | Medium | Low | Phase 1 only defines interface; real MCP in Phase 2 |
-| pytest-asyncio + anyio configuration conflicts | Medium | Medium | Pin versions; test in CI early |
-
----
-
-## Notes
-
-- Phase 1 uses mock LLM implementations. Real LiteLLM wiring is deferred to Phase 2 integration.
-- NATS connection is stubbed. The EventBus handles all intra-process communication.
-- The project already has `pyproject.toml` and basic structure. TASK-001 updates (not creates from scratch).
-- All async tests use `@pytest.mark.asyncio` with anyio backend, never raw asyncio.
-- Recommended execution order follows the dependency graph: scaffold -> test infra -> models -> (config | bus | state) -> bootstrap -> (spec | runtime | terminal) -> (dag | engine) -> integration.
+**Depends on:** TASK-004, TASK-008
