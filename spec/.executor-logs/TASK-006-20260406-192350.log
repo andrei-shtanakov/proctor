@@ -1,0 +1,91 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-006 — Tests for Episode Model and Lifecycle
+
+**Priority:** P0
+**Estimate:** 1h
+**Milestone:** Milestone 3: Testing
+
+## Checklist (implement ALL items):
+
+- [ ] Test Episode model instantiation with defaults
+- [ ] Test Episode model with all fields explicit
+- [ ] Test EpisodicMemory initialize creates DB file and episodes table
+- [ ] Test EpisodicMemory close is idempotent
+- [ ] Use `@pytest.mark.anyio` for async tests, `tmp_path` for DB path
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All tests and checks pass. The task is already implemented. Here's the summary:
+
+## Summary
+
+All checklist items are already implemented in the existing codebase:
+
+- **Episode model with defaults** — `TestEpisodeModel::test_defaults` verifies auto-generated UUID, UTC timestamp, and default `workflow_result=None`
+- **Episode model with all fields explicit** — `TestEpisodeModel::test_all_fields_explicit` verifies all fields can be set explicitly
+- **EpisodicMemory initialize creates DB file and episodes table** — `TestInitializeAndClose::test_creates_db_file` and `test_creates_episodes_table`
+- **EpisodicMemory close is idempotent** — `TestInitializeAndClose::test_close_idempotent` calls close twice without error
+- **`@pytest.mark.anyio` and `tmp_path`** — module-level `pytestmark = pytest.mark.anyio` with asyncio-only backend override; `tmp_path` used in fixtures
+
+## Files
+
+- `src/proctor/core/models.py` — `Episode` model (lines 54-62)
+- `src/proctor/core/memory.py` — `EpisodicMemory` class
+- `tests/test_core/test_memory.py` — 19 tests covering model, lifecycle, CRUD, and search
+
+## Results
+
+- 296/296 tests pass across the full suite
+- Ruff lint: all checks passed
+- No changes needed
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
