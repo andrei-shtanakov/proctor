@@ -80,9 +80,7 @@ class TestScheduleItemConfig:
         assert item.enabled is True
 
     def test_interval_schedule(self) -> None:
-        item = ScheduleItemConfig(
-            name="heartbeat", interval_seconds=60.0
-        )
+        item = ScheduleItemConfig(name="heartbeat", interval_seconds=60.0)
         assert item.name == "heartbeat"
         assert item.cron is None
         assert item.interval_seconds == 60.0
@@ -96,9 +94,7 @@ class TestScheduleItemConfig:
         assert item.payload == {"target": "api", "timeout": 30}
 
     def test_disabled(self) -> None:
-        item = ScheduleItemConfig(
-            name="off", cron="0 0 * * *", enabled=False
-        )
+        item = ScheduleItemConfig(name="off", cron="0 0 * * *", enabled=False)
         assert item.enabled is False
 
     def test_neither_cron_nor_interval_raises(self) -> None:
@@ -114,9 +110,7 @@ class TestScheduleItemConfig:
             )
 
     def test_interval_float_precision(self) -> None:
-        item = ScheduleItemConfig(
-            name="precise", interval_seconds=0.5
-        )
+        item = ScheduleItemConfig(name="precise", interval_seconds=0.5)
         assert item.interval_seconds == 0.5
 
 
@@ -294,9 +288,7 @@ class TestLoadConfig:
         assert cfg.schedules[0].cron == "0 2 * * *"
         assert cfg.schedules[1].interval_seconds == 300
         assert cfg.schedules[1].enabled is False
-        assert cfg.schedules[1].payload == {
-            "url": "https://example.com"
-        }
+        assert cfg.schedules[1].payload == {"url": "https://example.com"}
 
     def test_load_no_schedules_key(self, tmp_path: Path) -> None:
         """Config without schedules key still works."""

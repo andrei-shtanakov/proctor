@@ -1,0 +1,93 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-003 — Implement SchedulerTrigger Class
+
+**Priority:** P0
+**Estimate:** 2-3h
+**Milestone:** Milestone 2: Core Implementation
+
+## Checklist (implement ALL items):
+
+- [ ] Create `src/proctor/triggers/scheduler.py`
+- [ ] Implement `SchedulerTrigger.__init__(self, schedules: list[ScheduleItemConfig])` storing schedules and internal state
+- [ ] Implement `start(self, bus: EventBus)` — launch one asyncio task per enabled schedule item
+- [ ] Implement `stop(self)` — cancel all running tasks with proper cleanup (suppress CancelledError, like TerminalTrigger)
+- [ ] Implement `_run_cron(self, item, bus)` — loop using croniter to compute next fire time, asyncio.sleep until then, publish event
+- [ ] Implement `_run_interval(self, item, bus)` — loop with fixed asyncio.sleep, publish event
+- [ ] Publish `Event(type="trigger.scheduler", source=f"scheduler:{item.name}", payload=item.payload)` on each fire
+- [ ] Add logging at DEBUG (each fire) and INFO (start/stop) levels
+- [ ] Handle edge case: if next cron time is in the past (e.g. after long sleep), skip to next future occurrence
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+**Files created:**
+- `src/proctor/triggers/scheduler.py` — `SchedulerTrigger` class implementing the `Trigger` ABC
+- `tests/test_triggers/test_scheduler.py` — 26 tests (19 pass, 7 skip on trio)
+
+**Files modified:**
+- `src/proctor/triggers/__init__.py` — exports `SchedulerTrigger`
+
+**Implementation details:**
+- `__init__` stores schedules list and empty tasks list
+- `start(bus)` creates one `asyncio.create_task` per enabled schedule item (cron or interval)
+- `stop()` cancels all tasks with `contextlib.suppress(CancelledError)`, matching `TerminalTrigger` pattern
+- `_run_cron(item, bus)` uses `croniter` to compute next fire time, sleeps until then, publishes event; skips past times
+- `_run_interval(item, bus)` sleeps for `interval_seconds`, then publishes
+- Events published as `Event(type="trigger.scheduler", source=f"scheduler:{item.name}", payload=item.payload)`
+- Logging: DEBUG on each fire, INFO on start/stop
+
+**Tests cover:** config validation (6), init/ABC (3), interval firing (2), cron event shape (1), disabled items (2), lifecycle start/stop (3), public exports (1). Tests using `asyncio.create_task` are skipped under trio.
+
+**Quality:** 307 tests pass, 0 lint errors, 0 new type errors.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

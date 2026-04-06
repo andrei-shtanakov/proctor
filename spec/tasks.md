@@ -30,7 +30,7 @@ Add `croniter` as a runtime dependency for cron expression parsing. Verify it in
 ## Milestone 2: Core Implementation
 
 ### TASK-003: Implement SchedulerTrigger Class
-🔴 P0 | ⬜ TODO | Est: 2-3h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 2-3h
 
 Create `src/proctor/triggers/scheduler.py` implementing `SchedulerTrigger(Trigger)`. The trigger accepts a list of `ScheduleItemConfig` items, starts an asyncio task per schedule, and publishes `trigger.scheduler` events on the EventBus when each schedule fires.
 
