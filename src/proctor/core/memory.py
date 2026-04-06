@@ -35,6 +35,12 @@ INSERT INTO episodes (
     id, timestamp, trigger_type, user_input,
     agent_response, workflow_result_json
 ) VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+    timestamp=excluded.timestamp,
+    trigger_type=excluded.trigger_type,
+    user_input=excluded.user_input,
+    agent_response=excluded.agent_response,
+    workflow_result_json=excluded.workflow_result_json
 """
 
 _SELECT_EPISODE = "SELECT * FROM episodes WHERE id = ?"
@@ -43,7 +49,8 @@ _SELECT_EPISODES_LIST = "SELECT * FROM episodes ORDER BY timestamp DESC LIMIT ?"
 
 _SEARCH_EPISODES = (
     "SELECT * FROM episodes"
-    " WHERE user_input LIKE ? OR agent_response LIKE ?"
+    " WHERE user_input LIKE ? ESCAPE '\\'"
+    " OR agent_response LIKE ? ESCAPE '\\'"
     " ORDER BY timestamp DESC LIMIT ?"
 )
 
@@ -74,7 +81,8 @@ class EpisodicMemory:
 
     async def save_episode(self, episode: Episode) -> None:
         """Insert an episode row."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("EpisodicMemory not initialized")
         await self._db.execute(
             _INSERT_EPISODE,
             (
@@ -94,7 +102,8 @@ class EpisodicMemory:
 
     async def get_episode(self, episode_id: str) -> Episode | None:
         """Get episode by ID. Returns None if not found."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("EpisodicMemory not initialized")
         cursor = await self._db.execute(_SELECT_EPISODE, (episode_id,))
         row = await cursor.fetchone()
         if row is None:
@@ -103,15 +112,18 @@ class EpisodicMemory:
 
     async def list_episodes(self, limit: int = 50) -> list[Episode]:
         """List episodes, most recent first."""
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("EpisodicMemory not initialized")
         cursor = await self._db.execute(_SELECT_EPISODES_LIST, (limit,))
         rows = await cursor.fetchall()
         return [_row_to_episode(row) for row in rows]
 
     async def search_episodes(self, query: str, limit: int = 20) -> list[Episode]:
         """Search episodes by user_input or agent_response."""
-        assert self._db is not None
-        pattern = f"%{query}%"
+        if self._db is None:
+            raise RuntimeError("EpisodicMemory not initialized")
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         cursor = await self._db.execute(_SEARCH_EPISODES, (pattern, pattern, limit))
         rows = await cursor.fetchall()
         return [_row_to_episode(row) for row in rows]

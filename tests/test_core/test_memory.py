@@ -1,5 +1,6 @@
 """Tests for EpisodicMemory (SQLite episodic store)."""
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,11 +20,11 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def memory(tmp_path: Path) -> EpisodicMemory:
+async def memory(tmp_path: Path) -> AsyncGenerator[EpisodicMemory]:
     """Create and initialize an EpisodicMemory with a temp DB."""
     mem = EpisodicMemory(tmp_path / "episodes.db")
     await mem.initialize()
-    yield mem  # type: ignore[misc]
+    yield mem
     await mem.close()
 
 
@@ -192,3 +193,30 @@ class TestSearchEpisodes:
             await memory.save_episode(_make_episode(user_input="keyword match"))
         results = await memory.search_episodes("keyword", limit=2)
         assert len(results) == 2
+
+
+class TestSaveEpisodeDuplicate:
+    async def test_save_duplicate_is_idempotent(self, memory: EpisodicMemory) -> None:
+        ep = _make_episode(id="dup-1", agent_response="first")
+        await memory.save_episode(ep)
+        ep_updated = _make_episode(id="dup-1", agent_response="second")
+        await memory.save_episode(ep_updated)
+        retrieved = await memory.get_episode("dup-1")
+        assert retrieved is not None
+        assert retrieved.agent_response == "second"
+
+
+class TestSearchWildcardEscape:
+    async def test_percent_in_query_does_not_match_all(
+        self, memory: EpisodicMemory
+    ) -> None:
+        await memory.save_episode(_make_episode(user_input="normal text"))
+        results = await memory.search_episodes("%")
+        assert results == []
+
+    async def test_underscore_in_query_is_literal(self, memory: EpisodicMemory) -> None:
+        await memory.save_episode(_make_episode(user_input="a"))
+        await memory.save_episode(_make_episode(user_input="a_b"))
+        results = await memory.search_episodes("a_b")
+        assert len(results) == 1
+        assert results[0].user_input == "a_b"
