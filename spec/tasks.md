@@ -19,7 +19,7 @@ Add a `TelegramConfig` pydantic model to `src/proctor/core/config.py` and wire i
 ## Milestone 2: TelegramTrigger Implementation
 
 ### TASK-002: Implement TelegramTrigger core
-🔴 P0 | ⬜ TODO | Est: 1-2h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1-2h
 
 Create `src/proctor/triggers/telegram.py` following the TerminalTrigger pattern. Uses aiohttp to long-poll Telegram Bot API `getUpdates`, filters by `allowed_chat_ids`, and publishes `trigger.telegram` events on EventBus.
 
