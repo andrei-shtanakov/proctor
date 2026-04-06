@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from proctor.core.bus import EventBus
 from proctor.core.config import ProctorConfig
 from proctor.core.memory import EpisodicMemory
-from proctor.core.models import Event, Task, TaskStatus
+from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.state import StateManager
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
@@ -127,6 +127,14 @@ class Application:
             task.updated_at = datetime.now(UTC)
             await self.state.save_task(task)
 
+            episode = Episode(
+                trigger_type=event.source,
+                user_input=text,
+                agent_response=result.output or "",
+                workflow_result=task.result,
+            )
+            await self.memory.save_episode(episode)
+
             await self.bus.publish(
                 Event(
                     type=(
@@ -144,6 +152,14 @@ class Application:
             task.result = {"error": str(exc)}
             task.updated_at = datetime.now(UTC)
             await self.state.save_task(task)
+
+            episode = Episode(
+                trigger_type=event.source,
+                user_input=text,
+                agent_response="",
+                workflow_result=task.result,
+            )
+            await self.memory.save_episode(episode)
 
             await self.bus.publish(
                 Event(

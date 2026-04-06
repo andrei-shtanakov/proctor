@@ -279,6 +279,67 @@ class TestHandleTerminal:
         finally:
             await app.stop()
 
+    @pytest.mark.anyio
+    async def test_successful_workflow_saves_episode(
+        self, tmp_config: ProctorConfig
+    ) -> None:
+        """After successful workflow, an episode should be saved."""
+        app = Application(tmp_config)
+
+        async def mock_llm(prompt: str) -> str:
+            return f"echo: {prompt}"
+
+        app.set_llm_call(mock_llm)
+        await app.start()
+        try:
+            await app.bus.publish(
+                Event(
+                    type="trigger.terminal",
+                    source="terminal",
+                    payload={"text": "hello"},
+                )
+            )
+            episodes = await app.memory.list_episodes(limit=10)
+            assert len(episodes) == 1
+            ep = episodes[0]
+            assert ep.trigger_type == "terminal"
+            assert ep.user_input == "hello"
+            assert ep.agent_response == "echo: hello"
+            assert ep.workflow_result is not None
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_failed_workflow_saves_episode(
+        self, tmp_config: ProctorConfig
+    ) -> None:
+        """Failed workflows should also save an episode."""
+        app = Application(tmp_config)
+
+        async def bad_llm(prompt: str) -> str:
+            raise RuntimeError("LLM down")
+
+        app.set_llm_call(bad_llm)
+        await app.start()
+        try:
+            await app.bus.publish(
+                Event(
+                    type="trigger.terminal",
+                    source="terminal",
+                    payload={"text": "test"},
+                )
+            )
+            episodes = await app.memory.list_episodes(limit=10)
+            assert len(episodes) == 1
+            ep = episodes[0]
+            assert ep.trigger_type == "terminal"
+            assert ep.user_input == "test"
+            assert ep.agent_response == ""
+            assert ep.workflow_result is not None
+            assert "LLM down" in str(ep.workflow_result)
+        finally:
+            await app.stop()
+
 
 class TestTelegramTriggerBootstrap:
     """Test TelegramTrigger integration in Application lifecycle."""
@@ -388,7 +449,7 @@ class TestSchedulerIntegration:
         await app.start()
         try:
             assert app._scheduler is not None
-            assert len(app._scheduler._tasks) == 1
+            assert app._scheduler._task_group is not None
         finally:
             await app.stop()
 
@@ -416,8 +477,9 @@ class TestSchedulerIntegration:
     @pytest.mark.anyio
     async def test_scheduler_publishes_events(self, tmp_path: object) -> None:
         """Scheduler trigger events arrive on the bus."""
-        import asyncio
         from pathlib import Path
+
+        import anyio
 
         config = ProctorConfig(
             data_dir=Path(str(tmp_path)) / "proctor_data",
@@ -439,7 +501,7 @@ class TestSchedulerIntegration:
         await app.start()
         try:
             app.bus.subscribe("trigger.scheduler", capture)
-            await asyncio.sleep(0.15)
+            await anyio.sleep(0.15)
             assert len(received) >= 1
             assert received[0].type == "trigger.scheduler"
             assert received[0].payload["msg"] == "tick"
