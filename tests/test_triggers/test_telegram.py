@@ -485,9 +485,7 @@ class TestStartStop:
     """Test start/stop lifecycle."""
 
     @pytest.mark.anyio
-    async def test_start_creates_session_and_task(
-        self, anyio_backend: str
-    ) -> None:
+    async def test_start_creates_session_and_task(self, anyio_backend: str) -> None:
         if anyio_backend != "asyncio":
             pytest.skip("TelegramTrigger uses asyncio.create_task")
         config = _make_config()

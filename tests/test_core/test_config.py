@@ -281,7 +281,7 @@ class TestLoadConfig:
         config_file = tmp_path / "bad.yaml"
         config_file.write_text(":\n  :\n- {\n")
 
-        with pytest.raises((yaml.YAMLError, Exception)):
+        with pytest.raises(yaml.YAMLError):
             load_config(config_file)
 
     def test_example_config_loads(self) -> None:

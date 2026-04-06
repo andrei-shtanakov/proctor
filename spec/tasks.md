@@ -87,7 +87,7 @@ Add tests verifying TelegramConfig loads correctly from YAML and defaults work.
 ## Milestone 4: Quality
 
 ### TASK-006: Lint, format, and type-check pass
-🟠 P1 | ⬜ TODO | Est: 15m
+🟠 P1 | 🔄 IN_PROGRESS | Est: 15m
 
 Final quality gate — ensure all checks pass on the complete changeset.
 
