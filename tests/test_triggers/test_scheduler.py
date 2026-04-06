@@ -1,9 +1,9 @@
 """Tests for SchedulerTrigger: cron, interval, start/stop, edge cases."""
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+import anyio
 import pytest
 
 from proctor.core.bus import EventBus
@@ -42,14 +42,6 @@ def _interval_item(
         payload=payload or {"action": "interval"},
         enabled=enabled,
     )
-
-
-# SchedulerTrigger uses asyncio.create_task internally, so tests that
-# call start()/stop() only run under the asyncio backend.
-@pytest.fixture()
-def _asyncio_only(anyio_backend: str) -> None:
-    if anyio_backend != "asyncio":
-        pytest.skip("SchedulerTrigger requires asyncio")
 
 
 # ---------------------------------------------------------------------------
@@ -118,17 +110,16 @@ class TestSchedulerTriggerInit:
         trigger = SchedulerTrigger(schedules=items)
         assert trigger._schedules is items
 
-    def test_initial_tasks_empty(self) -> None:
+    def test_initial_task_group_none(self) -> None:
         trigger = SchedulerTrigger(schedules=[])
-        assert trigger._tasks == []
+        assert trigger._task_group is None
 
 
 # ---------------------------------------------------------------------------
-# SchedulerTrigger — interval scheduling (asyncio only)
+# SchedulerTrigger — interval scheduling
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.usefixtures("_asyncio_only")
 class TestIntervalScheduling:
     @pytest.mark.anyio
     async def test_interval_fires_events(self) -> None:
@@ -144,7 +135,7 @@ class TestIntervalScheduling:
         trigger = SchedulerTrigger(schedules=[item])
         await trigger.start(bus)
 
-        await asyncio.sleep(0.1)
+        await anyio.sleep(0.1)
         await trigger.stop()
 
         assert len(received) >= 2
@@ -170,7 +161,7 @@ class TestIntervalScheduling:
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)
 
-        await asyncio.sleep(0.1)
+        await anyio.sleep(0.1)
         await trigger.stop()
 
         sources = {e.source for e in received}
@@ -183,7 +174,6 @@ class TestIntervalScheduling:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.usefixtures("_asyncio_only")
 class TestCronScheduling:
     @pytest.mark.anyio
     async def test_cron_publishes_correct_event_type(self) -> None:
@@ -234,7 +224,7 @@ class TestCronScheduling:
             _fake_get_next,
         ):
             await trigger.start(bus)
-            await asyncio.sleep(0.08)
+            await anyio.sleep(0.08)
             await trigger.stop()
 
         assert len(received) >= 1
@@ -268,7 +258,7 @@ class TestCronScheduling:
             _fake_get_next,
         ):
             await trigger.start(bus)
-            await asyncio.sleep(0.05)
+            await anyio.sleep(0.05)
             await trigger.stop()
 
         assert len(received) >= 1
@@ -282,45 +272,65 @@ class TestCronScheduling:
 
 
 # ---------------------------------------------------------------------------
-# SchedulerTrigger — disabled items (asyncio only)
+# SchedulerTrigger — disabled items
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.usefixtures("_asyncio_only")
 class TestDisabledSchedules:
     @pytest.mark.anyio
     async def test_disabled_items_not_started(self) -> None:
         bus = EventBus()
+        received: list[Event] = []
+
+        async def handler(e: Event) -> None:
+            received.append(e)
+
+        bus.subscribe("trigger.scheduler", handler)
+
         items = [
-            _interval_item(name="on", interval_seconds=0.02),
-            _interval_item(name="off", interval_seconds=0.02, enabled=False),
+            _interval_item(name="on", interval_seconds=0.01),
+            _interval_item(
+                name="off",
+                interval_seconds=0.01,
+                enabled=False,
+            ),
         ]
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)
-
-        assert len(trigger._tasks) == 1
+        await anyio.sleep(0.05)
         await trigger.stop()
+
+        sources = {e.source for e in received}
+        assert "scheduler:on" in sources
+        assert "scheduler:off" not in sources
 
     @pytest.mark.anyio
     async def test_all_disabled_no_tasks(self) -> None:
         bus = EventBus()
+        received: list[Event] = []
+
+        async def handler(e: Event) -> None:
+            received.append(e)
+
+        bus.subscribe("trigger.scheduler", handler)
+
         items = [
             _interval_item(name="off1", enabled=False),
             _cron_item(name="off2", enabled=False),
         ]
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)
-
-        assert len(trigger._tasks) == 0
+        await anyio.sleep(0.05)
         await trigger.stop()
 
+        assert len(received) == 0
+
 
 # ---------------------------------------------------------------------------
-# SchedulerTrigger — start / stop lifecycle (asyncio only)
+# SchedulerTrigger — start / stop lifecycle
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.usefixtures("_asyncio_only")
 class TestLifecycle:
     @pytest.mark.anyio
     async def test_stop_cancels_all_tasks(self) -> None:
@@ -331,13 +341,14 @@ class TestLifecycle:
         ]
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)
-
-        assert len(trigger._tasks) == 2
+        assert trigger._task_group is not None
         await trigger.stop()
-        assert trigger._tasks == []
+        assert trigger._task_group is None
 
     @pytest.mark.anyio
-    async def test_stop_cancels_cron_tasks_without_errors(self) -> None:
+    async def test_stop_cancels_cron_tasks_without_errors(
+        self,
+    ) -> None:
         """stop() cleanly cancels cron tasks without errors."""
         bus = EventBus()
         items = [
@@ -346,14 +357,9 @@ class TestLifecycle:
         ]
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)
-
-        assert len(trigger._tasks) == 2
-        # All tasks should be running (waiting on sleep)
-        for task in trigger._tasks:
-            assert not task.done()
-
+        assert trigger._task_group is not None
         await trigger.stop()
-        assert trigger._tasks == []
+        assert trigger._task_group is None
 
     @pytest.mark.anyio
     async def test_stop_cancels_mixed_tasks(self) -> None:
@@ -365,24 +371,24 @@ class TestLifecycle:
         ]
         trigger = SchedulerTrigger(schedules=items)
         await trigger.start(bus)
-
-        assert len(trigger._tasks) == 2
+        assert trigger._task_group is not None
         await trigger.stop()
-        assert trigger._tasks == []
+        assert trigger._task_group is None
 
     @pytest.mark.anyio
     async def test_stop_when_not_started(self) -> None:
         trigger = SchedulerTrigger(schedules=[])
         await trigger.stop()
-        assert trigger._tasks == []
+        assert trigger._task_group is None
 
     @pytest.mark.anyio
     async def test_empty_schedules(self) -> None:
         bus = EventBus()
         trigger = SchedulerTrigger(schedules=[])
         await trigger.start(bus)
-        assert trigger._tasks == []
+        assert trigger._task_group is not None
         await trigger.stop()
+        assert trigger._task_group is None
 
 
 # ---------------------------------------------------------------------------
