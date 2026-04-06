@@ -1,0 +1,83 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-001 — Add TelegramConfig to ProctorConfig
+
+**Priority:** P0
+**Estimate:** 
+**Milestone:** Milestone 1: Config & Model
+
+## Checklist (implement ALL items):
+
+- [ ] Create `TelegramConfig(BaseModel)` with `bot_token: str`, `allowed_chat_ids: list[int]`, `poll_timeout: int = 30`
+- [ ] Add `telegram: TelegramConfig | None = None` to `ProctorConfig`
+- [ ] Verify existing config tests still pass (`uv run pytest`)
+- [ ] Run `pyrefly check` and fix any type errors
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 286 tests pass (including the 33 config tests).
+
+## Summary
+
+**Files modified:**
+- `src/proctor/core/config.py` — Added `TelegramConfig(BaseModel)` with `bot_token: str`, `allowed_chat_ids: list[int]`, `poll_timeout: int = 30`; added `telegram: TelegramConfig | None = None` to `ProctorConfig`
+- `src/proctor/core/__init__.py` — Exported `TelegramConfig` in imports and `__all__`
+- `tests/test_core/test_config.py` — Added `TestTelegramConfig` (5 tests), telegram integration tests in `TestProctorConfig` (2 tests), and YAML loading tests in `TestLoadConfig` (2 tests)
+
+**Checklist:**
+- [x] `TelegramConfig(BaseModel)` with `bot_token`, `allowed_chat_ids`, `poll_timeout`
+- [x] `telegram: TelegramConfig | None = None` on `ProctorConfig`
+- [x] All existing tests pass (286 total)
+- [x] `pyrefly check` — 0 errors
+- [x] `ruff check` — all passed
+- [x] 9 new tests with full coverage of the new model
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

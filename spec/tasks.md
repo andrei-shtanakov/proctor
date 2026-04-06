@@ -4,7 +4,7 @@
 ## Milestone 1: Config & Model
 
 ### TASK-001: Add TelegramConfig to ProctorConfig
-🔴 P0 | ⬜ TODO | Est: 30m
+🔴 P0 | 🔄 IN_PROGRESS | Est: 30m
 
 Add a `TelegramConfig` pydantic model to `src/proctor/core/config.py` and wire it into `ProctorConfig` as an optional `telegram` field.
 
