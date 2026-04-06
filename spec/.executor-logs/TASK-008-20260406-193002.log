@@ -1,0 +1,90 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-008 — Wire EpisodicMemory into Bootstrap
+
+**Priority:** P1
+**Estimate:** 
+**Milestone:** Milestone 4: Integration
+
+## Checklist (implement ALL items):
+
+- [ ] Add memory DB path to config (or derive from existing data_dir)
+- [ ] Initialize EpisodicMemory in bootstrap `startup()`
+- [ ] Close EpisodicMemory in bootstrap `shutdown()`
+- [ ] Verify existing tests still pass after wiring
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+## Summary
+
+### Changes Made
+
+**Files modified:**
+
+1. **`src/proctor/core/bootstrap.py`** — Wired `EpisodicMemory` into the `Application` lifecycle:
+   - Added `EpisodicMemory` import
+   - Created `self.memory = EpisodicMemory(config.data_dir / "episodes.db")` in `__init__` (derives path from existing `data_dir`, matching the `state.db` pattern)
+   - Added `await self.memory.initialize()` in `start()`
+   - Added `await self.memory.close()` in `stop()`
+
+2. **`tests/test_core/test_bootstrap.py`** — Added 4 new tests:
+   - `test_creates_memory` — verifies `memory` attribute exists and is `EpisodicMemory`
+   - `test_episodes_db_created` — verifies `episodes.db` file is created on start
+   - `test_memory_usable_after_start` — saves and retrieves an episode after start
+   - `test_memory_closed_after_stop` — verifies DB connection is None after stop
+
+### Results
+- All **300 tests pass** (20 bootstrap tests, including 4 new ones)
+- **ruff check** passes
+- **ruff format** passes
+- **pyrefly check** passes on changed files (3 pre-existing errors in other files)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

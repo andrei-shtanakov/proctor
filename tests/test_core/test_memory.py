@@ -106,9 +106,7 @@ class TestInitializeAndClose:
 
 
 class TestSaveAndGetEpisode:
-    async def test_save_and_retrieve_all_fields(
-        self, memory: EpisodicMemory
-    ) -> None:
+    async def test_save_and_retrieve_all_fields(self, memory: EpisodicMemory) -> None:
         ts = datetime(2026, 3, 15, 12, 30, 0, tzinfo=UTC)
         ep = Episode(
             id="ep-roundtrip",
