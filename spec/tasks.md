@@ -108,7 +108,7 @@ Test that interval-based schedules fire events repeatedly at the configured inte
 **Depends on:** TASK-003
 
 ### TASK-008: Integration Test — SchedulerTrigger with EventBus
-🟠 P1 | ⬜ TODO | Est: 1h
+🟠 P1 | 🔄 IN_PROGRESS | Est: 1h
 
 End-to-end test: create a real EventBus, start SchedulerTrigger with a short interval, verify events arrive on the bus via a subscriber.
 
