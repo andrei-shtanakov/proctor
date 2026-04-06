@@ -74,7 +74,7 @@ Implement `list_episodes(limit: int = 50) -> list[Episode]` (most recent first) 
 ## Milestone 3: Testing
 
 ### TASK-006: Tests for Episode Model and Lifecycle
-🔴 P0 | ⬜ TODO | Est: 1h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
 
 Create `tests/test_core/test_memory.py` with tests for Episode model creation, EpisodicMemory initialize/close, and table creation. Use tmp_path fixture for DB, anyio for async.
 
