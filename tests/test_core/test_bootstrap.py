@@ -246,18 +246,14 @@ class TestSchedulerIntegration:
             await app.stop()
 
     @pytest.mark.anyio
-    async def test_scheduler_not_created_when_disabled(
-        self, tmp_path: object
-    ) -> None:
+    async def test_scheduler_not_created_when_disabled(self, tmp_path: object) -> None:
         from pathlib import Path
 
         config = ProctorConfig(
             data_dir=Path(str(tmp_path)) / "proctor_data",
             scheduler=SchedulerConfig(enabled=False),
             schedules=[
-                ScheduleItemConfig(
-                    name="test", interval_seconds=60, payload={"k": "v"}
-                )
+                ScheduleItemConfig(name="test", interval_seconds=60, payload={"k": "v"})
             ],
         )
         app = Application(config)
@@ -268,9 +264,7 @@ class TestSchedulerIntegration:
             await app.stop()
 
     @pytest.mark.anyio
-    async def test_scheduler_started_with_schedules(
-        self, tmp_path: object
-    ) -> None:
+    async def test_scheduler_started_with_schedules(self, tmp_path: object) -> None:
         from pathlib import Path
 
         config = ProctorConfig(
@@ -293,9 +287,7 @@ class TestSchedulerIntegration:
             await app.stop()
 
     @pytest.mark.anyio
-    async def test_scheduler_stopped_on_app_stop(
-        self, tmp_path: object
-    ) -> None:
+    async def test_scheduler_stopped_on_app_stop(self, tmp_path: object) -> None:
         from pathlib import Path
 
         config = ProctorConfig(
@@ -316,9 +308,7 @@ class TestSchedulerIntegration:
         assert app._scheduler is None
 
     @pytest.mark.anyio
-    async def test_scheduler_publishes_events(
-        self, tmp_path: object
-    ) -> None:
+    async def test_scheduler_publishes_events(self, tmp_path: object) -> None:
         """Scheduler trigger events arrive on the bus."""
         import asyncio
         from pathlib import Path

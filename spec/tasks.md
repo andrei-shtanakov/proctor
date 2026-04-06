@@ -124,7 +124,7 @@ End-to-end test: create a real EventBus, start SchedulerTrigger with a short int
 ## Milestone 4: Quality
 
 ### TASK-009: Lint, Format, and Type Check
-🟠 P1 | ⬜ TODO | Est: 30m
+🟠 P1 | 🔄 IN_PROGRESS | Est: 30m
 
 Run all code quality tools on new and modified files, fix any issues.
 

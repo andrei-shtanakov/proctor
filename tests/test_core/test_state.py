@@ -1,5 +1,6 @@
 """Tests for StateManager (SQLite wrapper)."""
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,7 +20,7 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-async def state_manager(tmp_path: Path) -> StateManager:
+async def state_manager(tmp_path: Path) -> AsyncGenerator[StateManager, None]:
     """Create and initialize a StateManager with a temp DB."""
     sm = StateManager(tmp_path / "test.db")
     await sm.initialize()
