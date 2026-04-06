@@ -1,0 +1,88 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-007 — Tests for CRUD Operations
+
+**Priority:** P0
+**Estimate:** 1-2h
+**Milestone:** Milestone 3: Testing
+
+## Checklist (implement ALL items):
+
+- [ ] Test save and retrieve round-trip (all fields preserved)
+- [ ] Test get_episode returns None for nonexistent id
+- [ ] Test list_episodes returns newest first
+- [ ] Test list_episodes respects limit parameter
+- [ ] Test search_episodes matches on user_input
+- [ ] Test search_episodes matches on agent_response
+- [ ] Test search_episodes returns empty list for no matches
+- [ ] Test workflow_result None and non-None serialization
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 296 tests pass, lint is clean.
+
+## Summary
+
+**Files modified:** `tests/test_core/test_memory.py`
+
+**Change:** Strengthened `test_save_and_retrieve` → `test_save_and_retrieve_all_fields` to explicitly verify all 6 Episode fields (`id`, `timestamp`, `trigger_type`, `user_input`, `agent_response`, `workflow_result`) survive the save/retrieve round-trip through SQLite.
+
+**Checklist coverage (all 8 items):**
+- [x] Save and retrieve round-trip (all fields preserved) — `test_save_and_retrieve_all_fields`
+- [x] get_episode returns None for nonexistent id — `test_get_nonexistent_returns_none`
+- [x] list_episodes returns newest first — `test_list_returns_newest_first`
+- [x] list_episodes respects limit parameter — `test_list_respects_limit`
+- [x] search_episodes matches on user_input — `test_search_matches_user_input`
+- [x] search_episodes matches on agent_response — `test_search_matches_agent_response`
+- [x] search_episodes returns empty list for no matches — `test_search_no_match`
+- [x] workflow_result None and non-None serialization — `test_workflow_result_roundtrip` + `test_workflow_result_none`
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

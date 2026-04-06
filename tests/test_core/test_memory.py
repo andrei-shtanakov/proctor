@@ -106,14 +106,27 @@ class TestInitializeAndClose:
 
 
 class TestSaveAndGetEpisode:
-    async def test_save_and_retrieve(self, memory: EpisodicMemory) -> None:
-        ep = _make_episode()
+    async def test_save_and_retrieve_all_fields(
+        self, memory: EpisodicMemory
+    ) -> None:
+        ts = datetime(2026, 3, 15, 12, 30, 0, tzinfo=UTC)
+        ep = Episode(
+            id="ep-roundtrip",
+            timestamp=ts,
+            trigger_type="webhook",
+            user_input="search RISC-V",
+            agent_response="Here is info on RISC-V",
+            workflow_result={"status": "ok", "steps": 2},
+        )
         await memory.save_episode(ep)
         retrieved = await memory.get_episode(ep.id)
         assert retrieved is not None
         assert retrieved.id == ep.id
+        assert retrieved.timestamp == ep.timestamp
+        assert retrieved.trigger_type == ep.trigger_type
         assert retrieved.user_input == ep.user_input
         assert retrieved.agent_response == ep.agent_response
+        assert retrieved.workflow_result == ep.workflow_result
 
     async def test_get_nonexistent_returns_none(self, memory: EpisodicMemory) -> None:
         result = await memory.get_episode("no-such-id")
