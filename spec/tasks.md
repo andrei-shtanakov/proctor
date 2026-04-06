@@ -72,7 +72,7 @@ Create `tests/test_triggers/test_telegram.py` with comprehensive tests using moc
 **Depends on:** TASK-002
 
 ### TASK-005: Config tests for TelegramConfig
-🟠 P1 | ⬜ TODO | Est: 30m
+🟠 P1 | 🔄 IN_PROGRESS | Est: 30m
 
 Add tests verifying TelegramConfig loads correctly from YAML and defaults work.
 
