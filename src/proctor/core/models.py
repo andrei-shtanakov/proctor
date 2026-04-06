@@ -51,6 +51,17 @@ class Task(BaseModel):
     deadline: datetime | None = None
 
 
+class Episode(BaseModel):
+    """Record of a single agent interaction."""
+
+    id: str = Field(default_factory=_uuid)
+    timestamp: datetime = Field(default_factory=_utcnow)
+    trigger_type: str
+    user_input: str
+    agent_response: str
+    workflow_result: dict[str, Any] | None = None
+
+
 class Envelope(BaseModel):
     """NATS message wrapper with routing metadata."""
 
