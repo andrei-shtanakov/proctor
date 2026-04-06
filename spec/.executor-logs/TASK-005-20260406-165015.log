@@ -1,0 +1,85 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-005 — Unit Tests for ScheduleItemConfig Validation
+
+**Priority:** P0
+**Estimate:** 1h
+**Milestone:** Milestone 3: Testing
+
+## Checklist (implement ALL items):
+
+- [ ] Create `tests/test_triggers/test_scheduler.py`
+- [ ] Test valid cron-based config (`cron="*/5 * * * *"`, no interval)
+- [ ] Test valid interval-based config (`interval_seconds=60`, no cron)
+- [ ] Test validation error when both `cron` and `interval_seconds` are set
+- [ ] Test validation error when neither `cron` nor `interval_seconds` is set
+- [ ] Test `enabled=False` is accepted
+- [ ] Test config loads from YAML with schedules section
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 54 tests pass, 0 lint errors. All TASK-005 checklist items are already implemented across two test files:
+
+**`tests/test_triggers/test_scheduler.py`** — `TestScheduleItemConfigValidation` class (lines 58-88):
+- `test_valid_cron_config` — valid cron, no interval
+- `test_valid_interval_config` — valid interval, no cron
+- `test_both_set_raises` — ValueError when both set
+- `test_neither_set_raises` — ValueError when neither set
+- `test_disabled_accepted` — `enabled=False` works
+- `test_default_payload_empty` — bonus coverage
+
+**`tests/test_core/test_config.py`** — additional coverage (lines 73-115, 269-291):
+- `TestScheduleItemConfig` — 7 tests covering cron, interval, payload, disabled, validation errors, float precision
+- `test_load_with_schedules` — YAML loading with schedules section
+
+**Files:** No changes needed — all tests were already created in a previous task.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
