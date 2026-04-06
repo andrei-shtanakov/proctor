@@ -534,6 +534,12 @@ class TestStartStop:
         assert trigger._session is None
 
 
+class TestTelegramConfigDefaults:
+    def test_allowed_chat_ids_defaults_empty(self) -> None:
+        config = TelegramConfig(bot_token="tok")
+        assert config.allowed_chat_ids == []
+
+
 class TestPublicExports:
     def test_import_from_triggers_package(self) -> None:
         from proctor.triggers import TelegramTrigger

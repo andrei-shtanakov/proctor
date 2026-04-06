@@ -2,9 +2,11 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import yaml
-from pydantic import BaseModel, model_validator
+from croniter import croniter
+from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +35,12 @@ class ScheduleItemConfig(BaseModel):
     name: str
     cron: str | None = None
     interval_seconds: float | None = None
-    payload: dict = {}
+    payload: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
 
     @model_validator(mode="after")
-    def exactly_one_schedule_type(self) -> "ScheduleItemConfig":
-        """Ensure exactly one of cron or interval_seconds is set."""
+    def validate_schedule(self) -> "ScheduleItemConfig":
+        """Validate schedule type, cron syntax, and interval value."""
         has_cron = self.cron is not None
         has_interval = self.interval_seconds is not None
         if has_cron == has_interval:
@@ -46,6 +48,10 @@ class ScheduleItemConfig(BaseModel):
                 "Exactly one of 'cron' or 'interval_seconds' "
                 "must be set, not both or neither."
             )
+        if self.cron is not None and not croniter.is_valid(self.cron):
+            raise ValueError(f"Invalid cron expression: {self.cron!r}")
+        if self.interval_seconds is not None and self.interval_seconds <= 0:
+            raise ValueError("interval_seconds must be greater than 0")
         return self
 
 
@@ -60,7 +66,7 @@ class TelegramConfig(BaseModel):
     """Telegram trigger configuration."""
 
     bot_token: str
-    allowed_chat_ids: list[int]
+    allowed_chat_ids: list[int] = Field(default_factory=list)
     poll_timeout: int = 30
 
 

@@ -88,6 +88,18 @@ class TestScheduleItemConfigValidation:
         item = ScheduleItemConfig(name="test", interval_seconds=10)
         assert item.payload == {}
 
+    def test_invalid_cron_raises(self) -> None:
+        with pytest.raises(ValueError, match="Invalid cron"):
+            ScheduleItemConfig(name="bad", cron="not-a-cron")
+
+    def test_zero_interval_raises(self) -> None:
+        with pytest.raises(ValueError, match="greater than 0"):
+            ScheduleItemConfig(name="bad", interval_seconds=0)
+
+    def test_negative_interval_raises(self) -> None:
+        with pytest.raises(ValueError, match="greater than 0"):
+            ScheduleItemConfig(name="bad", interval_seconds=-1)
+
 
 # ---------------------------------------------------------------------------
 # SchedulerTrigger — init & ABC compliance
