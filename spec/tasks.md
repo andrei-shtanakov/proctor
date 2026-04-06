@@ -16,7 +16,7 @@ Add a `ScheduleItemConfig` pydantic model to `src/proctor/core/config.py` repres
 **Depends on:**
 
 ### TASK-002: Add croniter Dependency
-🔴 P0 | ⬜ TODO | Est: 30m
+🔴 P0 | 🔄 IN_PROGRESS | Est: 30m
 
 Add `croniter` as a runtime dependency for cron expression parsing. Verify it installs cleanly and is importable.
 

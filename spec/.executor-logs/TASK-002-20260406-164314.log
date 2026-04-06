@@ -1,0 +1,78 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-002 — Add croniter Dependency
+
+**Priority:** P0
+**Estimate:** 
+**Milestone:** Milestone 1: Config & Models
+
+## Checklist (implement ALL items):
+
+- [ ] Run `uv add croniter`
+- [ ] Verify `uv sync` succeeds
+- [ ] Verify `from croniter import croniter` works in a quick script
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All done.
+
+**Summary:**
+- Added `croniter==6.2.2` (plus transitive deps `python-dateutil`, `six`) via `uv add croniter`
+- `uv sync` succeeds
+- `from croniter import croniter` works correctly
+- All 288 existing tests pass
+- No lint errors
+
+**Files modified:**
+- `pyproject.toml` — croniter added to dependencies
+- `uv.lock` — lockfile updated
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
