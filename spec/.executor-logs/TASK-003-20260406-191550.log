@@ -1,0 +1,79 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-003 — Register TelegramTrigger in triggers module
+
+**Priority:** P0
+**Estimate:** 
+**Milestone:** Milestone 2: TelegramTrigger Implementation
+
+## Checklist (implement ALL items):
+
+- [ ] Add `TelegramTrigger` import and export in `src/proctor/triggers/__init__.py`
+- [ ] Update bootstrap in `src/proctor/core/bootstrap.py` to instantiate and start `TelegramTrigger` when `config.telegram` is not None
+- [ ] Verify existing tests still pass
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 330 tests pass and lint is clean.
+
+**Summary of changes:**
+
+**Files modified:**
+- `src/proctor/core/bootstrap.py` — Added `TelegramTrigger` import, instantiation on `start()` when `config.telegram` is not `None`, and cleanup on `stop()`
+- `tests/test_core/test_bootstrap.py` — Added `TestTelegramTriggerBootstrap` class with 3 tests: trigger started when configured, stopped on shutdown, and not created when telegram config is absent
+- `src/proctor/triggers/__init__.py` — Already had `TelegramTrigger` export (from TASK-002)
+
+**Checklist:**
+- [x] `TelegramTrigger` import and export in `src/proctor/triggers/__init__.py` (already done)
+- [x] Bootstrap updated to instantiate and start `TelegramTrigger` when `config.telegram` is not None
+- [x] Existing tests still pass (330 passed)
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
