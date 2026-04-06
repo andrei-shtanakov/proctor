@@ -1,0 +1,89 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-004 — Implement save_episode and get_episode
+
+**Priority:** P0
+**Estimate:** 1h
+**Milestone:** Milestone 2: EpisodicMemory Class
+
+## Checklist (implement ALL items):
+
+- [ ] `save_episode` inserts episode row with all fields, commits
+- [ ] `get_episode` queries by id, returns `Episode` or `None`
+- [ ] Add `_row_to_episode` helper function to convert `aiosqlite.Row` to `Episode`
+- [ ] Handle `workflow_result` JSON serialization/deserialization (json.dumps/loads)
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/episodic-memory/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 296 tests pass. TASK-004 is already fully implemented from the TASK-003 commit. Here's the summary:
+
+## Summary
+
+All TASK-004 checklist items are already implemented in `src/proctor/core/memory.py`:
+
+- **`save_episode`** (lines 74-92): Inserts episode row with all fields, serializes `workflow_result` via `json.dumps`, commits
+- **`get_episode`** (lines 94-101): Queries by id, returns `Episode | None`
+- **`_row_to_episode`** (lines 119-131): Module-level helper converting `aiosqlite.Row` to `Episode`, with `datetime.fromisoformat` and `json.loads` deserialization
+- **JSON serialization/deserialization**: `workflow_result` is stored as `workflow_result_json TEXT` — `json.dumps` on save, `json.loads` on read, `None` handled correctly
+
+## Files
+
+- `src/proctor/core/models.py` — `Episode` model (already existed from TASK-001)
+- `src/proctor/core/memory.py` — `EpisodicMemory` class with all CRUD methods
+- `tests/test_core/test_memory.py` — 19 tests covering model, lifecycle, save/get, list, search
+
+## Verification
+
+- 19/19 memory tests pass
+- 296/296 full suite tests pass
+- Ruff lint clean
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

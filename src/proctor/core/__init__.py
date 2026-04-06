@@ -9,12 +9,15 @@ from proctor.core.config import (
     SchedulerConfig,
     load_config,
 )
-from proctor.core.models import Envelope, Event, Task, TaskStatus
+from proctor.core.memory import EpisodicMemory
+from proctor.core.models import Envelope, Episode, Event, Task, TaskStatus
 from proctor.core.state import StateManager
 
 __all__ = [
     "Application",
     "Envelope",
+    "EpisodicMemory",
+    "Episode",
     "Event",
     "EventBus",
     "Handler",

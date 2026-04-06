@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import aiosqlite
@@ -118,8 +119,6 @@ class EpisodicMemory:
 
 def _row_to_episode(row: aiosqlite.Row) -> Episode:
     """Convert a SQLite row to an Episode model."""
-    from datetime import datetime
-
     wf_json = row["workflow_result_json"]
     return Episode(
         id=row["id"],
