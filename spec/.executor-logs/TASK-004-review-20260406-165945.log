@@ -1,0 +1,961 @@
+=== REVIEW PROMPT ===
+# Code Review Request
+
+## Task Completed: TASK-004 — Register SchedulerTrigger in Bootstrap
+
+## Changed Files:
+spec/.executor-logs/TASK-007-20260406-165611.log
+spec/.executor-logs/TASK-007-review-20260406-165704.log
+spec/.executor-progress.txt
+spec/.task-history.log
+spec/tasks.md
+src/proctor/core/bootstrap.py
+tests/test_core/test_bootstrap.py
+
+## Full Diff:
+diff --git a/spec/.executor-logs/TASK-007-20260406-165611.log b/spec/.executor-logs/TASK-007-20260406-165611.log
+new file mode 100644
+index 0000000..e670d6e
+--- /dev/null
++++ b/spec/.executor-logs/TASK-007-20260406-165611.log
+@@ -0,0 +1,81 @@
++=== PROMPT ===
++# Task Execution Request
++
++## Task: TASK-007 — Unit Tests for SchedulerTrigger Interval Mode
++
++**Priority:** P0
++**Estimate:** 1h
++**Milestone:** Milestone 3: Testing
++
++## Checklist (implement ALL items):
++
++- [ ] Test that an interval schedule publishes events on the bus
++- [ ] Test that multiple intervals fire multiple events (with short interval like 0.1s)
++- [ ] Test that `stop()` cleanly cancels interval tasks
++- [ ] Test event payload matches config
++- [ ] Use `anyio` for async tests
++
++## Related Requirements:
++
++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
++
++## Related Design:
++
++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
++
++## Instructions:
++
++1. Implement ALL checklist items for this task
++2. Write unit tests for new code (coverage ≥80%)
++3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
++4. Use existing code style and conventions
++5. Create/update files as needed
++
++## Dependencies:
++
++- To add a new dependency: `uv add <package>`
++- To add a dev dependency: `uv add --dev <package>`
++- NEVER edit pyproject.toml manually for dependencies
++- After adding dependencies, they are available immediately
++
++## Success Criteria:
++
++- All checklist items implemented
++- All tests pass (`uv run pytest`)
++- No lint errors (`uv run ruff check .`)
++- Code follows project conventions
++
++## Output:
++
++When complete, respond with:
++- Summary of changes made
++- Files created/modified
++- Any issues or notes
++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
++
++
++Begin implementation:
++
++
++=== OUTPUT ===
++All 310 tests pass, no lint errors. The test file `tests/test_triggers/test_scheduler.py` already covers all TASK-007 checklist items:
++
++| Checklist Item | Test Coverage |
++|---|---|
++| Interval schedule publishes events on the bus | `TestIntervalScheduling::test_interval_fires_events` |
++| Multiple intervals fire multiple events | `TestIntervalScheduling::test_multiple_interval_items` |
++| `stop()` cleanly cancels interval tasks | `TestLifecycle::test_stop_cancels_all_tasks`, `test_stop_cancels_cron_tasks_without_errors`, `test_stop_cancels_mixed_tasks` |
++| Event payload matches config | `TestCronScheduling::test_cron_publishes_correct_event_type`, `test_cron_event_has_correct_fields`, plus assertions in interval tests |
++| Uses `anyio` for async tests | All async tests use `@pytest.mark.anyio` |
++
++**Files:** No changes needed — `tests/test_triggers/test_scheduler.py` was already implemented (likely from TASK-006).
++
++**Summary:** All 5 checklist items are already implemented and passing. 322 collected, 310 passed, 12 skipped (trio backend correctly skipped for asyncio-only tests). Lint clean.
++
++TASK_COMPLETE
++
++
++=== STDERR ===
++
++
++=== RETURN CODE: 0 ===
+diff --git a/spec/.executor-logs/TASK-007-review-20260406-165704.log b/spec/.executor-logs/TASK-007-review-20260406-165704.log
+new file mode 100644
+index 0000000..d7c67ac
+--- /dev/null
++++ b/spec/.executor-logs/TASK-007-review-20260406-165704.log
+@@ -0,0 +1,948 @@
++=== REVIEW PROMPT ===
++# Code Review Request
++
++## Task Completed: TASK-007 — Unit Tests for SchedulerTrigger Interval Mode
++
++## Changed Files:
++spec/.executor-logs/TASK-006-20260406-165202.log
++spec/.executor-logs/TASK-006-review-20260406-165405.log
++spec/.executor-progress.txt
++spec/.task-history.log
++spec/tasks.md
++src/proctor/triggers/scheduler.py
++tests/test_triggers/test_scheduler.py
++
++## Full Diff:
++diff --git a/spec/.executor-logs/TASK-006-20260406-165202.log b/spec/.executor-logs/TASK-006-20260406-165202.log
++new file mode 100644
++index 0000000..1fd7ca5
++--- /dev/null
+++++ b/spec/.executor-logs/TASK-006-20260406-165202.log
++@@ -0,0 +1,87 @@
+++=== PROMPT ===
+++# Task Execution Request
+++
+++## Task: TASK-006 — Unit Tests for SchedulerTrigger Cron Mode
+++
+++**Priority:** P0
+++**Estimate:** 1-2h
+++**Milestone:** Milestone 3: Testing
+++
+++## Checklist (implement ALL items):
+++
+++- [ ] Test that a cron schedule publishes an event on the bus after firing
+++- [ ] Test that `stop()` cleanly cancels cron tasks without errors
+++- [ ] Test that disabled schedule items are not started
+++- [ ] Test that the event has correct `type`, `source`, and `payload` fields
+++- [ ] Use `anyio` for async tests (not asyncio), per project conventions
+++
+++## Related Requirements:
+++
+++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+++
+++## Related Design:
+++
+++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++
+++## Instructions:
+++
+++1. Implement ALL checklist items for this task
+++2. Write unit tests for new code (coverage ≥80%)
+++3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++4. Use existing code style and conventions
+++5. Create/update files as needed
+++
+++## Dependencies:
+++
+++- To add a new dependency: `uv add <package>`
+++- To add a dev dependency: `uv add --dev <package>`
+++- NEVER edit pyproject.toml manually for dependencies
+++- After adding dependencies, they are available immediately
+++
+++## Success Criteria:
+++
+++- All checklist items implemented
+++- All tests pass (`uv run pytest`)
+++- No lint errors (`uv run ruff check .`)
+++- Code follows project conventions
+++
+++## Output:
+++
+++When complete, respond with:
+++- Summary of changes made
+++- Files created/modified
+++- Any issues or notes
+++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++
+++
+++Begin implementation:
+++
+++
+++=== OUTPUT ===
+++All 310 tests pass, no lint errors.
+++
+++## Summary
+++
+++**Files modified:** `tests/test_triggers/test_scheduler.py`
+++
+++**Changes made:**
+++- Added `test_cron_fires_event_via_start` — verifies a cron schedule publishes an event on the bus after firing through `start()` (uses patched `croniter.get_next` to avoid real cron delays)
+++- Added `test_cron_event_has_correct_fields` — verifies the event has correct `type`, `source`, `payload`, `id`, and `timestamp`
+++- Added `test_stop_cancels_cron_tasks_without_errors` — verifies `stop()` cleanly cancels cron tasks
+++- Added `test_stop_cancels_mixed_tasks` — verifies `stop()` handles a mix of cron and interval tasks
+++- Added `_asyncio_only` fixture to `TestCronScheduling` class (cron tests use `asyncio.create_task`)
+++
+++**Checklist coverage:**
+++- [x] Cron schedule publishes event on bus after firing
+++- [x] `stop()` cleanly cancels cron tasks without errors
+++- [x] Disabled schedule items are not started (pre-existing)
+++- [x] Event has correct `type`, `source`, and `payload` fields
+++- [x] Uses `anyio` for async tests (`pytest.mark.anyio`)
+++
+++TASK_COMPLETE
+++
+++
+++=== STDERR ===
+++
+++
+++=== RETURN CODE: 0 ===
++diff --git a/spec/.executor-logs/TASK-006-review-20260406-165405.log b/spec/.executor-logs/TASK-006-review-20260406-165405.log
++new file mode 100644
++index 0000000..fb13cd1
++--- /dev/null
+++++ b/spec/.executor-logs/TASK-006-review-20260406-165405.log
++@@ -0,0 +1,917 @@
+++=== REVIEW PROMPT ===
+++# Code Review Request
+++
+++## Task Completed: TASK-006 — Unit Tests for SchedulerTrigger Cron Mode
+++
+++## Changed Files:
+++spec/.executor-logs/TASK-005-20260406-165015.log
+++spec/.executor-logs/TASK-005-review-20260406-165127.log
+++spec/.executor-progress.txt
+++spec/.task-history.log
+++spec/tasks.md
+++tests/test_triggers/test_scheduler.py
+++
+++## Full Diff:
+++diff --git a/spec/.executor-logs/TASK-005-20260406-165015.log b/spec/.executor-logs/TASK-005-20260406-165015.log
+++new file mode 100644
+++index 0000000..f71a51d
+++--- /dev/null
++++++ b/spec/.executor-logs/TASK-005-20260406-165015.log
+++@@ -0,0 +1,85 @@
++++=== PROMPT ===
++++# Task Execution Request
++++
++++## Task: TASK-005 — Unit Tests for ScheduleItemConfig Validation
++++
++++**Priority:** P0
++++**Estimate:** 1h
++++**Milestone:** Milestone 3: Testing
++++
++++## Checklist (implement ALL items):
++++
++++- [ ] Create `tests/test_triggers/test_scheduler.py`
++++- [ ] Test valid cron-based config (`cron="*/5 * * * *"`, no interval)
++++- [ ] Test valid interval-based config (`interval_seconds=60`, no cron)
++++- [ ] Test validation error when both `cron` and `interval_seconds` are set
++++- [ ] Test validation error when neither `cron` nor `interval_seconds` is set
++++- [ ] Test `enabled=False` is accepted
++++- [ ] Test config loads from YAML with schedules section
++++
++++## Related Requirements:
++++
++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
++++
++++## Related Design:
++++
++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
++++
++++## Instructions:
++++
++++1. Implement ALL checklist items for this task
++++2. Write unit tests for new code (coverage ≥80%)
++++3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
++++4. Use existing code style and conventions
++++5. Create/update files as needed
++++
++++## Dependencies:
++++
++++- To add a new dependency: `uv add <package>`
++++- To add a dev dependency: `uv add --dev <package>`
++++- NEVER edit pyproject.toml manually for dependencies
++++- After adding dependencies, they are available immediately
++++
++++## Success Criteria:
++++
++++- All checklist items implemented
++++- All tests pass (`uv run pytest`)
++++- No lint errors (`uv run ruff check .`)
++++- Code follows project conventions
++++
++++## Output:
++++
++++When complete, respond with:
++++- Summary of changes made
++++- Files created/modified
++++- Any issues or notes
++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
++++
++++
++++Begin implementation:
++++
++++
++++=== OUTPUT ===
++++All 54 tests pass, 0 lint errors. All TASK-005 checklist items are already implemented across two test files:
++++
++++**`tests/test_triggers/test_scheduler.py`** — `TestScheduleItemConfigValidation` class (lines 58-88):
++++- `test_valid_cron_config` — valid cron, no interval
++++- `test_valid_interval_config` — valid interval, no cron
++++- `test_both_set_raises` — ValueError when both set
++++- `test_neither_set_raises` — ValueError when neither set
++++- `test_disabled_accepted` — `enabled=False` works
++++- `test_default_payload_empty` — bonus coverage
++++
++++**`tests/test_core/test_config.py`** — additional coverage (lines 73-115, 269-291):
++++- `TestScheduleItemConfig` — 7 tests covering cron, interval, payload, disabled, validation errors, float precision
++++- `test_load_with_schedules` — YAML loading with schedules section
++++
++++**Files:** No changes needed — all tests were already created in a previous task.
++++
++++TASK_COMPLETE
++++
++++
++++=== STDERR ===
++++
++++
++++=== RETURN CODE: 0 ===
+++diff --git a/spec/.executor-logs/TASK-005-review-20260406-165127.log b/spec/.executor-logs/TASK-005-review-20260406-165127.log
+++new file mode 100644
+++index 0000000..8d706b5
+++--- /dev/null
++++++ b/spec/.executor-logs/TASK-005-review-20260406-165127.log
+++@@ -0,0 +1,902 @@
++++=== REVIEW PROMPT ===
++++# Code Review Request
++++
++++## Task Completed: TASK-005 — Unit Tests for ScheduleItemConfig Validation
++++
++++## Changed Files:
++++spec/.executor-logs/TASK-003-20260406-164426.log
++++spec/.executor-logs/TASK-003-review-20260406-164915.log
++++spec/.executor-progress.txt
++++spec/.task-history.log
++++spec/tasks.md
++++src/proctor/triggers/__init__.py
++++src/proctor/triggers/scheduler.py
++++tests/test_core/test_config.py
++++tests/test_triggers/test_scheduler.py
++++
++++## Full Diff:
++++diff --git a/spec/.executor-logs/TASK-003-20260406-164426.log b/spec/.executor-logs/TASK-003-20260406-164426.log
++++new file mode 100644
++++index 0000000..9e1fa2f
++++--- /dev/null
+++++++ b/spec/.executor-logs/TASK-003-20260406-164426.log
++++@@ -0,0 +1,93 @@
+++++=== PROMPT ===
+++++# Task Execution Request
+++++
+++++## Task: TASK-003 — Implement SchedulerTrigger Class
+++++
+++++**Priority:** P0
+++++**Estimate:** 2-3h
+++++**Milestone:** Milestone 2: Core Implementation
+++++
+++++## Checklist (implement ALL items):
+++++
+++++- [ ] Create `src/proctor/triggers/scheduler.py`
+++++- [ ] Implement `SchedulerTrigger.__init__(self, schedules: list[ScheduleItemConfig])` storing schedules and internal state
+++++- [ ] Implement `start(self, bus: EventBus)` — launch one asyncio task per enabled schedule item
+++++- [ ] Implement `stop(self)` — cancel all running tasks with proper cleanup (suppress CancelledError, like TerminalTrigger)
+++++- [ ] Implement `_run_cron(self, item, bus)` — loop using croniter to compute next fire time, asyncio.sleep until then, publish event
+++++- [ ] Implement `_run_interval(self, item, bus)` — loop with fixed asyncio.sleep, publish event
+++++- [ ] Publish `Event(type="trigger.scheduler", source=f"scheduler:{item.name}", payload=item.payload)` on each fire
+++++- [ ] Add logging at DEBUG (each fire) and INFO (start/stop) levels
+++++- [ ] Handle edge case: if next cron time is in the past (e.g. after long sleep), skip to next future occurrence
+++++
+++++## Related Requirements:
+++++
+++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+++++
+++++## Related Design:
+++++
+++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++++
+++++## Instructions:
+++++
+++++1. Implement ALL checklist items for this task
+++++2. Write unit tests for new code (coverage ≥80%)
+++++3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++++4. Use existing code style and conventions
+++++5. Create/update files as needed
+++++
+++++## Dependencies:
+++++
+++++- To add a new dependency: `uv add <package>`
+++++- To add a dev dependency: `uv add --dev <package>`
+++++- NEVER edit pyproject.toml manually for dependencies
+++++- After adding dependencies, they are available immediately
+++++
+++++## Success Criteria:
+++++
+++++- All checklist items implemented
+++++- All tests pass (`uv run pytest`)
+++++- No lint errors (`uv run ruff check .`)
+++++- Code follows project conventions
+++++
+++++## Output:
+++++
+++++When complete, respond with:
+++++- Summary of changes made
+++++- Files created/modified
+++++- Any issues or notes
+++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++++
+++++
+++++Begin implementation:
+++++
+++++
+++++=== OUTPUT ===
+++++## Summary
+++++
+++++**Files created:**
+++++- `src/proctor/triggers/scheduler.py` — `SchedulerTrigger` class implementing the `Trigger` ABC
+++++- `tests/test_triggers/test_scheduler.py` — 26 tests (19 pass, 7 skip on trio)
+++++
+++++**Files modified:**
+++++- `src/proctor/triggers/__init__.py` — exports `SchedulerTrigger`
+++++
+++++**Implementation details:**
+++++- `__init__` stores schedules list and empty tasks list
+++++- `start(bus)` creates one `asyncio.create_task` per enabled schedule item (cron or interval)
+++++- `stop()` cancels all tasks with `contextlib.suppress(CancelledError)`, matching `TerminalTrigger` pattern
+++++- `_run_cron(item, bus)` uses `croniter` to compute next fire time, sleeps until then, publishes event; skips past times
+++++- `_run_interval(item, bus)` sleeps for `interval_seconds`, then publishes
+++++- Events published as `Event(type="trigger.scheduler", source=f"scheduler:{item.name}", payload=item.payload)`
+++++- Logging: DEBUG on each fire, INFO on start/stop
+++++
+++++**Tests cover:** config validation (6), init/ABC (3), interval firing (2), cron event shape (1), disabled items (2), lifecycle start/stop (3), public exports (1). Tests using `asyncio.create_task` are skipped under trio.
+++++
+++++**Quality:** 307 tests pass, 0 lint errors, 0 new type errors.
+++++
+++++TASK_COMPLETE
+++++
+++++
+++++=== STDERR ===
+++++
+++++
+++++=== RETURN CODE: 0 ===
++++diff --git a/spec/.executor-logs/TASK-003-review-20260406-164915.log b/spec/.executor-logs/TASK-003-review-20260406-164915.log
++++new file mode 100644
++++index 0000000..ac2598a
++++--- /dev/null
+++++++ b/spec/.executor-logs/TASK-003-review-20260406-164915.log
++++@@ -0,0 +1,880 @@
+++++=== REVIEW PROMPT ===
+++++# Code Review Request
+++++
+++++## Task Completed: TASK-003 — Implement SchedulerTrigger Class
+++++
+++++## Changed Files:
+++++pyproject.toml
+++++spec/.executor-logs/TASK-002-20260406-164314.log
+++++spec/.executor-logs/TASK-002-review-20260406-164351.log
+++++spec/.executor-progress.txt
+++++spec/.task-history.log
+++++spec/tasks.md
+++++src/proctor/triggers/__init__.py
+++++tests/test_core/test_config.py
+++++uv.lock
+++++
+++++## Full Diff:
+++++diff --git a/pyproject.toml b/pyproject.toml
+++++index 42ea948..ae47aae 100644
+++++--- a/pyproject.toml
++++++++ b/pyproject.toml
+++++@@ -8,6 +8,7 @@ dependencies = [
+++++     "aiohttp>=3.13.3",
+++++     "aiosqlite>=0.22.1",
+++++     "anyio>=4.12.1",
++++++    "croniter>=6.2.2",
+++++     "litellm>=1.82.0",
+++++     "mcp>=1.26.0",
+++++     "nats-py>=2.14.0",
+++++diff --git a/spec/.executor-logs/TASK-002-20260406-164314.log b/spec/.executor-logs/TASK-002-20260406-164314.log
+++++new file mode 100644
+++++index 0000000..5dc2bf5
+++++--- /dev/null
++++++++ b/spec/.executor-logs/TASK-002-20260406-164314.log
+++++@@ -0,0 +1,78 @@
++++++=== PROMPT ===
++++++# Task Execution Request
++++++
++++++## Task: TASK-002 — Add croniter Dependency
++++++
++++++**Priority:** P0
++++++**Estimate:** 
++++++**Milestone:** Milestone 1: Config & Models
++++++
++++++## Checklist (implement ALL items):
++++++
++++++- [ ] Run `uv add croniter`
++++++- [ ] Verify `uv sync` succeeds
++++++- [ ] Verify `from croniter import croniter` works in a quick script
++++++
++++++## Related Requirements:
++++++
++++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
++++++
++++++## Related Design:
++++++
++++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
++++++
++++++## Instructions:
++++++
++++++1. Implement ALL checklist items for this task
++++++2. Write unit tests for new code (coverage ≥80%)
++++++3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
++++++4. Use existing code style and conventions
++++++5. Create/update files as needed
++++++
++++++## Dependencies:
++++++
++++++- To add a new dependency: `uv add <package>`
++++++- To add a dev dependency: `uv add --dev <package>`
++++++- NEVER edit pyproject.toml manually for dependencies
++++++- After adding dependencies, they are available immediately
++++++
++++++## Success Criteria:
++++++
++++++- All checklist items implemented
++++++- All tests pass (`uv run pytest`)
++++++- No lint errors (`uv run ruff check .`)
++++++- Code follows project conventions
++++++
++++++## Output:
++++++
++++++When complete, respond with:
++++++- Summary of changes made
++++++- Files created/modified
++++++- Any issues or notes
++++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
++++++
++++++
++++++Begin implementation:
++++++
++++++
++++++=== OUTPUT ===
++++++All done.
++++++
++++++**Summary:**
++++++- Added `croniter==6.2.2` (plus transitive deps `python-dateutil`, `six`) via `uv add croniter`
++++++- `uv sync` succeeds
++++++- `from croniter import croniter` works correctly
++++++- All 288 existing tests pass
++++++- No lint errors
++++++
++++++**Files modified:**
++++++- `pyproject.toml` — croniter added to dependencies
++++++- `uv.lock` — lockfile updated
++++++
++++++TASK_COMPLETE
++++++
++++++
++++++=== STDERR ===
++++++
++++++
++++++=== RETURN CODE: 0 ===
+++++diff --git a/spec/.executor-logs/TASK-002-review-20260406-164351.log b/spec/.executor-logs/TASK-002-review-20260406-164351.log
+++++new file mode 100644
+++++index 0000000..cb697f7
+++++--- /dev/null
++++++++ b/spec/.executor-logs/TASK-002-review-20260406-164351.log
+++++@@ -0,0 +1,861 @@
++++++=== REVIEW PROMPT ===
++++++# Code Review Request
++++++
++++++## Task Completed: TASK-002 — Add croniter Dependency
++++++
++++++## Changed Files:
++++++pyproject.toml
++++++spec/.executor-logs/TASK-001-20260406-163744.log
++++++spec/.executor-logs/TASK-001-20260406-164022.log
++++++spec/.executor-logs/TASK-001-review-20260406-164236.log
++++++spec/.executor-progress.txt
++++++spec/.executor-state.lock
++++++spec/.task-history.log
++++++spec/tasks.md
++++++src/proctor/core/__init__.py
++++++src/proctor/core/config.py
++++++tests/test_core/test_config.py
++++++uv.lock
++++++
++++++## Full Diff:
++++++diff --git a/pyproject.toml b/pyproject.toml
++++++index 0f0b607..ae47aae 100644
++++++--- a/pyproject.toml
+++++++++ b/pyproject.toml
++++++@@ -8,6 +8,7 @@ dependencies = [
++++++     "aiohttp>=3.13.3",
++++++     "aiosqlite>=0.22.1",
++++++     "anyio>=4.12.1",
+++++++    "croniter>=6.2.2",
++++++     "litellm>=1.82.0",
++++++     "mcp>=1.26.0",
++++++     "nats-py>=2.14.0",
++++++@@ -24,7 +25,6 @@ dev = [
++++++     "pytest-asyncio>=1.3.0",
++++++     "pytest-cov>=7.0.0",
++++++     "ruff>=0.15.4",
++++++-    "spec-runner>=1.0.0",
++++++ ]
++++++ 
++++++ [build-system]
++++++@@ -49,6 +49,3 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
++++++ 
++++++ [tool.ruff.lint.isort]
++++++ known-first-party = ["proctor"]
++++++-
++++++-[tool.uv.sources]
++++++-spec-runner = { path = "../executor" }
++++++diff --git a/spec/.executor-logs/TASK-001-20260406-163744.log b/spec/.executor-logs/TASK-001-20260406-163744.log
++++++new file mode 100644
++++++index 0000000..872a1ae
++++++--- /dev/null
+++++++++ b/spec/.executor-logs/TASK-001-20260406-163744.log
++++++@@ -0,0 +1,81 @@
+++++++=== PROMPT ===
+++++++# Task Execution Request
+++++++
+++++++## Task: TASK-001 — Add Schedule Item Config Model
+++++++
+++++++**Priority:** P0
+++++++**Estimate:** 1h
+++++++**Milestone:** Milestone 1: Config & Models
+++++++
+++++++## Checklist (implement ALL items):
+++++++
+++++++- [ ] Define `ScheduleItemConfig` model with fields: `name` (str), `cron` (str | None), `interval_seconds` (float | None), `payload` (dict), `enabled` (bool, default True)
+++++++- [ ] Add pydantic validator ensuring exactly one of `cron` or `interval_seconds` is set
+++++++- [ ] Add `schedules: list[ScheduleItemConfig] = []` to `ProctorConfig`
+++++++- [ ] Verify existing config loading still works with no schedules defined
+++++++
+++++++## Related Requirements:
+++++++
+++++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+++++++
+++++++## Related Design:
+++++++
+++++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++++++
+++++++## Instructions:
+++++++
+++++++1. Implement ALL checklist items for this task
+++++++2. Write unit tests for new code (coverage ≥80%)
+++++++3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++++++4. Use existing code style and conventions
+++++++5. Create/update files as needed
+++++++
+++++++## Dependencies:
+++++++
+++++++- To add a new dependency: `uv add <package>`
+++++++- To add a dev dependency: `uv add --dev <package>`
+++++++- NEVER edit pyproject.toml manually for dependencies
+++++++- After adding dependencies, they are available immediately
+++++++
+++++++## Success Criteria:
+++++++
+++++++- All checklist items implemented
+++++++- All tests pass (`uv run pytest`)
+++++++- No lint errors (`uv run ruff check .`)
+++++++- Code follows project conventions
+++++++
+++++++## Output:
+++++++
+++++++When complete, respond with:
+++++++- Summary of changes made
+++++++- Files created/modified
+++++++- Any issues or notes
+++++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++++++
+++++++
+++++++Begin implementation:
+++++++
+++++++
+++++++=== OUTPUT ===
+++++++## Summary
+++++++
+++++++**Files modified:**
+++++++- `src/proctor/core/config.py` — Added `ScheduleItemConfig` model with `name`, `cron`, `interval_seconds`, `payload`, `enabled` fields and a `model_validator` ensuring exactly one of `cron`/`interval_seconds` is set. Added `schedules: list[ScheduleItemConfig] = []` to `ProctorConfig`.
+++++++- `src/proctor/core/__init__.py` — Exported `ScheduleItemConfig`.
+++++++- `tests/test_core/test_config.py` — Added 9 new tests: 5 for `ScheduleItemConfig` (cron, interval, payload+disabled, neither-set error, both-set error), 2 for `ProctorConfig.schedules` (default empty, with items), 2 for YAML loading (with schedules, backward compat without schedules).
+++++++
+++++++**Checklist:**
+++++++- [x] `ScheduleItemConfig` model with all required fields
+++++++- [x] Pydantic validator ensuring exactly one of `cron` or `interval_seconds`
+++++++- [x] `schedules: list[ScheduleItemConfig] = []` on `ProctorConfig`
+++++++- [x] Existing config loading works with no schedules defined
+++++++
+++++++**Results:** 286 tests pass, 0 lint errors.
+++++++
+++++++TASK_COMPLETE
+++++++
+++++++
+++++++=== STDERR ===
+++++++
+++++++
+++++++=== RETURN CODE: 0 ===
++++++diff --git a/spec/.executor-logs/TASK-001-20260406-164022.log b/spec/.executor-logs/TASK-001-20260406-164022.log
++++++new file mode 100644
++++++index 0000000..0e035b0
++++++--- /dev/null
+++++++++ b/spec/.executor-logs/TASK-001-20260406-164022.log
++++++@@ -0,0 +1,111 @@
+++++++=== PROMPT ===
+++++++# Task Execution Request
+++++++
+++++++## Task: TASK-001 — Add Schedule Item Config Model
+++++++
+++++++**Priority:** P0
+++++++**Estimate:** 1h
+++++++**Milestone:** Milestone 1: Config & Models
+++++++
+++++++## Checklist (implement ALL items):
+++++++
+++++++- [ ] Define `ScheduleItemConfig` model with fields: `name` (str), `cron` (str | None), `interval_seconds` (float | None), `payload` (dict), `enabled` (bool, default True)
+++++++- [ ] Add pydantic validator ensuring exactly one of `cron` or `interval_seconds` is set
+++++++- [ ] Add `schedules: list[ScheduleItemConfig] = []` to `ProctorConfig`
+++++++- [ ] Verify existing config loading still works with no schedules defined
+++++++
+++++++## Related Requirements:
+++++++
+++++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+++++++
+++++++## Related Design:
+++++++
+++++++See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++++++
+++++++## Instructions:
+++++++
+++++++1. Implement ALL checklist items for this task
+++++++2. Write unit tests for new code (coverage ≥80%)
+++++++3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+++++++4. Use existing code style and conventions
+++++++5. Create/update files as needed
+++++++
+++++++## Dependencies:
+++++++
+++++++- To add a new dependency: `uv add <package>`
+++++++- To add a dev dependency: `uv add --dev <package>`
+++++++- NEVER edit pyproject.toml manually for dependencies
+++++++- After adding dependencies, they are available immediately
+++++++
+++++++## Success Criteria:
+++++++
+++++++- All checklist items implemented
+++++++- All tests pass (`uv run pytest`)
+++++++- No lint errors (`uv run ruff check .`)
+++++++- Code follows project conventions
+++++++
+++++++## Output:
+++++++
+++++++When complete, respond with:
+++++++- Summary of changes made
+++++++- Files created/modified
+++++++- Any issues or notes
+++++++- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+++++++
+++++++
+++++++## ⚠️ RETRY — Attempt 2 of 2
+++++++
+++++++**Error type:** TEST_FAILURE
+++++++**What was tried:** Previous attempt for Add Schedule Item Config Model
+++++++**Error:** Tests failed:
+++++++warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/Maestro/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+++++++error: Distribution not found at: file:///private/tmp/maestro-ws/proctor-a/executor
+++++++
+++++++
+++++++**Test failures:**
+++++++```
+++++++uleItemConfig] = []` on `ProctorConfig`
+++++++- [x] Existing config loading works with no schedules defined
+++++++
+++++++**Results:** 286 tests pass, 0 lint errors.
+++++++
+++++++TASK_COMPLETE
+++++++
+++++++
+++++++=== TEST FAILURES ===
+++++++Tests failed:
+++++++warning: `VIRTUAL_ENV=/Users/Andrei_Shtanakov/labs/all_ai_orchestrators/Maestro/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+++++++error: Distribution not found at: file:///private/tmp/maestro-ws/proctor-a/executor
+++++++
+++++++```
+++++++
+++++++**IMPORTANT:** Review the error above and fix the issue. Do not repeat the same mistake.
+++++++
+++++++
+++++++Begin implementation:
+++++++
+++++++
+++++++=== OUTPUT ===
+++++++All 288 tests pass.
+++++++
+++++++## Summary
+++++++
+++++++**Changes made:**
+++++++
+++++++- **`src/proctor/core/config.py`** — Added `ScheduleItemConfig` model with fields `name`, `cron`, `interval_seconds`, `payload`, `enabled` and a pydantic `model_validator` ensuring exactly one of `cron`/`interval_seconds` is set. Added `schedules: list[ScheduleItemConfig] = []` to `ProctorConfig`.
+++++++
+++++++- **`src/proctor/core/__init__.py`** — Exported `ScheduleItemConfig`.
+++++++
+++++++- **`tests/test_core/test_config.py`** — Added 10 new tests: 7 for `ScheduleItemConfig` (cron, interval, payload, disabled, validation errors, float precision) and 3 for integration with `ProctorConfig`/YAML loading (empty default, with items, YAML roundtrip, no-key backward compat).
+++++++
+++++++- **`pyproject.toml`** — Removed broken `spec-runner` dev dependency (referenced nonexistent `../executor` path causing the previous test failure).
+++++++
+++++++**Results:** 288 tests pass, 0 lint errors.
+++++++
+++++++TASK_COMPLETE
+++++++
+++++++
+++++++=== STDERR ===
+++++++
+++++++
+++++++=== RETURN CODE: 0 ===
++++++diff --git a/spec/.executor-logs/TASK-001-review-20260406-164236.log b/spec/.executor-logs/TASK-001-review-20260406-164236.log
++++++new file mode 100644
++++++index 0000000..63a5a6d
++++++--- /dev/null
+++++++++ b/spec/.executor-logs/TASK-001-review-20260406-164236.log
++++++@@ -0,0 +1,836 @@
+++++++=== REVIEW PROMPT ===
+++++++# Code Review Request
+++++++
+++++++## Task Completed: TASK-001 — Add Schedule Item Config Model
+++++++
+++++++## Changed Files:
+++++++pyproject.toml
+++++++spec-runner.config.yaml
+++++++spec/.executor-progress.txt
+++++++spec/.task-history.log
+++++++spec/tasks.md
+++++++src/proctor/core/__init__.py
+++++++src/proctor/core/config.py
++++++
+... (diff truncated)
+
+## Diff Summary:
+spec/.executor-logs/TASK-007-20260406-165611.log   |  81 ++
+ .../TASK-007-review-20260406-165704.log            | 948 +++++++++++++++++++++
+ spec/.executor-progress.txt                        |   4 +
+ spec/.task-history.log                             |   2 +
+ spec/tasks.md                                      |   4 +-
+ src/proctor/core/bootstrap.py                      |  12 +-
+ tests/test_core/test_bootstrap.py                  | 120 ++-
+ 7 files changed, 1167 insertions(+), 4 deletions(-)
+
+## Task Checklist
+- Import `SchedulerTrigger` in bootstrap module
+- Instantiate `SchedulerTrigger` from `config.schedules` if list is non-empty and `config.scheduler.enabled`
+- Call `scheduler_trigger.start(bus)` during startup
+- Call `scheduler_trigger.stop()` during shutdown
+- Export `SchedulerTrigger` from `src/proctor/triggers/__init__.py`
+
+## Test Results
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-9.0.2, pluggy-1.6.0 -- /private/tmp/maestro-ws/proctor-a/scheduler-trigger/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /private/tmp/maestro-ws/proctor-a/scheduler-trigger
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 327 items
+
+tests/test_core/test_bootstrap.py::TestInit::test_creates_bus_and_state PASSED [  0%]
+tests/test_core/test_bootstrap.py::TestInit::test_config_stored PASSED   [  0%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_start_sets_running PASSED [  0%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_stop_clears_running PASSED [  1%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_data_dir_created PASSED [  1%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_state_db_created PASSED [  1%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_state_tables_created PASSED [  2%]
+tests/test_core/test_bootstrap.py::TestStartStop::test_double_stop_is_safe PASSED [  2%]
+tests/test_core/test_bootstrap.py::TestSetLLMCall::test_set_llm_call PASSED [  2%]
+tests/test_core/test_bootstrap.py::TestEventBusFunctional::test_bus_works_after_start PASSED [  3%]
+tests/test_core/test_bootstrap.py::TestEventBusFunctional::test_terminal_handler_subscribed PASSED [  3%]
+tests/test_core/test_bootstrap.py::TestHandleTerminal::test_no_llm_publishes_failed PASSED [  3%]
+tests/test_core/test_bootstrap.py::TestHandleTerminal::test_empty_text_ignored PASSED [  3%]
+tests/test_core/test_bootstrap.py::TestHandleTerminal::test_llm_error_publishes_failed PASSED [  4%]
+tests/test_core/test_bootstrap.py::TestSchedulerIntegration::test_scheduler_not_created_when_no_schedules PASSED [  4%]
+tests/test_core/test_bootstrap.py::TestSchedulerIntegration::test_scheduler_not_created_when_disabled PASSED [  4%]
+tes
+
+## Lint Status
+clean
+
+## Review Instructions:
+
+Launch the following review agents in parallel using the Task tool:
+
+### 1. Quality Agent
+Review the code changes for:
+- Bugs and logic errors
+- Security vulnerabilities
+- Error handling gaps
+
+### 2. Implementation Agent
+Verify the implementation:
+- Code achieves the stated task goals
+- All checklist items are properly implemented
+- Edge cases are handled
+
+### 3. Testing Agent
+Review test coverage:
+- New code has adequate test coverage
+- Tests are meaningful and not trivial
+
+## Output:
+
+For each issue found, describe it briefly.
+If issues are found, fix them and respond with: "REVIEW_FIXED"
+If no issues found, respond with: "REVIEW_PASSED"
+
+
+=== OUTPUT ===
+I've reviewed all the key files. Here's my assessment:
+
+## Review Results
+
+### Quality
+- **No bugs or logic errors found.** The bootstrap correctly guards scheduler creation with both `config.scheduler.enabled` and `config.schedules` non-empty.
+- **No security vulnerabilities.** No user input flows into unsafe operations.
+- **Error handling is adequate.** `stop()` nullifies `_scheduler` after stopping, and the `None` check prevents double-stop issues.
+
+### Implementation Completeness
+All checklist items are properly implemented:
+- **Import** `SchedulerTrigger` — line 11 of `bootstrap.py`
+- **Instantiate conditionally** — line 47-48, checks both `scheduler.enabled` and non-empty `schedules`
+- **Start on bus** — line 49, `await self._scheduler.start(self.bus)`
+- **Stop on shutdown** — lines 57-59, with proper cleanup setting `_scheduler = None`
+- **Export** — `SchedulerTrigger` was already exported from `triggers/__init__.py` in TASK-003
+
+### Test Coverage
+The `TestSchedulerIntegration` class (5 tests) covers:
+- No scheduler when no schedules configured
+- No scheduler when `enabled=False`
+- Scheduler created and tasks launched when configured
+- Scheduler cleaned up on `stop()`
+- End-to-end: scheduler publishes events on the bus
+
+Tests are meaningful and verify real behavior, not just mocking.
+
+### Minor Observation
+The `test_scheduler_publishes_events` test uses `asyncio.sleep(0.15)` with a 0.05s interval — this is fine for CI but could be flaky under heavy load. The `>= 1` assertion mitigates this well enough.
+
+REVIEW_PASSED
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

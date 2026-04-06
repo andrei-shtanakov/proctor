@@ -9,6 +9,7 @@ from proctor.core.config import ProctorConfig
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Event, Task, TaskStatus
 from proctor.core.state import StateManager
+from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.workflow.engine import WorkflowEngine
 from proctor.workflow.spec import WorkflowMode, WorkflowSpec
@@ -34,6 +35,7 @@ class Application:
         self._llm_call: LLMCall | None = None
         self._engine: WorkflowEngine | None = None
         self._telegram_trigger: TelegramTrigger | None = None
+        self._scheduler: SchedulerTrigger | None = None
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -52,6 +54,10 @@ class Application:
             await self._telegram_trigger.start(self.bus)
             logger.info("TelegramTrigger enabled")
 
+        if self.config.scheduler.enabled and self.config.schedules:
+            self._scheduler = SchedulerTrigger(self.config.schedules)
+            await self._scheduler.start(self.bus)
+
         self.is_running = True
         logger.info("Application started (node=%s)", self.config.node_id)
 
@@ -61,6 +67,9 @@ class Application:
         if self._telegram_trigger is not None:
             await self._telegram_trigger.stop()
             self._telegram_trigger = None
+        if self._scheduler is not None:
+            await self._scheduler.stop()
+            self._scheduler = None
         await self.memory.close()
         await self.state.close()
         logger.info("Application stopped")

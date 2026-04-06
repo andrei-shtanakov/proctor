@@ -1,0 +1,81 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-007 — Unit Tests for SchedulerTrigger Interval Mode
+
+**Priority:** P0
+**Estimate:** 1h
+**Milestone:** Milestone 3: Testing
+
+## Checklist (implement ALL items):
+
+- [ ] Test that an interval schedule publishes events on the bus
+- [ ] Test that multiple intervals fire multiple events (with short interval like 0.1s)
+- [ ] Test that `stop()` cleanly cancels interval tasks
+- [ ] Test event payload matches config
+- [ ] Use `anyio` for async tests
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/scheduler-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All 310 tests pass, no lint errors. The test file `tests/test_triggers/test_scheduler.py` already covers all TASK-007 checklist items:
+
+| Checklist Item | Test Coverage |
+|---|---|
+| Interval schedule publishes events on the bus | `TestIntervalScheduling::test_interval_fires_events` |
+| Multiple intervals fire multiple events | `TestIntervalScheduling::test_multiple_interval_items` |
+| `stop()` cleanly cancels interval tasks | `TestLifecycle::test_stop_cancels_all_tasks`, `test_stop_cancels_cron_tasks_without_errors`, `test_stop_cancels_mixed_tasks` |
+| Event payload matches config | `TestCronScheduling::test_cron_publishes_correct_event_type`, `test_cron_event_has_correct_fields`, plus assertions in interval tests |
+| Uses `anyio` for async tests | All async tests use `@pytest.mark.anyio` |
+
+**Files:** No changes needed — `tests/test_triggers/test_scheduler.py` was already implemented (likely from TASK-006).
+
+**Summary:** All 5 checklist items are already implemented and passing. 322 collected, 310 passed, 12 skipped (trio backend correctly skipped for asyncio-only tests). Lint clean.
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===

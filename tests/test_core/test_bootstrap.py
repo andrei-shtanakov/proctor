@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from proctor.core.bootstrap import Application
-from proctor.core.config import ProctorConfig, TelegramConfig
+from proctor.core.config import (
+    ProctorConfig,
+    ScheduleItemConfig,
+    SchedulerConfig,
+    TelegramConfig,
+)
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event
 
@@ -330,6 +335,114 @@ class TestTelegramTriggerBootstrap:
         await app.start()
         try:
             assert app._telegram_trigger is None
+        finally:
+            await app.stop()
+
+
+class TestSchedulerIntegration:
+    @pytest.mark.anyio
+    async def test_scheduler_not_created_when_no_schedules(
+        self, tmp_config: ProctorConfig
+    ) -> None:
+        app = Application(tmp_config)
+        await app.start()
+        try:
+            assert app._scheduler is None
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_scheduler_not_created_when_disabled(self, tmp_path: object) -> None:
+        from pathlib import Path
+
+        config = ProctorConfig(
+            data_dir=Path(str(tmp_path)) / "proctor_data",
+            scheduler=SchedulerConfig(enabled=False),
+            schedules=[
+                ScheduleItemConfig(name="test", interval_seconds=60, payload={"k": "v"})
+            ],
+        )
+        app = Application(config)
+        await app.start()
+        try:
+            assert app._scheduler is None
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_scheduler_started_with_schedules(self, tmp_path: object) -> None:
+        from pathlib import Path
+
+        config = ProctorConfig(
+            data_dir=Path(str(tmp_path)) / "proctor_data",
+            scheduler=SchedulerConfig(enabled=True),
+            schedules=[
+                ScheduleItemConfig(
+                    name="heartbeat",
+                    interval_seconds=3600,
+                    payload={"type": "ping"},
+                )
+            ],
+        )
+        app = Application(config)
+        await app.start()
+        try:
+            assert app._scheduler is not None
+            assert len(app._scheduler._tasks) == 1
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_scheduler_stopped_on_app_stop(self, tmp_path: object) -> None:
+        from pathlib import Path
+
+        config = ProctorConfig(
+            data_dir=Path(str(tmp_path)) / "proctor_data",
+            scheduler=SchedulerConfig(enabled=True),
+            schedules=[
+                ScheduleItemConfig(
+                    name="heartbeat",
+                    interval_seconds=3600,
+                    payload={},
+                )
+            ],
+        )
+        app = Application(config)
+        await app.start()
+        assert app._scheduler is not None
+        await app.stop()
+        assert app._scheduler is None
+
+    @pytest.mark.anyio
+    async def test_scheduler_publishes_events(self, tmp_path: object) -> None:
+        """Scheduler trigger events arrive on the bus."""
+        import asyncio
+        from pathlib import Path
+
+        config = ProctorConfig(
+            data_dir=Path(str(tmp_path)) / "proctor_data",
+            scheduler=SchedulerConfig(enabled=True),
+            schedules=[
+                ScheduleItemConfig(
+                    name="fast",
+                    interval_seconds=0.05,
+                    payload={"msg": "tick"},
+                )
+            ],
+        )
+        app = Application(config)
+        received: list[Event] = []
+
+        async def capture(e: Event) -> None:
+            received.append(e)
+
+        await app.start()
+        try:
+            app.bus.subscribe("trigger.scheduler", capture)
+            await asyncio.sleep(0.15)
+            assert len(received) >= 1
+            assert received[0].type == "trigger.scheduler"
+            assert received[0].payload["msg"] == "tick"
         finally:
             await app.stop()
 

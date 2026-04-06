@@ -11,6 +11,6 @@ executor:
       run_tests: true
     pre_start:
       create_git_branch: true
-  main_branch: feature/telegram-trigger
+  main_branch: feature/scheduler-trigger
   max_retries: 2
   task_timeout_minutes: 30
