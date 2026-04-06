@@ -1,11 +1,11 @@
 """Tests for TelegramTrigger: polling, filtering, event publishing."""
 
-import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import anyio
 import pytest
 
 from proctor.core.bus import EventBus
@@ -66,8 +66,8 @@ class TestTelegramTriggerInit:
     def test_initial_state(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        assert trigger._running is False
-        assert trigger._task is None
+        assert not trigger._running
+        assert trigger._task_group is None
         assert trigger._session is None
         assert trigger._offset == 0
 
@@ -409,7 +409,7 @@ class TestPollLoop:
         trigger._running = True
         with (
             patch.object(trigger, "_get_updates", side_effect=mock_get_updates),
-            patch("proctor.triggers.telegram.asyncio.sleep") as mock_sleep,
+            patch("proctor.triggers.telegram.anyio.sleep") as mock_sleep,
         ):
             await trigger._poll_loop(bus)
 
@@ -437,7 +437,7 @@ class TestPollLoop:
         trigger._running = True
         with (
             patch.object(trigger, "_get_updates", side_effect=mock_get_updates),
-            patch("proctor.triggers.telegram.asyncio.sleep") as mock_sleep,
+            patch("proctor.triggers.telegram.anyio.sleep") as mock_sleep,
         ):
             await trigger._poll_loop(bus)
 
@@ -471,7 +471,7 @@ class TestPollLoop:
         trigger._running = True
         with (
             patch.object(trigger, "_get_updates", side_effect=mock_get_updates),
-            patch("proctor.triggers.telegram.asyncio.sleep") as mock_sleep,
+            patch("proctor.triggers.telegram.anyio.sleep") as mock_sleep,
         ):
             await trigger._poll_loop(bus)
 
@@ -485,15 +485,13 @@ class TestStartStop:
     """Test start/stop lifecycle."""
 
     @pytest.mark.anyio
-    async def test_start_creates_session_and_task(self, anyio_backend: str) -> None:
-        if anyio_backend != "asyncio":
-            pytest.skip("TelegramTrigger uses asyncio.create_task")
+    async def test_start_creates_session_and_task(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
         bus = EventBus()
 
         async def fake_poll(bus: EventBus) -> None:
-            await asyncio.sleep(10)
+            await anyio.sleep(10)
 
         trigger._poll_loop = fake_poll  # type: ignore[assignment]
 
@@ -503,14 +501,14 @@ class TestStartStop:
             await trigger.start(bus)
 
             assert trigger._session is mock_session
-            assert trigger._task is not None
-            assert trigger._running is True
+            assert trigger._task_group is not None
+            assert trigger._running
 
             await trigger.stop()
 
             assert trigger._session is None
-            assert trigger._task is None
-            assert trigger._running is False
+            assert trigger._task_group is None
+            assert not trigger._running
             mock_session.close.assert_called_once()
 
     @pytest.mark.anyio
@@ -518,7 +516,7 @@ class TestStartStop:
         config = _make_config()
         trigger = TelegramTrigger(config)
         await trigger.stop()  # should not raise
-        assert trigger._running is False
+        assert not trigger._running
 
     @pytest.mark.anyio
     async def test_stop_closes_session(self) -> None:

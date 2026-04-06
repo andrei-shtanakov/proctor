@@ -1,10 +1,12 @@
 """Telegram trigger — polls Telegram Bot API and publishes events."""
 
-import asyncio
 import contextlib
 import logging
+from typing import Any
 
 import aiohttp
+import anyio
+from anyio.abc import TaskGroup
 
 from proctor.core.bus import EventBus
 from proctor.core.config import TelegramConfig
@@ -30,7 +32,7 @@ class TelegramTrigger(Trigger):
         self._config = config
         self._offset: int = 0
         self._session: aiohttp.ClientSession | None = None
-        self._task: asyncio.Task[None] | None = None
+        self._task_group: TaskGroup | None = None
         self._running = False
 
     @property
@@ -41,17 +43,19 @@ class TelegramTrigger(Trigger):
         """Create aiohttp session and launch polling task."""
         self._session = aiohttp.ClientSession()
         self._running = True
-        self._task = asyncio.create_task(self._poll_loop(bus))
+        self._task_group = anyio.create_task_group()
+        await self._task_group.__aenter__()
+        self._task_group.start_soon(self._poll_loop, bus)
         logger.info("TelegramTrigger started")
 
     async def stop(self) -> None:
         """Cancel polling task and close aiohttp session."""
         self._running = False
-        if self._task is not None:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-            self._task = None
+        if self._task_group is not None:
+            self._task_group.cancel_scope.cancel()
+            with contextlib.suppress(Exception):
+                await self._task_group.__aexit__(None, None, None)
+            self._task_group = None
         if self._session is not None:
             await self._session.close()
             self._session = None
@@ -66,20 +70,30 @@ class TelegramTrigger(Trigger):
                 retry_delay = INITIAL_RETRY_DELAY
                 for update in updates:
                     await self._handle_update(update, bus)
-            except asyncio.CancelledError:
+            except anyio.get_cancelled_exc_class():
                 break
             except aiohttp.ClientError as exc:
-                logger.error("Telegram API HTTP error: %s", exc)
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * RETRY_BACKOFF_FACTOR, MAX_RETRY_DELAY)
+                logger.error(
+                    "Telegram API HTTP error: %s",
+                    type(exc).__name__,
+                )
+                await anyio.sleep(retry_delay)
+                retry_delay = min(
+                    retry_delay * RETRY_BACKOFF_FACTOR,
+                    MAX_RETRY_DELAY,
+                )
             except Exception:
                 logger.exception("Unexpected error in Telegram poll loop")
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * RETRY_BACKOFF_FACTOR, MAX_RETRY_DELAY)
+                await anyio.sleep(retry_delay)
+                retry_delay = min(
+                    retry_delay * RETRY_BACKOFF_FACTOR,
+                    MAX_RETRY_DELAY,
+                )
 
-    async def _get_updates(self) -> list[dict]:
+    async def _get_updates(self) -> list[dict[str, Any]]:
         """Call Telegram getUpdates endpoint."""
-        assert self._session is not None
+        if self._session is None:
+            raise RuntimeError("TelegramTrigger not started; call start() first")
         url = f"{self._api_url}/getUpdates"
         params: dict[str, int] = {
             "timeout": self._config.poll_timeout,
@@ -92,20 +106,20 @@ class TelegramTrigger(Trigger):
         if not data.get("ok"):
             logger.error("Telegram API returned ok=false: %s", data)
             return []
-        result: list[dict] = data.get("result", [])
+        result: list[dict[str, Any]] = data.get("result", [])
         return result
 
-    async def _handle_update(self, update: dict, bus: EventBus) -> None:
+    async def _handle_update(self, update: dict[str, Any], bus: EventBus) -> None:
         """Process a single update: filter, extract, publish."""
         update_id: int = update["update_id"]
         self._offset = update_id + 1
 
-        message: dict | None = update.get("message")
+        message: dict[str, Any] | None = update.get("message")
         if message is None:
             logger.debug("Skipping non-message update %d", update_id)
             return
 
-        chat: dict = message.get("chat", {})
+        chat: dict[str, Any] = message.get("chat", {})
         chat_id: int = chat.get("id", 0)
 
         if (
@@ -132,4 +146,8 @@ class TelegramTrigger(Trigger):
             },
         )
         await bus.publish(event)
-        logger.debug("Published telegram event: %s (chat=%d)", event.id, chat_id)
+        logger.debug(
+            "Published telegram event: %s (chat=%d)",
+            event.id,
+            chat_id,
+        )
