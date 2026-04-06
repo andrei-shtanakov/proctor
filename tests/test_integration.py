@@ -1,12 +1,15 @@
 """Integration tests: terminal event -> workflow -> task persistence."""
 
+import asyncio
 from pathlib import Path
 
 import pytest
 
 from proctor.core.bootstrap import Application
-from proctor.core.config import ProctorConfig
+from proctor.core.bus import EventBus
+from proctor.core.config import ProctorConfig, ScheduleItemConfig
 from proctor.core.models import Event, TaskStatus
+from proctor.triggers.scheduler import SchedulerTrigger
 
 # aiosqlite is asyncio-only
 pytestmark = pytest.mark.anyio
@@ -210,3 +213,77 @@ class TestTerminalToResult:
             assert results[0].payload["output"] == "via-engine: ping"
         finally:
             await app.stop()
+
+
+class TestSchedulerTriggerIntegration:
+    """Integration: SchedulerTrigger publishes events on a real EventBus."""
+
+    @pytest.mark.anyio
+    async def test_interval_publishes_events_on_eventbus(self) -> None:
+        """GIVEN a SchedulerTrigger with a 0.1s interval on a real EventBus
+        WHEN it runs for ~0.5s
+        THEN at least 2 trigger.scheduler events are received.
+        """
+        bus = EventBus()
+        received: list[Event] = []
+
+        async def handler(e: Event) -> None:
+            received.append(e)
+
+        bus.subscribe("trigger.scheduler", handler)
+
+        item = ScheduleItemConfig(
+            name="fast-tick",
+            interval_seconds=0.1,
+            payload={"tick": True},
+        )
+        trigger = SchedulerTrigger(schedules=[item])
+        await trigger.start(bus)
+
+        await asyncio.sleep(0.55)
+        await trigger.stop()
+
+        # At least 2 events in ~0.5s with 0.1s interval
+        assert len(received) >= 2
+        for ev in received:
+            assert ev.type == "trigger.scheduler"
+            assert ev.source == "scheduler:fast-tick"
+            assert ev.payload == {"tick": True}
+            assert ev.id  # auto-generated UUID
+            assert ev.timestamp  # auto-generated timestamp
+
+    @pytest.mark.anyio
+    async def test_clean_shutdown_no_events_after_stop(self) -> None:
+        """GIVEN a running SchedulerTrigger
+        WHEN stop() is called
+        THEN no more events are published and tasks list is empty.
+        """
+        bus = EventBus()
+        received: list[Event] = []
+
+        async def handler(e: Event) -> None:
+            received.append(e)
+
+        bus.subscribe("trigger.scheduler", handler)
+
+        item = ScheduleItemConfig(
+            name="shutdown-test",
+            interval_seconds=0.05,
+            payload={},
+        )
+        trigger = SchedulerTrigger(schedules=[item])
+        await trigger.start(bus)
+
+        await asyncio.sleep(0.15)
+        await trigger.stop()
+
+        # Record count at stop
+        count_at_stop = len(received)
+        assert count_at_stop >= 1
+
+        # Wait and verify no new events arrive
+        await asyncio.sleep(0.15)
+        assert len(received) == count_at_stop
+
+        # Internal tasks list is cleared
+        assert trigger._tasks == []
