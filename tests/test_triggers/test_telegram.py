@@ -306,6 +306,30 @@ class TestGetUpdates:
         assert captured_params["timeout"] == 1
 
     @pytest.mark.anyio
+    async def test_returns_empty_on_missing_result_key(self) -> None:
+        """Malformed API response with ok=true but no result key."""
+        config = _make_config()
+        trigger = TelegramTrigger(config)
+
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json = AsyncMock(return_value={"ok": True})
+
+        @asynccontextmanager
+        async def mock_get(
+            url: str, params: dict[str, int]
+        ) -> AsyncIterator[AsyncMock]:
+            yield mock_resp
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
+        trigger._session = mock_session
+
+        updates = await trigger._get_updates()
+
+        assert updates == []
+
+    @pytest.mark.anyio
     async def test_no_offset_param_when_zero(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
@@ -460,8 +484,12 @@ class TestPollLoop:
 class TestStartStop:
     """Test start/stop lifecycle."""
 
-    @pytest.mark.asyncio
-    async def test_start_creates_session_and_task(self) -> None:
+    @pytest.mark.anyio
+    async def test_start_creates_session_and_task(
+        self, anyio_backend: str
+    ) -> None:
+        if anyio_backend != "asyncio":
+            pytest.skip("TelegramTrigger uses asyncio.create_task")
         config = _make_config()
         trigger = TelegramTrigger(config)
         bus = EventBus()

@@ -52,7 +52,7 @@ Export `TelegramTrigger` from `src/proctor/triggers/__init__.py` and wire it int
 ## Milestone 3: Tests
 
 ### TASK-004: Unit tests for TelegramTrigger
-🔴 P0 | ⬜ TODO | Est: 1-2h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1-2h
 
 Create `tests/test_triggers/test_telegram.py` with comprehensive tests using mocked aiohttp responses.
 
