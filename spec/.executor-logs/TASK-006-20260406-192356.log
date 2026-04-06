@@ -1,0 +1,78 @@
+=== PROMPT ===
+# Task Execution Request
+
+## Task: TASK-006 — Lint, format, and type-check pass
+
+**Priority:** P1
+**Estimate:** 
+**Milestone:** Milestone 4: Quality
+
+## Checklist (implement ALL items):
+
+- [ ] Run `uv run ruff format .`
+- [ ] Run `uv run ruff check .` — zero errors
+- [ ] Run `pyrefly check` — zero errors
+- [ ] Run `uv run pytest` — all tests pass
+
+## Related Requirements:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/requirements.md
+
+## Related Design:
+
+See /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+
+## Instructions:
+
+1. Implement ALL checklist items for this task
+2. Write unit tests for new code (coverage ≥80%)
+3. Follow the design patterns from /private/tmp/maestro-ws/proctor-a/telegram-trigger/spec/design.md
+4. Use existing code style and conventions
+5. Create/update files as needed
+
+## Dependencies:
+
+- To add a new dependency: `uv add <package>`
+- To add a dev dependency: `uv add --dev <package>`
+- NEVER edit pyproject.toml manually for dependencies
+- After adding dependencies, they are available immediately
+
+## Success Criteria:
+
+- All checklist items implemented
+- All tests pass (`uv run pytest`)
+- No lint errors (`uv run ruff check .`)
+- Code follows project conventions
+
+## Output:
+
+When complete, respond with:
+- Summary of changes made
+- Files created/modified
+- Any issues or notes
+- "TASK_COMPLETE" if successful, or "TASK_FAILED: <reason>" if not
+
+
+Begin implementation:
+
+
+=== OUTPUT ===
+All checks pass. Summary:
+
+**Changes made:**
+- `tests/test_core/test_config.py` — Changed `pytest.raises((yaml.YAMLError, Exception))` to `pytest.raises(yaml.YAMLError)` to fix both pyrefly overload error and ruff B017 (blind exception)
+- `tests/test_core/test_state.py` — Fixed return type annotation from `StateManager` to `AsyncGenerator[StateManager, None]` for the async generator fixture, added `AsyncGenerator` import
+
+**Results:**
+- `uv run ruff format .` — 1 file reformatted
+- `uv run ruff check .` — zero errors
+- `pyrefly check` — zero errors (only 1 warning, no errors)
+- `uv run pytest` — 332 passed, 1 skipped
+
+TASK_COMPLETE
+
+
+=== STDERR ===
+
+
+=== RETURN CODE: 0 ===
