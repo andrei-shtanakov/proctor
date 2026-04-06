@@ -94,7 +94,7 @@ Test that cron-based schedules fire events at the correct times. Use time mockin
 **Depends on:** TASK-003
 
 ### TASK-007: Unit Tests for SchedulerTrigger Interval Mode
-🔴 P0 | ⬜ TODO | Est: 1h
+🔴 P0 | 🔄 IN_PROGRESS | Est: 1h
 
 Test that interval-based schedules fire events repeatedly at the configured interval.
 
