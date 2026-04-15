@@ -112,10 +112,58 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
                 )
                 raise
 
-        # If we get here, all primary attempts failed with transient errors.
-        # Fallback handling is added in Task 6; for now we just raise.
+        # All primary attempts failed with transient errors.
         assert last_transient is not None
-        raise last_transient
+        if config.fallback_model is None:  # type: ignore[name-defined]
+            raise RuntimeError(
+                f"Primary model {chosen} failed with transient error "
+                f"and fallback_model is not configured"
+            ) from last_transient
+
+        logger.warning(
+            "Primary model %s exhausted retries (%s: %s), falling back to %s",
+            chosen,
+            type(last_transient).__name__,
+            last_transient,
+            config.fallback_model,  # type: ignore[name-defined]
+        )
+
+        fb_model = config.fallback_model  # type: ignore[name-defined]
+        start = monotonic()
+        try:
+            # See comment above about litellm.acompletion typing.
+            resp = await litellm.acompletion(  # type: ignore[misc]
+                model=fb_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=config.max_tokens,  # type: ignore[name-defined]
+                temperature=config.temperature,  # type: ignore[name-defined]
+                timeout=config.request_timeout,  # type: ignore[name-defined]
+                num_retries=0,
+            )
+            latency_ms = int((monotonic() - start) * 1000)
+            text, usage = _extract_text_and_usage(resp)
+            await _persist(
+                memory,
+                _record(
+                    model=fb_model,
+                    fallback_used=True,
+                    usage=usage,
+                    latency_ms=latency_ms,
+                ),
+            )
+            return text
+        except Exception as fb_exc:
+            latency_ms = int((monotonic() - start) * 1000)
+            await _persist(
+                memory,
+                _record(
+                    model=fb_model,
+                    fallback_used=True,
+                    latency_ms=latency_ms,
+                    error=f"{type(fb_exc).__name__}: {fb_exc}",
+                ),
+            )
+            raise
 
     return _call
 

@@ -144,3 +144,83 @@ class TestRetry:
         assert rows[1]["error"] is None  # second attempt succeeded
         assert rows[1]["fallback_used"] == 0
         assert rows[1]["model"] == cfg.default_model
+
+
+class TestFallback:
+    async def test_fallback_transient_primary_fails_once(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        models_called: list[str] = []
+
+        async def fake_acompletion(**kwargs: Any) -> SimpleNamespace:
+            models_called.append(kwargs["model"])
+            if kwargs["model"] == "primary":
+                raise litellm.RateLimitError(
+                    "429", model="primary", llm_provider="test"
+                )
+            return _make_response(content="fallback ok")
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        async def no_sleep(_seconds: float) -> None:
+            return None
+
+        monkeypatch.setattr("proctor.workers.llm.anyio.sleep", no_sleep)
+
+        cfg = LLMConfig(
+            default_model="primary",
+            fallback_model="fallback",
+            max_retries=0,
+        )
+        call = build_llm_call(cfg, memory)
+        result = await call("hi")
+
+        assert result == "fallback ok"
+        assert models_called == ["primary", "fallback"]
+        rows = await _fetch_rows(memory)
+        assert len(rows) == 2
+        assert rows[0]["error"] is not None
+        assert rows[0]["fallback_used"] == 0
+        assert rows[0]["model"] == "primary"
+        assert rows[1]["error"] is None
+        assert rows[1]["fallback_used"] == 1
+        assert rows[1]["model"] == "fallback"
+
+    async def test_retries_exhausted_then_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        primary_attempts = 0
+
+        async def fake_acompletion(**kwargs: Any) -> SimpleNamespace:
+            nonlocal primary_attempts
+            if kwargs["model"] == "primary":
+                primary_attempts += 1
+                raise litellm.Timeout("slow", model="primary", llm_provider="test")
+            return _make_response(content="fallback result")
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        async def no_sleep(_seconds: float) -> None:
+            return None
+
+        monkeypatch.setattr("proctor.workers.llm.anyio.sleep", no_sleep)
+
+        cfg = LLMConfig(
+            default_model="primary",
+            fallback_model="fallback",
+            max_retries=1,
+        )
+        call = build_llm_call(cfg, memory)
+        result = await call("hi")
+
+        assert result == "fallback result"
+        assert primary_attempts == 2
+        rows = await _fetch_rows(memory)
+        assert len(rows) == 3
+        assert [r["model"] for r in rows] == ["primary", "primary", "fallback"]
+        assert [r["error"] is None for r in rows] == [False, False, True]
+        assert [r["fallback_used"] for r in rows] == [0, 0, 1]
