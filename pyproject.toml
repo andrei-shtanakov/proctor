@@ -11,11 +11,13 @@ dependencies = [
     "croniter>=6.2.2",
     "litellm>=1.82.0",
     "mcp>=1.26.0",
-    "nats-py>=2.14.0",
     "pydantic>=2.12.5",
     "pyyaml>=6.0.3",
     "tiktoken>=0.12.0",
 ]
+
+[project.optional-dependencies]
+nats = ["nats-py>=2.14.0,<3"]
 
 [dependency-groups]
 dev = [
@@ -25,6 +27,7 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.4",
+    "testcontainers[nats]>=4.0",
 ]
 
 [build-system]
@@ -37,7 +40,13 @@ packages = ["src/proctor"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "strict"
-markers = ["integration: requires external services (Ollama, etc.)"]
+addopts = "-m 'not nats and not ollama and not benchmark'"
+markers = [
+    "integration: requires external services",
+    "nats: requires running NATS server (docker/podman or CI services)",
+    "ollama: requires local Ollama",
+    "benchmark: performance smoke tests (opt-in)",
+]
 
 [tool.ruff]
 line-length = 88
