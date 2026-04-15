@@ -1,7 +1,9 @@
 """Tests for core data models: Event, Task, Envelope, TaskStatus."""
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
+
+import pytest
 
 from proctor.core.models import (
     Envelope,
@@ -233,3 +235,70 @@ class TestPublicExports:
         assert Event is not None
         assert Task is not None
         assert Envelope is not None
+
+
+class TestEventValidators:
+    def test_type_charset_underscores_ok(self) -> None:
+        Event(type="trigger.webhook.github", source="x", payload={})
+        Event(type="task.completed", source="x", payload={})
+        Event(type="routing.binding_failed", source="x", payload={})
+
+    def test_type_charset_uppercase_rejected(self) -> None:
+        with pytest.raises(ValueError, match="must match"):
+            Event(type="Task.Completed", source="x", payload={})
+
+    def test_type_charset_dash_rejected(self) -> None:
+        # After LABS-68 tightening: dashes no longer allowed
+        with pytest.raises(ValueError, match="must match"):
+            Event(type="my-event.foo", source="x", payload={})
+
+    def test_type_charset_leading_digit_rejected(self) -> None:
+        with pytest.raises(ValueError, match="must match"):
+            Event(type="9task.completed", source="x", payload={})
+
+    def test_type_charset_wildcards_rejected(self) -> None:
+        # Event.type is concrete, not a pattern
+        with pytest.raises(ValueError):
+            Event(type="trigger.*", source="x", payload={})
+
+    def test_timestamp_must_be_tz_aware(self) -> None:
+        with pytest.raises(ValueError, match="timezone-aware"):
+            Event(
+                type="test.ok",
+                source="x",
+                payload={},
+                timestamp=datetime.now(),  # naive
+            )
+
+    def test_timestamp_must_be_utc(self) -> None:
+        non_utc = timezone(timedelta(hours=3))
+        with pytest.raises(ValueError, match="UTC"):
+            Event(
+                type="test.ok",
+                source="x",
+                payload={},
+                timestamp=datetime.now(non_utc),
+            )
+
+    def test_payload_simple_dict_ok(self) -> None:
+        Event(type="test.ok", source="x", payload={"key": "val", "n": 1})
+
+    def test_payload_datetime_ok_via_pydantic(self) -> None:
+        # pydantic handles datetime → iso natively
+        Event(
+            type="test.ok",
+            source="x",
+            payload={"ts": datetime.now(UTC)},
+        )
+
+    def test_payload_non_serializable_rejected(self) -> None:
+        class CustomObj:
+            def __init__(self) -> None:
+                pass
+
+        with pytest.raises(ValueError, match="not serializable"):
+            Event(
+                type="test.ok",
+                source="x",
+                payload={"obj": CustomObj()},
+            )
