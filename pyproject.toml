@@ -37,6 +37,7 @@ packages = ["src/proctor"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "strict"
+markers = ["integration: requires external services (Ollama, etc.)"]
 
 [tool.ruff]
 line-length = 88
