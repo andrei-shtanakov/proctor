@@ -10,7 +10,7 @@ import pytest
 
 from proctor.core.config import LLMConfig
 from proctor.core.memory import EpisodicMemory
-from proctor.workers.llm import build_llm_call
+from proctor.workers.llm import build_llm_call, episode_id_ctx, step_id_ctx, task_id_ctx
 
 pytestmark = pytest.mark.anyio
 
@@ -327,3 +327,54 @@ class TestNonTransient:
         assert len(rows) == 1
         assert rows[0]["error"] is not None
         assert rows[0]["fallback_used"] == 0
+
+
+class TestContextVars:
+    async def test_ids_flow_into_record(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        async def fake_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            return _make_response()
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        cfg = LLMConfig()
+        call = build_llm_call(cfg, memory)
+
+        tokens = (
+            task_id_ctx.set("task-42"),
+            step_id_ctx.set("step-A"),
+            episode_id_ctx.set("ep-7"),
+        )
+        try:
+            await call("hi")
+        finally:
+            task_id_ctx.reset(tokens[0])
+            step_id_ctx.reset(tokens[1])
+            episode_id_ctx.reset(tokens[2])
+
+        rows = await _fetch_rows(memory)
+        assert rows[0]["task_id"] == "task-42"
+        assert rows[0]["step_id"] == "step-A"
+        assert rows[0]["episode_id"] == "ep-7"
+
+    async def test_no_ctx_set_records_null(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        async def fake_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            return _make_response()
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        cfg = LLMConfig()
+        call = build_llm_call(cfg, memory)
+        await call("hi")
+
+        rows = await _fetch_rows(memory)
+        assert rows[0]["task_id"] is None
+        assert rows[0]["step_id"] is None
+        assert rows[0]["episode_id"] is None
