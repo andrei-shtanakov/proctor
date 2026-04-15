@@ -86,6 +86,10 @@ class WorkflowEngine:
 
         async def step_runner(step: Step, results: dict[str, StepResult]) -> StepResult:
             """Run a single DAG step by calling LLM with step context."""
+            # Local import avoids a circular dependency: core/__init__.py
+            # re-exports bootstrap.Application → imports engine → would
+            # import workers.llm → imports core.config (triggering
+            # core/__init__.py again mid-load).
             from proctor.workers.llm import step_id_ctx
 
             # Build prompt from step inputs and dependency outputs
