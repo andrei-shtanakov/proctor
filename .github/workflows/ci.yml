@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  unit:
+    name: Unit (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install ${{ matrix.python }}
+      - name: Install deps (with nats extra)
+        run: uv sync --extra nats --dev
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Type check
+        run: uv run pyrefly check
+      - name: Unit tests (default markers)
+        run: uv run pytest -q
+
+  integration-nats:
+    name: Integration NATS (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12"]
+    services:
+      nats:
+        image: nats:2-alpine
+        ports:
+          - 4222:4222
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8222/healthz || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      NATS_URL: nats://localhost:4222
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install ${{ matrix.python }}
+      - name: Install deps (with nats extra)
+        run: uv sync --extra nats --dev
+      - name: Contract tests (local + nats)
+        run: uv run pytest -m nats tests/integration/test_transport_contract.py -v
+      - name: Reconnect tests (toxiproxy)
+        # testcontainers spins up NATS + Toxiproxy inside the job;
+        # ignore the outer services.nats for this step.
+        env:
+          NATS_URL: ""
+        run: uv run pytest -m nats tests/integration/test_transport_nats_reconnect.py -v
