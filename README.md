@@ -163,6 +163,144 @@ either add matching route rules now or accept the `routing.unmatched`
 signal as a diagnostic (previously those triggers published to nobody
 silently — this is an observability improvement).
 
+## Webhook trigger
+
+HTTP endpoint that receives POSTs from external systems (GitHub,
+Stripe, CI pipelines, internal services), authenticates them, and
+publishes `trigger.webhook.<source_name>` events on the bus. Router
+then dispatches those events to catalog workflows via the existing YAML rules.
+
+Example config:
+
+```yaml
+webhook:
+  host: 127.0.0.1
+  port: 8080
+  paths:
+    /webhook/github:
+      source_name: github
+      auth:
+        type: hmac
+        secret_env: GITHUB_WEBHOOK_SECRET
+        header: X-Hub-Signature-256
+        prefix: "sha256="
+    /webhook/ci:
+      auth:
+        type: bearer
+        secret_env: PROCTOR_CI_TOKEN
+```
+
+The path `/webhook/github` → event `trigger.webhook.github`. Routing:
+
+```yaml
+routes:
+  - event_pattern: "trigger.webhook.github"
+    workflow_id: ci-reviewer
+    prompt_from_payload: body.head_commit.message
+```
+
+### Response semantics
+
+Webhook handlers return **202 Accepted** immediately after publishing
+the event. The handler does **not** wait for the downstream workflow —
+HTTP response times are milliseconds, not seconds, matching how
+GitHub, Stripe, Slack, and the rest of the industry expect webhook
+receivers to behave. Response body:
+
+```json
+{ "accepted": true, "correlation_id": "<event uuid>" }
+```
+
+### At-least-once delivery
+
+Webhook events are delivered **at least once**. Client retries, proxy
+retries, or server crashes after publish can produce duplicates.
+Workflow authors should treat duplicates as normal and use dedup keys:
+
+- GitHub: `payload.headers["X-GitHub-Delivery"]` (always present).
+- Internal clients: send `X-Request-Id`.
+- `correlation_id` returned in 202 response.
+
+### Authentication
+
+Three `auth.type` variants:
+
+- **`hmac`** — HMAC-SHA256. Header + prefix configurable. Covers
+  GitHub-style signing. Slack and Stripe use different base-string
+  constructions and are out of scope.
+- **`bearer`** — `Authorization: Bearer <token>` (RFC 6750,
+  case-insensitive scheme).
+- **`none`** — no auth. Explicit opt-in. Triggers startup WARNING
+  per such path. **Do not use in production.**
+
+Secrets live in env vars via `secret_env`. `WebhookTrigger.start()`
+fails fast with `RuntimeError` listing all missing vars.
+
+All auth failures return an identical `401 {"error": "unauthorized"}`.
+
+### Capacity and shutdown
+
+- `max_in_flight` (default **20**) — concurrent handler cap. 21st
+  request returns `503 + Retry-After: 1`.
+- `max_body_bytes` (default **1048576** — 1 MB) — aiohttp enforces;
+  excess returns `413`.
+- `shutdown_timeout` (default **30s**) — max drain time on `stop()`.
+
+## Deployment topologies
+
+The default `host: 127.0.0.1` means Proctor's webhook endpoint is
+reachable only from localhost. **A reverse-proxy in front of Proctor
+is required for public exposure** — Proctor does not do TLS
+termination, per-IP rate limiting, or IP-level abuse detection. The
+in-flight cap is a memory-footprint guardrail, not a DDoS defense.
+
+### Sidecar nginx
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name proctor.example.com;
+    ssl_certificate /etc/letsencrypt/live/proctor.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/proctor.example.com/privkey.pem;
+
+    limit_req_zone $binary_remote_addr zone=webhook:10m rate=10r/s;
+
+    location /webhook/ {
+        limit_req zone=webhook burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8080;
+        proxy_read_timeout 10s;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+```
+
+### Kubernetes (Traefik ingress)
+
+```yaml
+# proctor.yaml excerpt
+webhook:
+  host: 0.0.0.0        # reachable from ingress
+  port: 8080
+```
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: proctor-webhook }
+spec:
+  podSelector: { matchLabels: { app: proctor } }
+  ingress:
+  - from:
+    - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+    ports:
+    - port: 8080
+```
+
+Set `terminationGracePeriodSeconds` on the Proctor Deployment to at
+least `shutdown_timeout + 15s` (default 45s) so the pod has time to
+drain HTTP handlers before SIGKILL.
+
 ## Development
 
 ```bash
@@ -232,7 +370,8 @@ proctor/
 │   │   ├── base.py               # Trigger ABC
 │   │   ├── scheduler.py          # SchedulerTrigger: cron/interval event firing
 │   │   ├── telegram.py           # TelegramTrigger: Bot API long-polling
-│   │   └── terminal.py           # TerminalTrigger: stdin reader with /quit command
+│   │   ├── terminal.py           # TerminalTrigger: stdin reader with /quit command
+│   │   └── webhook.py            # WebhookTrigger: HTTP POST handler with auth
 │   ├── workers/
 │   │   └── runtime.py            # AgentRuntime: LLM loop with tool calling
 │   └── workflow/
@@ -381,7 +520,7 @@ Tasks are saved at every state transition. Episodes are saved after each workflo
 |-------|-------|--------|
 | 0 | Foundation (models, config, bus, state, bootstrap) | Done |
 | 1 | MVP (workflow engine, DAG, agent runtime, terminal trigger) | Done |
-| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory) | Partial (scheduler, Telegram, episodic memory, router, LiteLLM done; webhook, NATS pending) |
+| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory, webhook) | Done (scheduler, Telegram, episodic memory, router, LiteLLM, webhook). NATS transport deferred to Phase 3. |
 | 3 | Distribution (NATS transport, worker pool, task queue, MCP tools) | Planned |
 | 4 | Advanced orchestration (FSM, multi-agent, self-modification) | Planned |
 | 5 | Observability & control (OpenTelemetry, dashboards, audit log, TUI) | Planned |

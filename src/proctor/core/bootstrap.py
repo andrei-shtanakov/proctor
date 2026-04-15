@@ -12,6 +12,7 @@ from proctor.core.router import Router
 from proctor.core.state import StateManager
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
+from proctor.triggers.webhook import WebhookTrigger
 from proctor.workers.llm import episode_id_ctx, task_id_ctx
 from proctor.workflow.engine import WorkflowEngine
 
@@ -38,6 +39,7 @@ class Application:
         self._router: Router | None = None
         self._telegram_trigger: TelegramTrigger | None = None
         self._scheduler: SchedulerTrigger | None = None
+        self._webhook_trigger: WebhookTrigger | None = None
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -65,12 +67,22 @@ class Application:
             self._scheduler = SchedulerTrigger(self.config.schedules)
             await self._scheduler.start(self.bus)
 
+        if self.config.webhook is not None:
+            self._webhook_trigger = WebhookTrigger(self.config.webhook)
+            await self._webhook_trigger.start(self.bus)
+            logger.info("WebhookTrigger enabled")
+
         self.is_running = True
         logger.info("Application started (node=%s)", self.config.node_id)
 
     async def stop(self) -> None:
         """Close state and memory, stop triggers, unset running."""
         self.is_running = False
+        # Close inputs first — WebhookTrigger first so the HTTP endpoint
+        # stops accepting new POSTs before other components tear down.
+        if self._webhook_trigger is not None:
+            await self._webhook_trigger.stop()
+            self._webhook_trigger = None
         if self._telegram_trigger is not None:
             await self._telegram_trigger.stop()
             self._telegram_trigger = None

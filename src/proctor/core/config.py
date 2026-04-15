@@ -1,13 +1,14 @@
 """Configuration system: YAML loading with pydantic models and defaults."""
 
 import logging
+import re
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Any, Self
+from typing import Annotated, Any, Literal, Self
 
 import yaml
 from croniter import croniter
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from proctor.workflow.spec import WorkflowSpec
 
@@ -93,6 +94,104 @@ class TelegramConfig(BaseModel):
     poll_timeout: int = 30
 
 
+class HMACAuthConfig(BaseModel):
+    """HMAC-SHA256 auth for a webhook path."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["hmac"] = "hmac"
+    secret_env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
+    header: str = "X-Hub-Signature-256"
+    # Header-value prefix stripped before hex comparison. Configures
+    # header SHAPE only, not the HMAC base string — Slack and Stripe
+    # sign a constructed string (e.g. "v0:{timestamp}:{body}"), which
+    # this implementation does NOT produce. Real Slack/Stripe support
+    # needs dedicated auth.type: "slack" / "stripe" — see Risks in
+    # docs/superpowers/specs/2026-04-15-webhook-trigger-design.md.
+    prefix: str = "sha256="
+
+
+class BearerAuthConfig(BaseModel):
+    """Bearer-token auth for a webhook path (RFC 6750)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["bearer"] = "bearer"
+    secret_env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
+    header: str = "Authorization"
+
+
+class NoneAuthConfig(BaseModel):
+    """No authentication. Explicit opt-in. Triggers startup WARNING."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["none"] = "none"
+
+
+AuthConfig = Annotated[
+    HMACAuthConfig | BearerAuthConfig | NoneAuthConfig,
+    Field(discriminator="type"),
+]
+
+
+class WebhookPathConfig(BaseModel):
+    """Per-path webhook configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+    source_name: str | None = None
+    auth: AuthConfig
+
+
+_SOURCE_NAME_RE = re.compile(r"[a-z][a-z0-9_-]*")
+
+
+class WebhookConfig(BaseModel):
+    """Webhook trigger configuration (aiohttp server)."""
+
+    model_config = ConfigDict(extra="forbid")
+    host: str = "127.0.0.1"
+    port: int = Field(default=8080, ge=0, le=65535)
+    paths: dict[str, WebhookPathConfig] = Field(min_length=1)
+    max_in_flight: int = 20
+    max_body_bytes: int = 1_048_576
+    shutdown_timeout: float = 30.0
+    keepalive_timeout: float = 75.0
+
+    @model_validator(mode="after")
+    def _validate_paths(self) -> Self:
+        """Validate path format; derive + uniqueness-check source_name."""
+        seen_names: dict[str, str] = {}
+        for path, path_cfg in self.paths.items():
+            if not path.startswith("/"):
+                raise ValueError(f"webhook path {path!r} must start with '/'")
+            if path == "/":
+                raise ValueError(f"webhook path {path!r} is not allowed")
+            if path.endswith("/"):
+                raise ValueError(f"webhook path {path!r} has a trailing '/'")
+            if any(c in path for c in "*?["):
+                raise ValueError(
+                    f"webhook path {path!r} contains a fnmatch metacharacter (*, ?, [)"
+                )
+            effective = path_cfg.source_name or path.rsplit("/", 1)[-1]
+            if not _SOURCE_NAME_RE.fullmatch(effective):
+                raise ValueError(
+                    f"webhook path {path!r}: source_name "
+                    f"{effective!r} must match "
+                    f"^[a-z][a-z0-9_-]*$"
+                )
+            if effective in {"", "*", "?"}:
+                raise ValueError(
+                    f"webhook path {path!r}: source_name {effective!r} is reserved"
+                )
+            if effective in seen_names:
+                raise ValueError(
+                    f"webhook source_name uniqueness: "
+                    f"{effective!r} used by both "
+                    f"{seen_names[effective]!r} and {path!r}"
+                )
+            seen_names[effective] = path
+            path_cfg.source_name = effective
+        return self
+
+
 class ProctorConfig(BaseModel):
     """Root configuration model with nested configs."""
 
@@ -105,6 +204,7 @@ class ProctorConfig(BaseModel):
     nats: NATSConfig = NATSConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
+    webhook: WebhookConfig | None = None
     schedules: list[ScheduleItemConfig] = []
     workflows: dict[str, WorkflowSpec] = Field(default_factory=dict)
     routes: list[RouteRule] = Field(default_factory=list)

@@ -31,10 +31,13 @@ def _ollama_up_sync() -> bool:
 
             async def check() -> bool:
                 try:
-                    async with aiohttp.ClientSession() as session, session.get(
-                        "http://localhost:11434/api/tags",
-                        timeout=aiohttp.ClientTimeout(total=2),
-                    ) as resp:
+                    async with (
+                        aiohttp.ClientSession() as session,
+                        session.get(
+                            "http://localhost:11434/api/tags",
+                            timeout=aiohttp.ClientTimeout(total=2),
+                        ) as resp,
+                    ):
                         return resp.status == 200
                 except Exception:
                     return False
