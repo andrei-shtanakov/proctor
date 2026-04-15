@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable
 from typing import Any
 
 from proctor.core.transport.base import Handler
+from proctor.core.transport.errors import InvalidSubjectError
 
 logger = logging.getLogger(__name__)
 
@@ -108,3 +110,60 @@ class _DedupCache:
         expired_keys = [k for k, ts in self._entries.items() if now - ts >= self._ttl]
         for k in expired_keys:
             del self._entries[k]
+
+
+_LITERAL_TOKEN_RE = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def _validate_subject(s: str, *, allow_wildcards: bool) -> None:
+    """Validate NATS subject / pattern. Raises InvalidSubjectError.
+
+    allow_wildcards=True: subscribe patterns (accept *, >).
+    allow_wildcards=False: publish subjects (reject any wildcard).
+    """
+    if not s:
+        raise InvalidSubjectError("subject must not be empty")
+    tokens = s.split(".")
+    for i, tok in enumerate(tokens):
+        if not tok:
+            raise InvalidSubjectError(f"subject {s!r} has empty token")
+        if tok == ">":
+            if not allow_wildcards:
+                raise InvalidSubjectError(f"wildcard > not allowed in subject {s!r}")
+            if i != len(tokens) - 1:
+                raise InvalidSubjectError(f"wildcard > must be the last token in {s!r}")
+            continue
+        if tok == "*":
+            if not allow_wildcards:
+                raise InvalidSubjectError(f"wildcard * not allowed in subject {s!r}")
+            continue
+        # Literal token: same charset as event.type segment
+        if not _LITERAL_TOKEN_RE.fullmatch(tok):
+            raise InvalidSubjectError(
+                f"token {tok!r} in {s!r} must match [a-z][a-z0-9_]*"
+            )
+
+
+def _match_subject(subject: str, pattern: str) -> bool:
+    """Match subject against NATS-syntax pattern.
+
+    Both subject and pattern are validated first; subject disallows
+    wildcards (concrete), pattern allows them.
+    """
+    _validate_subject(pattern, allow_wildcards=True)
+    _validate_subject(subject, allow_wildcards=False)
+    return _match_tokens(subject.split("."), pattern.split("."))
+
+
+def _match_tokens(sub: list[str], pat: list[str]) -> bool:
+    """Recursively match token lists."""
+    if not pat:
+        return not sub
+    if pat[0] == ">":
+        # > at end — must have ≥1 remaining subject token
+        return len(sub) >= 1
+    if not sub:
+        return False
+    if pat[0] == "*" or pat[0] == sub[0]:
+        return _match_tokens(sub[1:], pat[1:])
+    return False
