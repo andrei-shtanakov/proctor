@@ -4,6 +4,14 @@ See docs/superpowers/specs/2026-04-15-nats-transport-design.md for
 design rationale. All 21 ADRs in docs/superpowers/adr/.
 """
 
+from proctor.core.transport.base import (
+    ConnectionState,
+    DisconnectCallback,
+    EventTransport,
+    Handler,
+    ListenerHandle,
+    SubscriptionHandle,
+)
 from proctor.core.transport.errors import (
     EventSchemaError,
     EventTooLargeError,
@@ -17,10 +25,16 @@ from proctor.core.transport.errors import (
 )
 
 __all__ = [
+    "ConnectionState",
+    "DisconnectCallback",
     "EventSchemaError",
     "EventTooLargeError",
+    "EventTransport",
+    "Handler",
     "HandlerTimeoutError",
     "InvalidSubjectError",
+    "ListenerHandle",
+    "SubscriptionHandle",
     "TransportConnectionError",
     "TransportDrainingError",
     "TransportError",
