@@ -158,8 +158,21 @@ routes:
     prompt_from_payload: text
   - event_pattern: "trigger.scheduler"
     workflow_id: heartbeat
-    prompt: "Check system status and report"
+    prompt_from_payload: prompt   # each schedule item puts its prompt into payload
+
+schedules:
+  - name: heartbeat
+    interval_seconds: 3600
+    payload: { prompt: "Check system status and report" }
+  - name: daily-report
+    cron: "0 9 * * *"
+    payload: { prompt: "Produce the daily operations report" }
 ```
+
+Note: the scheduler route resolves `prompt` from each item's `payload`.
+Different schedules → different prompts, same workflow catalog entry.
+Adding a new schedule requires no Router/config changes beyond the
+`schedules:` block itself.
 
 With no `routes:` / `workflows:` configured (fresh checkout), Application
 starts cleanly — every trigger event produces a `routing.unmatched` event
@@ -199,13 +212,15 @@ async def route(self, event: Event) -> WorkflowSpec | None:
         if rule.prompt is not None:
             prompt = rule.prompt
         else:
-            prompt = _resolve_path(event.payload, rule.prompt_from_payload)
+            prompt, reason = _resolve_path(
+                event.payload, rule.prompt_from_payload
+            )
             if prompt is None:
                 logger.warning(
                     "Binding failed: pattern=%s workflow_id=%s "
-                    "path=%s (missing or non-string in payload)",
+                    "path=%s reason=%s",
                     rule.event_pattern, rule.workflow_id,
-                    rule.prompt_from_payload,
+                    rule.prompt_from_payload, reason,
                 )
                 await self._bus.publish(
                     Event(
@@ -214,9 +229,12 @@ async def route(self, event: Event) -> WorkflowSpec | None:
                         payload={
                             "original_event_id": event.id,
                             "original_type": event.type,
+                            "original_source": event.source,
+                            "original_payload": event.payload,
+                            "original_timestamp": event.timestamp.isoformat(),
                             "workflow_id": rule.workflow_id,
                             "binding_path": rule.prompt_from_payload,
-                            "reason": "path did not resolve to a string",
+                            "reason": reason,
                         },
                     )
                 )
@@ -244,7 +262,7 @@ async def route(self, event: Event) -> WorkflowSpec | None:
                 "original_type": event.type,
                 "original_source": event.source,
                 "original_payload": event.payload,
-                "original_created_at": event.timestamp.isoformat(),
+                "original_timestamp": event.timestamp.isoformat(),
             },
         )
     )
@@ -253,21 +271,43 @@ async def route(self, event: Event) -> WorkflowSpec | None:
 
 ### Dotted-path resolver
 
-```python
-def _resolve_path(payload: dict[str, Any], path: str) -> str | None:
-    """Walk a.b.c through nested dicts.
+Returns `(value, reason)` tuple so the caller can record a specific
+diagnostic on the `routing.binding_failed` event. On success, reason is
+`None`; on failure, value is `None` and reason identifies the failure
+class.
 
-    Returns the terminal value iff it is a `str`; otherwise None. This
-    means 'key missing', 'intermediate non-dict', and 'non-string
-    terminal' all collapse to the binding-failed path, which is the
-    correct coarseness for a config-bug signal.
+```python
+def _resolve_path(
+    payload: dict[str, Any], path: str
+) -> tuple[str | None, str | None]:
+    """Walk dotted path through nested dicts.
+
+    On success: (value, None).
+    On failure: (None, <reason>), where reason is one of:
+      - "top-level key '<k>' missing"
+      - "intermediate value at '<prefix>' is not a dict"
+      - "terminal value at '<path>' is <type>, expected str"
     """
     current: Any = payload
+    traversed: list[str] = []
     for key in path.split("."):
-        if not isinstance(current, dict) or key not in current:
-            return None
+        if not isinstance(current, dict):
+            prefix = ".".join(traversed) or "<root>"
+            return None, f"intermediate value at '{prefix}' is not a dict"
+        if key not in current:
+            if not traversed:
+                return None, f"top-level key '{key}' missing"
+            prefix = ".".join(traversed)
+            return None, f"key '{key}' missing under '{prefix}'"
         current = current[key]
-    return current if isinstance(current, str) else None
+        traversed.append(key)
+    if not isinstance(current, str):
+        return (
+            None,
+            f"terminal value at '{path}' is {type(current).__name__}, "
+            "expected str",
+        )
+    return current, None
 ```
 
 ## Config validators
@@ -326,7 +366,7 @@ with `exc_info=True` and propagate to the bootstrap-level `try/except`.
     "original_type": str,
     "original_source": str,
     "original_payload": dict[str, Any],
-    "original_created_at": str,   # ISO-8601
+    "original_timestamp": str,    # ISO-8601, from event.timestamp
 }
 ```
 
@@ -336,17 +376,25 @@ with `exc_info=True` and propagate to the bootstrap-level `try/except`.
 {
     "original_event_id": str,
     "original_type": str,
+    "original_source": str,
+    "original_payload": dict[str, Any],
+    "original_timestamp": str,    # ISO-8601
     "workflow_id": str,
     "binding_path": str,
-    "reason": str,                # "path did not resolve to a string"
+    "reason": str,                # one of:
+                                  #   "top-level key 'X' missing"
+                                  #   "key 'X' missing under 'A.B'"
+                                  #   "intermediate value at 'A' is not a dict"
+                                  #   "terminal value at 'A.B' is int, expected str"
 }
 ```
 
-The resolver intentionally collapses "key missing", "intermediate not a
-dict", and "terminal value is not a string" into one outcome — all three
-are config bugs at the same level, and the routing-failed event already
-carries enough context (the path and the original payload) for operators
-to diagnose which variant triggered it.
+The `original_*` fields are symmetric with `routing.unmatched` — metrics
+subscribers can group failures by `original_source` or replay the payload
+without having to correlate events across two separate bus messages. The
+`reason` is specific enough for an operator to know immediately whether
+they have a wrong key, wrong shape, or wrong type, and the string is
+stable enough to match against in alerts if someone wants to.
 
 **Namespace convention** (documented in the Router module docstring):
 `routing.*` events are observability signals emitted by the Router.
@@ -383,14 +431,19 @@ Cases:
 3. First-match wins: two matching rules, only the first is applied.
 4. Unmatched event: returns `None`, publishes `routing.unmatched` with
    every `original_*` field, WARNING logged with tried-patterns line.
-5. Binding failure — missing path: `prompt_from_payload=text` with
-   `payload={}` → `None`, publishes `routing.binding_failed` with
-   `reason="path not found"`.
+5. Binding failure — top-level key missing: `prompt_from_payload=text`
+   with `payload={}` → `None`, `routing.binding_failed` with
+   `reason="top-level key 'text' missing"`.
 6. Binding failure — non-string terminal: `prompt_from_payload=chat_id`
-   with `payload={"chat_id": 123}` → `reason="non-string value"`.
+   with `payload={"chat_id": 123}` → `reason` starts with `"terminal
+   value at 'chat_id' is int, expected str"`.
 7. Nested dotted path happy: `message.text` with
    `payload={"message": {"text": "hi"}}` → resolves.
-8. Nested dotted path — intermediate missing: graceful binding-failed.
+8. Nested dotted path — intermediate missing: `message.text` with
+   `payload={"other": {}}` → `reason="key 'message' missing under '<root>'"`
+   (or equivalent per the resolver contract).
+8a. Nested dotted path — intermediate not a dict: `message.text` with
+    `payload={"message": "hi"}` → `reason` contains "is not a dict".
 9. Router ignores its own namespace (no subscription on `routing.*`,
    verified via bus state inspection).
 10. `model_copy(update)` preserves other spec fields (mode, steps, etc.).
@@ -439,9 +492,18 @@ events go nowhere" regression — this issue closes it.
 - [ ] `_handle_terminal` replaced by `_handle_trigger_event` subscribed
       on `trigger.*`.
 - [ ] `routing.unmatched` and `routing.binding_failed` events published
-      with the payload shapes documented above.
+      with the payload shapes documented above (including symmetric
+      `original_*` fields on both).
+- [ ] `_resolve_path` returns `(value, reason)` with specific reason
+      strings for missing-key / not-dict / non-string-terminal.
 - [ ] Unit tests for all cases listed above.
-- [ ] README updated.
+- [ ] README `## Routing` section with example YAML.
+- [ ] README **Upgrading to LABS-65** subsection with the minimal
+      `workflows:` + `routes:` block that restores pre-LABS-65 terminal
+      behavior. (Breaking change: an existing user will get silent
+      `routing.unmatched` on every stdin input until they add config.)
+- [ ] `config/proctor.yaml` example updated with `workflows:` and
+      `routes:` (and `schedules:` items carrying `payload.prompt`).
 
 ## Risks and future work
 
@@ -464,7 +526,10 @@ events go nowhere" regression — this issue closes it.
 ## Related issues
 
 - **LABS-67** (LiteLLM integration) — noted this "hidden regression" in
-  its spec. Closed by this issue.
+  its spec. Closed by this issue. Also provides the verified
+  `save_episode` idempotency (`memory.py:33-44`, `ON CONFLICT(id) DO
+  UPDATE`) that this design's "pre-execution Episode save, update after"
+  pattern depends on.
 - **LABS-66** (WebhookTrigger) — blocked by this issue. Webhook simply
   publishes another `trigger.*`; the Router handles it without code
   changes once a route rule is added to the config.
