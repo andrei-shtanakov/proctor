@@ -82,9 +82,32 @@ class Router:
                 prompt: str | None = rule.prompt
             else:
                 assert rule.prompt_from_payload is not None  # validator guarantees
-                prompt, _reason = _resolve_path(event.payload, rule.prompt_from_payload)
+                prompt, reason = _resolve_path(event.payload, rule.prompt_from_payload)
                 if prompt is None:
-                    return None  # binding-failed handling comes in Task 9
+                    logger.warning(
+                        "Binding failed: pattern=%s workflow_id=%s path=%s reason=%s",
+                        rule.event_pattern,
+                        rule.workflow_id,
+                        rule.prompt_from_payload,
+                        reason,
+                    )
+                    await self._bus.publish(
+                        Event(
+                            type="routing.binding_failed",
+                            source="router",
+                            payload={
+                                "original_event_id": event.id,
+                                "original_type": event.type,
+                                "original_source": event.source,
+                                "original_payload": event.payload,
+                                "original_timestamp": event.timestamp.isoformat(),
+                                "workflow_id": rule.workflow_id,
+                                "binding_path": rule.prompt_from_payload,
+                                "reason": reason,
+                            },
+                        )
+                    )
+                    return None
             base = self._workflows[rule.workflow_id]
             logger.debug(
                 "Routed event type=%s to workflow_id=%s",

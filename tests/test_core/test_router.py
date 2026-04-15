@@ -263,3 +263,116 @@ class TestRouterUnmatched:
             for r in caplog.records
             if r.levelname == "WARNING"
         )
+
+
+class TestRouterBindingFailed:
+    @pytest.mark.anyio
+    async def test_missing_top_level_key(
+        self,
+        bus: EventBus,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        import logging
+
+        captured: list[Event] = []
+
+        async def capture(event: Event) -> None:
+            captured.append(event)
+
+        bus.subscribe("routing.*", capture)
+
+        workflows = {
+            "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.telegram",
+                workflow_id="chat",
+                prompt_from_payload="text",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(type="trigger.telegram", source="telegram", payload={})
+        with caplog.at_level(logging.WARNING, logger="proctor.core.router"):
+            spec = await router.route(event)
+
+        assert spec is None
+        assert len(captured) == 1
+        ev = captured[0]
+        assert ev.type == "routing.binding_failed"
+        assert ev.payload["workflow_id"] == "chat"
+        assert ev.payload["binding_path"] == "text"
+        assert "top-level key 'text' missing" in ev.payload["reason"]
+        # symmetric original_* fields
+        assert ev.payload["original_event_id"] == event.id
+        assert ev.payload["original_type"] == "trigger.telegram"
+        assert ev.payload["original_source"] == "telegram"
+        assert ev.payload["original_payload"] == {}
+        assert "original_timestamp" in ev.payload
+
+    @pytest.mark.anyio
+    async def test_non_string_terminal(self, bus: EventBus) -> None:
+        captured: list[Event] = []
+
+        async def capture(event: Event) -> None:
+            captured.append(event)
+
+        bus.subscribe("routing.*", capture)
+
+        workflows = {
+            "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.telegram",
+                workflow_id="chat",
+                prompt_from_payload="chat_id",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(
+            type="trigger.telegram",
+            source="telegram",
+            payload={"chat_id": 42},
+        )
+        spec = await router.route(event)
+
+        assert spec is None
+        assert len(captured) == 1
+        assert captured[0].type == "routing.binding_failed"
+        reason = captured[0].payload["reason"]
+        assert "int" in reason
+        assert "expected str" in reason
+
+    @pytest.mark.anyio
+    async def test_intermediate_not_a_dict(self, bus: EventBus) -> None:
+        captured: list[Event] = []
+
+        async def capture(event: Event) -> None:
+            captured.append(event)
+
+        bus.subscribe("routing.*", capture)
+
+        workflows = {
+            "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.telegram",
+                workflow_id="chat",
+                prompt_from_payload="message.text",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(
+            type="trigger.telegram",
+            source="telegram",
+            payload={"message": "hi"},
+        )
+        spec = await router.route(event)
+
+        assert spec is None
+        assert "not a dict" in captured[0].payload["reason"]
