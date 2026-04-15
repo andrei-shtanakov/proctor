@@ -593,6 +593,7 @@ def test_is_strictly_broader_direct() -> None:
 class TestPublicExports:
     def test_import_from_core(self) -> None:
         from proctor.core import (
+            EventsConfig,
             LLMConfig,
             NATSConfig,
             ProctorConfig,
@@ -602,6 +603,7 @@ class TestPublicExports:
             load_config,
         )
 
+        assert EventsConfig is not None
         assert LLMConfig is not None
         assert NATSConfig is not None
         assert ProctorConfig is not None
