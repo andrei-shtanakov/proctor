@@ -49,11 +49,21 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
     WorkflowEngine and bootstrap — no caller change required.
     """
 
+    # Snapshot config fields into locals so that the closure does not
+    # re-read attributes of `config` on every call and so that pyrefly's
+    # flow analysis does not lose track of `config` after the retry loop.
+    default_model = config.default_model
+    fallback_model = config.fallback_model
+    max_tokens = config.max_tokens
+    temperature = config.temperature
+    request_timeout = config.request_timeout
+    max_retries = config.max_retries
+
     async def _call(prompt: str, model: str | None = None) -> str:
-        chosen = model or config.default_model
+        chosen = model or default_model
         last_transient: BaseException | None = None
 
-        for attempt in range(config.max_retries + 1):
+        for attempt in range(max_retries + 1):
             start = monotonic()
             try:
                 # litellm.acompletion is declared as returning
@@ -63,9 +73,9 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
                 resp = await litellm.acompletion(  # type: ignore[misc]
                     model=chosen,
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=config.max_tokens,
-                    temperature=config.temperature,
-                    timeout=config.request_timeout,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    timeout=request_timeout,
                     num_retries=0,
                 )
                 latency_ms = int((monotonic() - start) * 1000)
@@ -93,7 +103,7 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
                         error=f"{type(exc).__name__}: {exc}",
                     ),
                 )
-                if attempt < config.max_retries:
+                if attempt < max_retries:
                     await anyio.sleep(_RETRY_BACKOFF_SECONDS)
                     continue
                 # Retries exhausted — fall through to fallback handling.
@@ -114,7 +124,7 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
 
         # All primary attempts failed with transient errors.
         assert last_transient is not None
-        if config.fallback_model is None:  # type: ignore[name-defined]
+        if fallback_model is None:
             raise RuntimeError(
                 f"Primary model {chosen} failed with transient error "
                 f"and fallback_model is not configured"
@@ -125,19 +135,19 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
             chosen,
             type(last_transient).__name__,
             last_transient,
-            config.fallback_model,  # type: ignore[name-defined]
+            fallback_model,
         )
 
-        fb_model = config.fallback_model  # type: ignore[name-defined]
+        fb_model = fallback_model
         start = monotonic()
         try:
             # See comment above about litellm.acompletion typing.
             resp = await litellm.acompletion(  # type: ignore[misc]
                 model=fb_model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=config.max_tokens,  # type: ignore[name-defined]
-                temperature=config.temperature,  # type: ignore[name-defined]
-                timeout=config.request_timeout,  # type: ignore[name-defined]
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+                timeout=config.request_timeout,
                 num_retries=0,
             )
             latency_ms = int((monotonic() - start) * 1000)
