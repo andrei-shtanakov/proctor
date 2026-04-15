@@ -14,6 +14,7 @@ from proctor.core.config import (
     TelegramConfig,
     load_config,
 )
+from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
 
 class TestLLMConfig:
@@ -451,6 +452,31 @@ class TestRouteRule:
             RouteRule(
                 event_pattern="trigger.terminal",
                 workflow_id="chat",
+            )
+
+
+class TestWorkflowCatalog:
+    def test_empty_catalog_valid(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.workflows == {}
+
+    def test_catalog_key_matches_field(self) -> None:
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            }
+        )
+        assert "chat" in cfg.workflows
+
+    def test_catalog_key_mismatch_raises(self) -> None:
+        with pytest.raises(ValueError, match="workflow_id"):
+            ProctorConfig(
+                workflows={
+                    "chat": WorkflowSpec(
+                        workflow_id="other",
+                        mode=WorkflowMode.SIMPLE,
+                    ),
+                }
             )
 
 

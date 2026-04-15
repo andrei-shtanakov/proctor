@@ -8,6 +8,8 @@ import yaml
 from croniter import croniter
 from pydantic import BaseModel, Field, model_validator
 
+from proctor.workflow.spec import WorkflowSpec
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,6 +105,18 @@ class ProctorConfig(BaseModel):
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     schedules: list[ScheduleItemConfig] = []
+    workflows: dict[str, WorkflowSpec] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_catalog_keys(self) -> Self:
+        """Ensure catalog key matches spec.workflow_id."""
+        for key, spec in self.workflows.items():
+            if spec.workflow_id != key:
+                raise ValueError(
+                    f"workflow catalog key {key!r} does not match "
+                    f"spec.workflow_id {spec.workflow_id!r}"
+                )
+        return self
 
 
 def load_config(path: Path | str | None = None) -> ProctorConfig:
