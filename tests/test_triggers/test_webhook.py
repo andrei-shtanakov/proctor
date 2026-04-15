@@ -669,3 +669,61 @@ class TestOuterErrorGuard:
         ):
             assert r.status == 503
             assert r.headers["Retry-After"] == "5"
+
+
+class TestDrainOnStop:
+    async def test_in_flight_handlers_drain_before_stop_returns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Inject a slow bus.publish — stop() must wait for in-flight
+        handlers to complete (within shutdown_timeout) before
+        returning. Each client must still get 202.
+        """
+        mp = pytest.MonkeyPatch()
+        try:
+            cfg = WebhookConfig(
+                port=0,
+                shutdown_timeout=2.0,
+                paths={
+                    "/webhook/slow": WebhookPathConfig(
+                        auth=NoneAuthConfig(),
+                    ),
+                },
+            )
+            bus = EventBus()
+            published = asyncio.Event()
+            proceed = asyncio.Event()
+
+            async def slow_publish(_evt: Event) -> None:
+                published.set()
+                await proceed.wait()
+
+            monkeypatch.setattr(bus, "publish", slow_publish)
+
+            trigger = WebhookTrigger(cfg)
+            await trigger.start(bus)
+            url = f"http://127.0.0.1:{trigger.bound_port}"
+            try:
+                async with aiohttp.ClientSession() as s:
+                    # Kick off a request that will block in publish.
+                    post_task = asyncio.create_task(
+                        s.post(f"{url}/webhook/slow", data=b"{}").__aenter__()
+                    )
+                    await published.wait()
+                    # Now in-flight = 1. Start stop() concurrently.
+                    stop_task = asyncio.create_task(trigger.stop())
+                    # stop() must not finish while handler is still
+                    # in-flight (publish blocked).
+                    await asyncio.sleep(0.1)
+                    assert not stop_task.done()
+                    # Release publish → handler completes → drain fires.
+                    proceed.set()
+                    r = await post_task
+                    async with r:
+                        assert r.status == 202
+                    await asyncio.wait_for(stop_task, timeout=2.0)
+            finally:
+                if not trigger._stopped:
+                    await trigger.stop()
+        finally:
+            mp.undo()
