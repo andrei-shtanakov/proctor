@@ -16,6 +16,13 @@ import logging
 import os
 from collections.abc import Mapping
 
+from aiohttp import web
+
+from proctor.core.bus import EventBus
+from proctor.core.config import WebhookConfig
+from proctor.core.models import Event  # noqa: F401 — used in Task 7's handler
+from proctor.triggers.base import Trigger
+
 logger = logging.getLogger(__name__)
 
 
@@ -155,3 +162,91 @@ class InflightLimiter:
             return True
         except TimeoutError:
             return False
+
+
+class WebhookTrigger(Trigger):
+    """aiohttp-based HTTP server that publishes trigger.webhook.<source_name>
+    events on the bus. Per-path auth (HMAC/Bearer/none), fire-and-forget
+    semantics (202 Accepted), graceful drain on stop().
+    """
+
+    def __init__(self, config: WebhookConfig) -> None:
+        self._config = config
+        self._paths = config.paths
+        self._limiter = InflightLimiter(config.max_in_flight)
+        self._runner: web.AppRunner | None = None
+        self._site: web.TCPSite | None = None
+        self._bus: EventBus | None = None
+        self._stopped = False
+
+    @property
+    def bound_port(self) -> int | None:
+        """Actual bound port (useful when config.port=0). None until
+        started, also None after stop() cleanup.
+        """
+        if self._site is None or self._site._server is None:
+            return None
+        sockets = self._site._server.sockets  # type: ignore[attr-defined]
+        return sockets[0].getsockname()[1] if sockets else None
+
+    async def start(self, bus: EventBus) -> None:
+        # Fail fast: every required env secret must be present.
+        missing = sorted(
+            {
+                cfg.auth.secret_env
+                for cfg in self._paths.values()
+                if cfg.auth.type != "none" and cfg.auth.secret_env not in os.environ
+            }
+        )
+        if missing:
+            raise RuntimeError(f"Missing required webhook secrets in env: {missing}")
+
+        # Loud WARNING for any unauthenticated path.
+        for path, cfg in self._paths.items():
+            if cfg.auth.type == "none":
+                logger.warning(
+                    "Webhook path %r has NO AUTHENTICATION "
+                    "(auth.type: none). Do not use in production.",
+                    path,
+                )
+
+        self._bus = bus
+        app = web.Application(client_max_size=self._config.max_body_bytes)
+        for path in self._paths:
+            app.router.add_post(path, self._handle_webhook)
+        self._runner = web.AppRunner(
+            app,
+            keepalive_timeout=self._config.keepalive_timeout,
+        )
+        await self._runner.setup()
+        self._site = web.TCPSite(self._runner, self._config.host, self._config.port)
+        await self._site.start()
+        logger.info(
+            "WebhookTrigger started on %s:%d with %d path(s)",
+            self._config.host,
+            self._config.port,
+            len(self._paths),
+        )
+
+    async def stop(self) -> None:
+        if self._stopped:
+            return
+        self._stopped = True
+
+        if self._site is not None:
+            await self._site.stop()
+
+        drained = await self._limiter.wait_idle(self._config.shutdown_timeout)
+        if not drained:
+            logger.warning(
+                "Webhook shutdown timed out with %d in-flight requests",
+                self._limiter.in_flight,
+            )
+
+        if self._runner is not None:
+            await self._runner.cleanup()
+        logger.info("WebhookTrigger stopped")
+
+    async def _handle_webhook(self, request: web.Request) -> web.Response:
+        # Placeholder — full implementation in Task 7.
+        return web.json_response({"stub": True}, status=501)

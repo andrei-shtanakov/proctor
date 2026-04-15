@@ -3,16 +3,25 @@
 import asyncio
 import hashlib
 import hmac
+import logging
 from unittest.mock import MagicMock
 
 import pytest
 
+from proctor.core.bus import EventBus
 from proctor.core.config import (
     BearerAuthConfig,
     HMACAuthConfig,
     NoneAuthConfig,
+    WebhookConfig,
+    WebhookPathConfig,
 )
-from proctor.triggers.webhook import InflightLimiter, _safe_headers, _verify_auth
+from proctor.triggers.webhook import (
+    InflightLimiter,
+    WebhookTrigger,
+    _safe_headers,
+    _verify_auth,
+)
 
 
 @pytest.fixture
@@ -214,3 +223,66 @@ class TestVerifyAuthNone:
         cfg = NoneAuthConfig()
         req = _mock_request({})
         assert _verify_auth(cfg, req, b"") is True
+
+
+class TestLifecycle:
+    async def test_missing_env_raises_runtime_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """start() fails fast with list of all missing env vars."""
+        monkeypatch.delenv("MISSING_ONE", raising=False)
+        monkeypatch.delenv("MISSING_TWO", raising=False)
+        cfg = WebhookConfig(
+            paths={
+                "/webhook/a": WebhookPathConfig(
+                    auth=HMACAuthConfig(secret_env="MISSING_ONE"),
+                ),
+                "/webhook/b": WebhookPathConfig(
+                    auth=BearerAuthConfig(secret_env="MISSING_TWO"),
+                ),
+            },
+        )
+        trigger = WebhookTrigger(cfg)
+        with pytest.raises(RuntimeError, match="MISSING_ONE.*MISSING_TWO"):
+            await trigger.start(EventBus())
+
+    async def test_unauthenticated_path_logs_warning(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        cfg = WebhookConfig(
+            port=0,
+            paths={
+                "/webhook/open": WebhookPathConfig(auth=NoneAuthConfig()),
+            },
+        )
+        trigger = WebhookTrigger(cfg)
+        with caplog.at_level(logging.WARNING, logger="proctor.triggers.webhook"):
+            await trigger.start(EventBus())
+        try:
+            assert any("NO AUTHENTICATION" in r.message for r in caplog.records)
+        finally:
+            await trigger.stop()
+
+    async def test_idempotent_stop(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        cfg = WebhookConfig(
+            port=0,
+            paths={
+                "/webhook/open": WebhookPathConfig(auth=NoneAuthConfig()),
+            },
+        )
+        trigger = WebhookTrigger(cfg)
+        await trigger.start(EventBus())
+        await trigger.stop()
+        await trigger.stop()  # second call must be a no-op
+
+    async def test_bound_port_none_before_start(self) -> None:
+        cfg = WebhookConfig(
+            port=0,
+            paths={
+                "/webhook/open": WebhookPathConfig(auth=NoneAuthConfig()),
+            },
+        )
+        trigger = WebhookTrigger(cfg)
+        assert trigger.bound_port is None
