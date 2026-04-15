@@ -499,9 +499,7 @@ class TestStatusCodes:
 
 
 class TestHappyPathBearer:
-    async def test_valid_bearer_returns_202(
-        self, webhook_env, captured
-    ) -> None:
+    async def test_valid_bearer_returns_202(self, webhook_env, captured) -> None:
         _, _, url = webhook_env
         events, arrived = captured
         async with aiohttp.ClientSession() as s:
@@ -517,9 +515,7 @@ class TestHappyPathBearer:
 
 
 class TestHeaderWhitelistE2E:
-    async def test_auth_headers_never_in_payload(
-        self, webhook_env, captured
-    ) -> None:
+    async def test_auth_headers_never_in_payload(self, webhook_env, captured) -> None:
         _, _, url = webhook_env
         events, arrived = captured
         async with aiohttp.ClientSession() as s:
@@ -546,15 +542,130 @@ class TestHeaderWhitelistE2E:
 
 
 class TestUnauthenticatedOpenPath:
-    async def test_open_path_accepts_anything(
-        self, webhook_env, captured
-    ) -> None:
+    async def test_open_path_accepts_anything(self, webhook_env, captured) -> None:
         _, _, url = webhook_env
         events, arrived = captured
         async with aiohttp.ClientSession() as s:
-            status, _ = await _post(
-                s, f"{url}/webhook/open", b'{"x": 1}', {}
-            )
+            status, _ = await _post(s, f"{url}/webhook/open", b'{"x": 1}', {})
         assert status == 202
         await arrived.wait()
         assert events[-1].type == "trigger.webhook.open"
+
+
+class TestInflightCap:
+    async def test_21st_request_returns_503_retry_after_1(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        mp = pytest.MonkeyPatch()
+        mp.setenv("X", "x")
+        try:
+            cfg = WebhookConfig(
+                port=0,
+                max_in_flight=2,
+                paths={
+                    "/webhook/slow": WebhookPathConfig(
+                        auth=NoneAuthConfig(),
+                    ),
+                },
+            )
+            bus = EventBus()
+            hold = asyncio.Event()
+
+            async def blocking_publish(_evt: Event) -> None:
+                await hold.wait()
+
+            trigger = WebhookTrigger(cfg)
+            await trigger.start(bus)
+            monkeypatch.setattr(bus, "publish", blocking_publish)
+
+            url = f"http://127.0.0.1:{trigger.bound_port}"
+            try:
+                async with aiohttp.ClientSession() as s:
+                    # Fire 2 requests that will block inside publish.
+                    task1 = asyncio.create_task(
+                        s.post(f"{url}/webhook/slow", data=b"{}").__aenter__()
+                    )
+                    task2 = asyncio.create_task(
+                        s.post(f"{url}/webhook/slow", data=b"{}").__aenter__()
+                    )
+                    # Give them time to enter _handle_webhook and acquire limiter slots.
+                    await asyncio.sleep(0.1)
+                    # 3rd request — should be rejected immediately.
+                    async with s.post(f"{url}/webhook/slow", data=b"{}") as r:
+                        assert r.status == 503
+                        assert r.headers["Retry-After"] == "1"
+                    hold.set()
+                    r1 = await task1
+                    r2 = await task2
+                    await r1.__aexit__(None, None, None)
+                    await r2.__aexit__(None, None, None)
+            finally:
+                await trigger.stop()
+        finally:
+            mp.undo()
+
+
+class TestBusPublishFailure:
+    async def test_bus_exception_returns_503_retry_after_5(
+        self,
+        webhook_env,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        trigger, bus, url = webhook_env
+
+        async def failing_publish(_evt: Event) -> None:
+            raise RuntimeError("bus down")
+
+        monkeypatch.setattr(bus, "publish", failing_publish)
+
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(f"{url}/webhook/open", data=b"{}") as r,
+        ):
+            assert r.status == 503
+            assert r.headers["Retry-After"] == "5"
+
+
+class TestCancelledErrorPassthrough:
+    async def test_cancelled_error_not_swallowed(
+        self,
+        webhook_env,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, bus, url = webhook_env
+
+        async def raise_cancelled(_evt: Event) -> None:
+            raise asyncio.CancelledError("shutdown")
+
+        monkeypatch.setattr(bus, "publish", raise_cancelled)
+
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.post(f"{url}/webhook/open", data=b"{}") as r:
+                    assert r.status != 503
+            except aiohttp.ClientError:
+                pass
+
+
+class TestOuterErrorGuard:
+    async def test_unexpected_exception_returns_503_not_500(
+        self,
+        webhook_env,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, _, url = webhook_env
+
+        def broken_safe_headers(_h):
+            raise ValueError("intentional test failure")
+
+        monkeypatch.setattr(
+            "proctor.triggers.webhook._safe_headers",
+            broken_safe_headers,
+        )
+
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(f"{url}/webhook/open", data=b"{}") as r,
+        ):
+            assert r.status == 503
+            assert r.headers["Retry-After"] == "5"
