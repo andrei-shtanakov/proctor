@@ -7,11 +7,15 @@ import pytest
 
 from proctor.core.bootstrap import Application
 from proctor.core.config import (
+    BearerAuthConfig,
+    NoneAuthConfig,
     ProctorConfig,
     RouteRule,
     ScheduleItemConfig,
     SchedulerConfig,
     TelegramConfig,
+    WebhookConfig,
+    WebhookPathConfig,
 )
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event
@@ -731,3 +735,82 @@ class TestRouterIntegration:
             assert "trigger.terminal" not in patterns
         finally:
             await app.stop()
+
+
+class TestWebhookBootstrap:
+    @pytest.mark.anyio
+    async def test_webhook_trigger_started_when_configured(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """WebhookTrigger is instantiated and started when
+        config.webhook is not None."""
+        monkeypatch.setenv("CI_TOKEN", "x")
+        cfg = ProctorConfig(
+            data_dir=tmp_path / "proctor_data",
+            webhook=WebhookConfig(
+                port=0,
+                paths={
+                    "/webhook/ci": WebhookPathConfig(
+                        auth=BearerAuthConfig(secret_env="CI_TOKEN"),
+                    ),
+                },
+            ),
+        )
+        app = Application(cfg)
+        await app.start()
+        try:
+            assert app._webhook_trigger is not None
+            assert app._webhook_trigger.bound_port is not None
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_no_webhook_when_config_missing(self, tmp_path: Path) -> None:
+        """When config.webhook is None, _webhook_trigger stays None."""
+        cfg = ProctorConfig(data_dir=tmp_path / "proctor_data")
+        app = Application(cfg)
+        await app.start()
+        try:
+            assert app._webhook_trigger is None
+        finally:
+            await app.stop()
+
+    @pytest.mark.anyio
+    async def test_webhook_stopped_first_in_application_stop(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Application.stop() must close WebhookTrigger before other
+        components."""
+        monkeypatch.setenv("CI_TOKEN", "x")
+        cfg = ProctorConfig(
+            data_dir=tmp_path / "proctor_data",
+            webhook=WebhookConfig(
+                port=0,
+                paths={
+                    "/webhook/open": WebhookPathConfig(
+                        auth=NoneAuthConfig(),
+                    ),
+                },
+            ),
+        )
+        app = Application(cfg)
+        await app.start()
+
+        order: list[str] = []
+        real_webhook_stop = app._webhook_trigger.stop  # type: ignore[union-attr]
+        real_memory_close = app.memory.close
+
+        async def tagged_webhook_stop() -> None:
+            order.append("webhook")
+            await real_webhook_stop()
+
+        async def tagged_memory_close() -> None:
+            order.append("memory")
+            await real_memory_close()
+
+        assert app._webhook_trigger is not None
+        app._webhook_trigger.stop = tagged_webhook_stop  # type: ignore[method-assign]
+        app.memory.close = tagged_memory_close  # type: ignore[method-assign]
+
+        await app.stop()
+        assert order.index("webhook") < order.index("memory")
