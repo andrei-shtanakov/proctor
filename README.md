@@ -260,9 +260,15 @@ TelegramTrigger (Bot API) ├─▶ Event(type="trigger.*")
 SchedulerTrigger (cron)  ─┘
     │
     ▼
-  EventBus
+  EventBus (subscribes "trigger.*")
     │
-    ▼ Application._handle_terminal()
+    ▼ Application._handle_trigger_event(event)
+    │   │
+    │   ▼ Router.route(event) → WorkflowSpec | None
+    │         │                     │
+    │         │ (None — publishes routing.unmatched or
+    │         │  routing.binding_failed and returns)
+    │         ▼
 Task(PENDING) → StateManager.save_task() → SQLite (state.db)
     │
     ▼ Task(RUNNING)
@@ -375,7 +381,7 @@ Tasks are saved at every state transition. Episodes are saved after each workflo
 |-------|-------|--------|
 | 0 | Foundation (models, config, bus, state, bootstrap) | Done |
 | 1 | MVP (workflow engine, DAG, agent runtime, terminal trigger) | Done |
-| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory) | Partial (scheduler, Telegram, episodic memory done; router, webhook pending) |
+| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory) | Partial (scheduler, Telegram, episodic memory, router, LiteLLM done; webhook, NATS pending) |
 | 3 | Distribution (NATS transport, worker pool, task queue, MCP tools) | Planned |
 | 4 | Advanced orchestration (FSM, multi-agent, self-modification) | Planned |
 | 5 | Observability & control (OpenTelemetry, dashboards, audit log, TUI) | Planned |
