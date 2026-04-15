@@ -93,4 +93,26 @@ class Router:
             )
             return base.model_copy(update={"prompt": prompt})
 
-        return None  # unmatched handling comes in Task 8
+        # no rule matched
+        logger.warning(
+            "No route matched event: type=%s source=%s id=%s (tried %d patterns: %s)",
+            event.type,
+            event.source,
+            event.id,
+            len(self._routes),
+            ", ".join(r.event_pattern for r in self._routes),
+        )
+        await self._bus.publish(
+            Event(
+                type="routing.unmatched",
+                source="router",
+                payload={
+                    "original_event_id": event.id,
+                    "original_type": event.type,
+                    "original_source": event.source,
+                    "original_payload": event.payload,
+                    "original_timestamp": event.timestamp.isoformat(),
+                },
+            )
+        )
+        return None

@@ -207,3 +207,59 @@ class TestRouterHappyPath:
         assert spec.description == "original description"
         assert len(spec.steps) == 1
         assert spec.prompt == "go"
+
+
+class TestRouterUnmatched:
+    @pytest.mark.anyio
+    async def test_unmatched_publishes_routing_unmatched(
+        self,
+        bus: EventBus,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        import logging
+
+        captured: list[Event] = []
+
+        async def capture(event: Event) -> None:
+            captured.append(event)
+
+        bus.subscribe("routing.*", capture)
+
+        workflows = {
+            "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.terminal",
+                workflow_id="chat",
+                prompt_from_payload="text",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        original = Event(
+            type="trigger.webhook",
+            source="webhook",
+            payload={"body": "x"},
+        )
+
+        with caplog.at_level(logging.WARNING, logger="proctor.core.router"):
+            spec = await router.route(original)
+
+        assert spec is None
+        assert len(captured) == 1
+        rout = captured[0]
+        assert rout.type == "routing.unmatched"
+        assert rout.source == "router"
+        assert rout.payload["original_event_id"] == original.id
+        assert rout.payload["original_type"] == "trigger.webhook"
+        assert rout.payload["original_source"] == "webhook"
+        assert rout.payload["original_payload"] == {"body": "x"}
+        assert "original_timestamp" in rout.payload
+
+        # WARNING log includes tried patterns
+        assert any(
+            "trigger.terminal" in r.message
+            for r in caplog.records
+            if r.levelname == "WARNING"
+        )
