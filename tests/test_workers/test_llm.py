@@ -98,6 +98,9 @@ class TestHappyPath:
 
         cfg = LLMConfig(default_model="claude-sonnet-4-20250514")
         call = build_llm_call(cfg, memory)
+        # LLMCall alias is single-arg (Callable[[str], Awaitable[str]]).
+        # The closure's optional `model` kwarg exists at runtime but isn't
+        # in the declared type. A Protocol alias would remove this ignore.
         await call("hi", model="gpt-4o")  # type: ignore[call-arg]
 
         assert seen_models == ["gpt-4o"]
