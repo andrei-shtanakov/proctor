@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from proctor.core.memory import EpisodicMemory
-from proctor.core.models import Episode
+from proctor.core.models import Episode, LLMCallRecord
 
 # aiosqlite is asyncio-only; override the anyio_backend fixture
 pytestmark = pytest.mark.anyio
@@ -220,3 +220,71 @@ class TestSearchWildcardEscape:
         results = await memory.search_episodes("a_b")
         assert len(results) == 1
         assert results[0].user_input == "a_b"
+
+
+class TestLLMCallsTable:
+    async def test_save_and_read_back(self, memory: EpisodicMemory) -> None:
+        rec = LLMCallRecord(
+            episode_id="ep-1",
+            task_id="task-1",
+            step_id="step-a",
+            model="claude-sonnet-4-20250514",
+            fallback_used=False,
+            prompt_tokens=100,
+            completion_tokens=50,
+            cache_read_tokens=10,
+            cache_write_tokens=20,
+            latency_ms=250,
+            error=None,
+        )
+        await memory.save_llm_call(rec)
+
+        # Read via raw SQL — we don't add a public getter yet
+        assert memory._db is not None
+        cursor = await memory._db.execute(
+            "SELECT * FROM llm_calls WHERE id = ?", (rec.id,)
+        )
+        row = await cursor.fetchone()
+        assert row is not None
+        assert row["episode_id"] == "ep-1"
+        assert row["task_id"] == "task-1"
+        assert row["step_id"] == "step-a"
+        assert row["model"] == "claude-sonnet-4-20250514"
+        assert row["fallback_used"] == 0
+        assert row["prompt_tokens"] == 100
+        assert row["completion_tokens"] == 50
+        assert row["cache_read_tokens"] == 10
+        assert row["cache_write_tokens"] == 20
+        assert row["latency_ms"] == 250
+        assert row["error"] is None
+
+    async def test_save_error_record(self, memory: EpisodicMemory) -> None:
+        rec = LLMCallRecord(
+            model="claude-sonnet-4-20250514",
+            error="RateLimitError: 429",
+        )
+        await memory.save_llm_call(rec)
+        assert memory._db is not None
+        cursor = await memory._db.execute(
+            "SELECT error FROM llm_calls WHERE id = ?", (rec.id,)
+        )
+        row = await cursor.fetchone()
+        assert row is not None
+        assert row["error"] == "RateLimitError: 429"
+
+    async def test_indexes_exist(self, memory: EpisodicMemory) -> None:
+        assert memory._db is not None
+        cursor = await memory._db.execute("PRAGMA index_list('llm_calls')")
+        names = {row["name"] for row in await cursor.fetchall()}
+        assert "idx_llm_calls_episode" in names
+        assert "idx_llm_calls_task" in names
+        assert "idx_llm_calls_created" in names
+
+    async def test_initialize_idempotent(self, tmp_path: Path) -> None:
+        mem = EpisodicMemory(tmp_path / "episodes.db")
+        await mem.initialize()
+        await mem.close()
+        # Re-open on the same file — CREATE TABLE IF NOT EXISTS must not raise
+        mem2 = EpisodicMemory(tmp_path / "episodes.db")
+        await mem2.initialize()
+        await mem2.close()

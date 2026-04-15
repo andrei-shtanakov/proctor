@@ -7,7 +7,7 @@ from pathlib import Path
 
 import aiosqlite
 
-from proctor.core.models import Episode
+from proctor.core.models import Episode, LLMCallRecord
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,34 @@ CREATE TABLE IF NOT EXISTS episodes (
 
 _CREATE_INDEX_EPISODES_TS = (
     "CREATE INDEX IF NOT EXISTS idx_episodes_timestamp ON episodes(timestamp)"
+)
+
+_CREATE_LLM_CALLS = """
+CREATE TABLE IF NOT EXISTS llm_calls (
+    id                 TEXT PRIMARY KEY,
+    episode_id         TEXT,
+    task_id            TEXT,
+    step_id            TEXT,
+    model              TEXT NOT NULL,
+    fallback_used      INTEGER NOT NULL DEFAULT 0,
+    prompt_tokens      INTEGER,
+    completion_tokens  INTEGER,
+    cache_read_tokens  INTEGER,
+    cache_write_tokens INTEGER,
+    latency_ms         INTEGER,
+    error              TEXT,
+    created_at         TEXT NOT NULL
+)
+"""
+
+_CREATE_INDEX_LLM_CALLS_EPISODE = (
+    "CREATE INDEX IF NOT EXISTS idx_llm_calls_episode ON llm_calls(episode_id)"
+)
+_CREATE_INDEX_LLM_CALLS_TASK = (
+    "CREATE INDEX IF NOT EXISTS idx_llm_calls_task ON llm_calls(task_id)"
+)
+_CREATE_INDEX_LLM_CALLS_CREATED = (
+    "CREATE INDEX IF NOT EXISTS idx_llm_calls_created ON llm_calls(created_at)"
 )
 
 # --- DML ---
@@ -54,6 +82,14 @@ _SEARCH_EPISODES = (
     " ORDER BY timestamp DESC LIMIT ?"
 )
 
+_INSERT_LLM_CALL = """
+INSERT INTO llm_calls (
+    id, episode_id, task_id, step_id, model, fallback_used,
+    prompt_tokens, completion_tokens, cache_read_tokens, cache_write_tokens,
+    latency_ms, error, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
 
 class EpisodicMemory:
     """Async SQLite store for episodic interaction history."""
@@ -70,6 +106,10 @@ class EpisodicMemory:
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute(_CREATE_EPISODES)
         await self._db.execute(_CREATE_INDEX_EPISODES_TS)
+        await self._db.execute(_CREATE_LLM_CALLS)
+        await self._db.execute(_CREATE_INDEX_LLM_CALLS_EPISODE)
+        await self._db.execute(_CREATE_INDEX_LLM_CALLS_TASK)
+        await self._db.execute(_CREATE_INDEX_LLM_CALLS_CREATED)
         await self._db.commit()
         logger.info("EpisodicMemory initialized: %s", self._db_path)
 
@@ -96,6 +136,30 @@ class EpisodicMemory:
                     if episode.workflow_result is not None
                     else None
                 ),
+            ),
+        )
+        await self._db.commit()
+
+    async def save_llm_call(self, record: LLMCallRecord) -> None:
+        """Insert an LLM call record. Each call produces a new row."""
+        if self._db is None:
+            raise RuntimeError("EpisodicMemory not initialized")
+        await self._db.execute(
+            _INSERT_LLM_CALL,
+            (
+                record.id,
+                record.episode_id,
+                record.task_id,
+                record.step_id,
+                record.model,
+                1 if record.fallback_used else 0,
+                record.prompt_tokens,
+                record.completion_tokens,
+                record.cache_read_tokens,
+                record.cache_write_tokens,
+                record.latency_ms,
+                record.error,
+                record.created_at.isoformat(),
             ),
         )
         await self._db.commit()
