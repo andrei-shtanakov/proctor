@@ -21,7 +21,7 @@ from aiohttp import web
 
 from proctor.core.bus import EventBus
 from proctor.core.config import WebhookConfig
-from proctor.core.models import Event  # noqa: F401 — used in Task 7's handler
+from proctor.core.models import Event
 from proctor.triggers.base import Trigger
 
 logger = logging.getLogger(__name__)
@@ -67,18 +67,10 @@ def _safe_headers(headers: Mapping[str, str]) -> dict[str, str]:
     return result
 
 
-# Auth failure reason codes. Never include raw header values, signatures,
-# or tokens in any log line — logs often have broader read access than
-# the SQLite DBs.
-_AUTH_REASONS = frozenset(
-    {
-        "missing_header",
-        "bad_prefix",
-        "bad_signature",
-        "non_bearer_scheme",
-        "wrong_token",
-    }
-)
+# Auth failures log only the path, never raw header values, signatures,
+# or tokens — logs often have broader read access than the SQLite DBs.
+# Reason-code emission is a follow-up (requires _verify_auth to return
+# (bool, reason) instead of just bool).
 
 
 def _verify_auth(
