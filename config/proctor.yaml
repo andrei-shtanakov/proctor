@@ -20,3 +20,37 @@ nats:
 scheduler:
   poll_interval_seconds: 30
   enabled: true
+
+telegram:
+  bot_token: "your-bot-token"
+  allowed_chat_ids: []
+  poll_timeout: 30
+
+workflows:
+  chat:
+    workflow_id: chat
+    mode: simple
+  heartbeat:
+    workflow_id: heartbeat
+    mode: simple
+
+routes:
+  - event_pattern: "trigger.terminal"
+    workflow_id: chat
+    prompt_from_payload: text
+  - event_pattern: "trigger.telegram"
+    workflow_id: chat
+    prompt_from_payload: text
+  - event_pattern: "trigger.scheduler"
+    workflow_id: heartbeat
+    prompt_from_payload: prompt
+
+schedules:
+  - name: heartbeat
+    interval_seconds: 3600
+    payload:
+      prompt: "Check system status and report any anomalies"
+  - name: daily-report
+    cron: "0 9 * * *"
+    payload:
+      prompt: "Produce the daily operations report"

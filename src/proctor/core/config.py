@@ -1,12 +1,15 @@
 """Configuration system: YAML loading with pydantic models and defaults."""
 
 import logging
+from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import yaml
 from croniter import croniter
 from pydantic import BaseModel, Field, model_validator
+
+from proctor.workflow.spec import WorkflowSpec
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,24 @@ class ScheduleItemConfig(BaseModel):
         return self
 
 
+class RouteRule(BaseModel):
+    """Declarative rule: event pattern → catalog workflow + prompt binding."""
+
+    event_pattern: str
+    workflow_id: str
+    prompt: str | None = None
+    prompt_from_payload: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_prompt_source(self) -> Self:
+        sources = (self.prompt is not None, self.prompt_from_payload is not None)
+        if sum(sources) != 1:
+            raise ValueError(
+                "RouteRule must specify exactly one of: prompt, prompt_from_payload"
+            )
+        return self
+
+
 class SchedulerConfig(BaseModel):
     """Task scheduler configuration."""
 
@@ -85,6 +106,53 @@ class ProctorConfig(BaseModel):
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     schedules: list[ScheduleItemConfig] = []
+    workflows: dict[str, WorkflowSpec] = Field(default_factory=dict)
+    routes: list[RouteRule] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_catalog_keys(self) -> Self:
+        """Ensure catalog key matches spec.workflow_id."""
+        for key, spec in self.workflows.items():
+            if spec.workflow_id != key:
+                raise ValueError(
+                    f"workflow catalog key {key!r} does not match "
+                    f"spec.workflow_id {spec.workflow_id!r}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_route_refs(self) -> Self:
+        for i, rule in enumerate(self.routes):
+            if rule.workflow_id not in self.workflows:
+                raise ValueError(
+                    f"route #{i} pattern={rule.event_pattern!r} references "
+                    f"unknown workflow_id {rule.workflow_id!r}. "
+                    f"Known workflows: {sorted(self.workflows)}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _no_shadowed_routes(self) -> Self:
+        for i, earlier in enumerate(self.routes):
+            for j_offset, later in enumerate(self.routes[i + 1 :]):
+                j = i + 1 + j_offset
+                if _is_strictly_broader(earlier.event_pattern, later.event_pattern):
+                    raise ValueError(
+                        f"route #{i} pattern={earlier.event_pattern!r} "
+                        f"shadows route #{j} pattern={later.event_pattern!r}. "
+                        "Put specific rules before catch-all rules."
+                    )
+        return self
+
+
+def _is_strictly_broader(a: str, b: str) -> bool:
+    """True if fnmatch pattern `a` strictly subsumes pattern `b`.
+
+    Heuristic: treat `b` as a literal string. If ``fnmatch(b, a)`` matches
+    and ``fnmatch(a, b)`` does not, then `a` covers every concrete event
+    that `b` covers, plus more.
+    """
+    return fnmatchcase(b, a) and not fnmatchcase(a, b)
 
 
 def load_config(path: Path | str | None = None) -> ProctorConfig:

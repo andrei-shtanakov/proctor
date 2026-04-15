@@ -6,7 +6,13 @@ Proctor orchestrates LLM-powered agents that execute workflows (simple prompts, 
 
 ## Status
 
-Phase 0 (Foundation) and Phase 1 (MVP) complete. Phase 2 partially complete: SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), and EpisodicMemory are implemented. The system accepts terminal input, Telegram messages, and scheduled events; executes simple and DAG workflows via LLM; and persists task state and episodic history in SQLite. NATS messaging, router, and webhook trigger are planned for remaining Phase 2 work.
+Phase 0 (Foundation) and Phase 1 (MVP) complete. Phase 2 in progress:
+SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling),
+EpisodicMemory, LiteLLM integration, and the declarative Router are all
+implemented. The system accepts terminal input, Telegram messages, and
+scheduled events; routes them to catalog workflows via the Router; and
+persists task state and episodic history in SQLite. NATS messaging and
+the webhook trigger are the remaining Phase 2 items.
 
 ## Requirements
 
@@ -92,6 +98,70 @@ export ANTHROPIC_API_KEY=sk-...    # for Claude models
 export OPENAI_API_KEY=sk-...       # for OpenAI models
 # Ollama models work without API keys (local)
 ```
+
+## Routing
+
+Trigger events (`trigger.terminal`, `trigger.telegram`, `trigger.scheduler`,
+future `trigger.webhook`) flow through a declarative Router that matches
+each event against a list of rules and dispatches it to a named workflow.
+
+Example (`config/proctor.yaml` excerpt):
+
+```yaml
+workflows:
+  chat:
+    workflow_id: chat
+    mode: simple
+  heartbeat:
+    workflow_id: heartbeat
+    mode: simple
+
+routes:
+  - event_pattern: "trigger.terminal"
+    workflow_id: chat
+    prompt_from_payload: text
+  - event_pattern: "trigger.telegram"
+    workflow_id: chat
+    prompt_from_payload: text
+  - event_pattern: "trigger.scheduler"
+    workflow_id: heartbeat
+    prompt_from_payload: prompt
+```
+
+Rule semantics:
+
+- **First match wins** — rules are iterated in YAML order. Put specific
+  patterns before broader ones; the loader rejects configurations where
+  a broader rule precedes a narrower one.
+- **Prompt binding** — each rule specifies exactly one of `prompt`
+  (literal) or `prompt_from_payload` (dotted path into `event.payload`).
+- **Unmatched events** publish a `routing.unmatched` event on the bus
+  and log a WARNING; no task is created. Binding failures publish
+  `routing.binding_failed`. Both are intended for dashboards and alerts.
+
+### Upgrading to LABS-65
+
+The Router replaces the previous hard-coded handler for terminal input.
+**Breaking:** a running Proctor without `workflows:`/`routes:` will
+accept stdin lines but route them to nobody (`routing.unmatched` WARNING
+in the log). To restore the pre-LABS-65 terminal behavior, add:
+
+```yaml
+workflows:
+  chat:
+    workflow_id: chat
+    mode: simple
+
+routes:
+  - event_pattern: "trigger.terminal"
+    workflow_id: chat
+    prompt_from_payload: text
+```
+
+With Telegram / Scheduler triggers already enabled in your config,
+either add matching route rules now or accept the `routing.unmatched`
+signal as a diagnostic (previously those triggers published to nobody
+silently — this is an observability improvement).
 
 ## Development
 
@@ -190,9 +260,15 @@ TelegramTrigger (Bot API) ├─▶ Event(type="trigger.*")
 SchedulerTrigger (cron)  ─┘
     │
     ▼
-  EventBus
+  EventBus (subscribes "trigger.*")
     │
-    ▼ Application._handle_terminal()
+    ▼ Application._handle_trigger_event(event)
+    │   │
+    │   ▼ Router.route(event) → WorkflowSpec | None
+    │         │                     │
+    │         │ (None — publishes routing.unmatched or
+    │         │  routing.binding_failed and returns)
+    │         ▼
 Task(PENDING) → StateManager.save_task() → SQLite (state.db)
     │
     ▼ Task(RUNNING)
@@ -305,7 +381,7 @@ Tasks are saved at every state transition. Episodes are saved after each workflo
 |-------|-------|--------|
 | 0 | Foundation (models, config, bus, state, bootstrap) | Done |
 | 1 | MVP (workflow engine, DAG, agent runtime, terminal trigger) | Done |
-| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory) | Partial (scheduler, Telegram, episodic memory done; router, webhook pending) |
+| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory) | Partial (scheduler, Telegram, episodic memory, router, LiteLLM done; webhook, NATS pending) |
 | 3 | Distribution (NATS transport, worker pool, task queue, MCP tools) | Planned |
 | 4 | Advanced orchestration (FSM, multi-agent, self-modification) | Planned |
 | 5 | Observability & control (OpenTelemetry, dashboards, audit log, TUI) | Planned |

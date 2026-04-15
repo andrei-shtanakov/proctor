@@ -9,11 +9,13 @@ from proctor.core.config import (
     LLMConfig,
     NATSConfig,
     ProctorConfig,
+    RouteRule,
     ScheduleItemConfig,
     SchedulerConfig,
     TelegramConfig,
     load_config,
 )
+from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
 
 class TestLLMConfig:
@@ -408,6 +410,184 @@ class TestLoadConfig:
             cfg = load_config(example)
             assert cfg.node_id == "node-local"
             assert cfg.llm.default_model == "claude-sonnet-4-20250514"
+
+
+class TestRouteRule:
+    def test_literal_prompt(self) -> None:
+        from proctor.core.config import RouteRule
+
+        rule = RouteRule(
+            event_pattern="trigger.terminal",
+            workflow_id="chat",
+            prompt="hi",
+        )
+        assert rule.prompt == "hi"
+        assert rule.prompt_from_payload is None
+
+    def test_payload_prompt(self) -> None:
+        from proctor.core.config import RouteRule
+
+        rule = RouteRule(
+            event_pattern="trigger.terminal",
+            workflow_id="chat",
+            prompt_from_payload="text",
+        )
+        assert rule.prompt is None
+        assert rule.prompt_from_payload == "text"
+
+    def test_both_sources_raises(self) -> None:
+        from proctor.core.config import RouteRule
+
+        with pytest.raises(ValueError, match="exactly one"):
+            RouteRule(
+                event_pattern="trigger.terminal",
+                workflow_id="chat",
+                prompt="hi",
+                prompt_from_payload="text",
+            )
+
+    def test_neither_source_raises(self) -> None:
+        from proctor.core.config import RouteRule
+
+        with pytest.raises(ValueError, match="exactly one"):
+            RouteRule(
+                event_pattern="trigger.terminal",
+                workflow_id="chat",
+            )
+
+
+class TestWorkflowCatalog:
+    def test_empty_catalog_valid(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.workflows == {}
+
+    def test_catalog_key_matches_field(self) -> None:
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            }
+        )
+        assert "chat" in cfg.workflows
+
+    def test_catalog_key_mismatch_raises(self) -> None:
+        with pytest.raises(ValueError, match="workflow_id"):
+            ProctorConfig(
+                workflows={
+                    "chat": WorkflowSpec(
+                        workflow_id="other",
+                        mode=WorkflowMode.SIMPLE,
+                    ),
+                }
+            )
+
+
+class TestRoutes:
+    def test_empty_routes_valid(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.routes == []
+
+    def test_routes_referencing_existing_workflow(self) -> None:
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            },
+            routes=[
+                RouteRule(
+                    event_pattern="trigger.terminal",
+                    workflow_id="chat",
+                    prompt_from_payload="text",
+                ),
+            ],
+        )
+        assert len(cfg.routes) == 1
+
+    def test_orphan_workflow_id_raises(self) -> None:
+        with pytest.raises(ValueError, match="unknown workflow_id"):
+            ProctorConfig(
+                workflows={
+                    "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+                },
+                routes=[
+                    RouteRule(
+                        event_pattern="trigger.terminal",
+                        workflow_id="missing",
+                        prompt_from_payload="text",
+                    ),
+                ],
+            )
+
+
+class TestShadowDetection:
+    def test_narrow_before_broad_passes(self) -> None:
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            },
+            routes=[
+                RouteRule(
+                    event_pattern="trigger.telegram",
+                    workflow_id="chat",
+                    prompt_from_payload="text",
+                ),
+                RouteRule(
+                    event_pattern="trigger.*",
+                    workflow_id="chat",
+                    prompt_from_payload="text",
+                ),
+            ],
+        )
+        assert len(cfg.routes) == 2
+
+    def test_broad_before_narrow_raises(self) -> None:
+        with pytest.raises(ValueError, match="shadows"):
+            ProctorConfig(
+                workflows={
+                    "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+                },
+                routes=[
+                    RouteRule(
+                        event_pattern="trigger.*",
+                        workflow_id="chat",
+                        prompt_from_payload="text",
+                    ),
+                    RouteRule(
+                        event_pattern="trigger.telegram",
+                        workflow_id="chat",
+                        prompt_from_payload="text",
+                    ),
+                ],
+            )
+
+    def test_intersecting_but_not_subsuming_passes(self) -> None:
+        """Patterns that overlap without one subsuming the other."""
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            },
+            routes=[
+                RouteRule(
+                    event_pattern="trigger.a.*",
+                    workflow_id="chat",
+                    prompt="x",
+                ),
+                RouteRule(
+                    event_pattern="trigger.*.b",
+                    workflow_id="chat",
+                    prompt="x",
+                ),
+            ],
+        )
+        assert len(cfg.routes) == 2
+
+
+def test_is_strictly_broader_direct() -> None:
+    from proctor.core.config import _is_strictly_broader
+
+    assert _is_strictly_broader("trigger.*", "trigger.telegram") is True
+    assert _is_strictly_broader("trigger.telegram", "trigger.*") is False
+    assert _is_strictly_broader("trigger.telegram", "trigger.telegram") is False
+    assert _is_strictly_broader("trigger.a.*", "trigger.*.b") is False
+    assert _is_strictly_broader("trigger.*.b", "trigger.a.*") is False
 
 
 class TestPublicExports:

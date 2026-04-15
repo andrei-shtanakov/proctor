@@ -7,9 +7,10 @@ import pytest
 
 from proctor.core.bootstrap import Application
 from proctor.core.bus import EventBus
-from proctor.core.config import ProctorConfig, ScheduleItemConfig
+from proctor.core.config import ProctorConfig, RouteRule, ScheduleItemConfig
 from proctor.core.models import Event, TaskStatus
 from proctor.triggers.scheduler import SchedulerTrigger
+from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
 # aiosqlite is asyncio-only
 pytestmark = pytest.mark.anyio
@@ -23,8 +24,20 @@ def anyio_backend() -> str:
 
 @pytest.fixture
 def tmp_config(tmp_path: Path) -> ProctorConfig:
-    """Config with a temporary data directory."""
-    return ProctorConfig(data_dir=tmp_path / "proctor_data")
+    """Config with workflows and terminal route for router-driven integration tests."""
+    return ProctorConfig(
+        data_dir=tmp_path / "proctor_data",
+        workflows={
+            "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+        },
+        routes=[
+            RouteRule(
+                event_pattern="trigger.terminal",
+                workflow_id="chat",
+                prompt_from_payload="text",
+            ),
+        ],
+    )
 
 
 class TestTerminalToResult:
@@ -93,7 +106,8 @@ class TestTerminalToResult:
             assert len(tasks) == 1
             task = tasks[0]
             assert task.status == TaskStatus.COMPLETED
-            assert task.spec == {"prompt": "hello"}
+            # spec is the full WorkflowSpec dump; prompt is the resolved payload value
+            assert task.spec["prompt"] == "hello"
             assert task.result == {"output": "response: hello"}
             assert task.trigger_event is not None
         finally:
