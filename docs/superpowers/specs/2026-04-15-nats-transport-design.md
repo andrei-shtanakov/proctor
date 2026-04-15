@@ -73,6 +73,7 @@ Atomic merge within one day. 68a can review first (pure refactor, easier eye); 6
 | 18 | Dedup symmetric across both transports via `Nats-Msg-Id` | Identical observable behaviour for overlapping subscriptions |
 | 19 | Subscription ownership: Application-level handlers in `Application.__init__`; component-level in `component.start()` | Policy removes PR-author ambiguity |
 | 20 | Parametrized `[local, nats]` tests only for contract behaviour, not implementation details | CI time budget discipline |
+| 21 | Handler dispatch via `asyncio.create_task` (fire-and-forget per handler); `drain()` awaits `self._handler_tasks` with timeout | Slow handler doesn't block pipeline; symmetric behaviour in both transports |
 
 Full ADR text: `docs/superpowers/adr/2026-04-15-nats-transport.md` (generated alongside this spec).
 
@@ -299,8 +300,15 @@ def _build_event_transport(config: ProctorConfig) -> EventTransport:
         return LocalEventTransport(
             max_payload=config.events.max_payload,
         )
+    # Inject node_role into NATS client name for debuggability —
+    # `nats server ls` shows which role is which on shared clusters.
+    nats_cfg = config.nats
+    if nats_cfg.name == f"proctor-{socket.gethostname()}":  # fallback default
+        nats_cfg = nats_cfg.model_copy(
+            update={"name": f"proctor-{config.node_role}-{socket.gethostname()}"}
+        )
     return NATSEventTransport(
-        config.nats, events_config=config.events,
+        nats_cfg, events_config=config.events,
     )
 
 
@@ -397,21 +405,40 @@ EventTransport.publish(event):
 nats.py inbound message (subject, data, headers)
   ↓
 NATSEventTransport._on_message(msg):
-  1. Verify subject == f"{prefix}.events.{headers['event-type']}"
-     Mismatch → logger.warning (rate-limited), drop.
-  2. Verify headers["content-type"] == "application/json".
-     Mismatch → drop + log.
-  3. Verify (event_type, int(headers["schema-version"])) ∈ decoder registry.
-     Unknown version → drop + log.
-  4. Check clock skew:
-       skew = now_utc - parse(headers["published-at"])
-       if abs(skew) > 1h → rate-limited WARN per publisher.
-  5. Dedup by (handler_id, Nats-Msg-Id). Cache miss → proceed.
-  6. decoder = _DECODERS[(event_type, version)]
-     event = decoder(data)  # Event.model_validate_json
-  7. For each matching subscription:
-       if not dedup.seen(sub.handler, msg_id):
-           await _safe_invoke(sub.handler, event)
+  1. Parse headers defensively:
+       try:
+           event_type = headers["event-type"]
+           version = int(headers["schema-version"])
+           content_type = headers["content-type"]
+           msg_id = headers["Nats-Msg-Id"]
+           published_at = parse_iso8601(headers["published-at"])
+       except (KeyError, ValueError) as e:
+           raise EventSchemaError(f"malformed headers: {e}")
+     EventSchemaError is caught one frame up → rate-limited WARN + drop.
+     NEVER propagates beyond transport (ADR #6).
+  2. Verify subject == f"{prefix}.events.{event_type}".
+     Mismatch → raise EventSchemaError("subject/header mismatch").
+  3. Verify content_type == "application/json".
+     Mismatch → raise EventSchemaError("unsupported content-type").
+  4. Lookup decoder in registry (ADR #12):
+       decoder = _DECODERS.get((event_type, version)) or _DECODERS.get(("*", version))
+       if decoder is None:
+           raise EventSchemaError(
+               f"no decoder for ({event_type}, v{version}); "
+               f"receiver is forward-compat-safe (drop)"
+           )
+  5. Check clock skew:
+       skew = now_utc - published_at
+       if abs(skew) > 1h → _rate_log.warn("clock_skew:{host}", ...)
+  6. event = decoder(data)  # typically Event.model_validate_json
+  7. Dispatch concurrently as background tasks (ADR #21):
+       for sub in matches(subject):
+           if dedup.seen(sub.handler, msg_id): continue
+           task = asyncio.create_task(_safe_invoke(sub.handler, event))
+           self._handler_tasks.add(task)
+           task.add_done_callback(self._handler_tasks.discard)
+     Slow handler does NOT block pipeline; drain() awaits all
+     outstanding tasks before stop.
 ```
 
 Subscribe buffering + flush on start:
@@ -531,8 +558,11 @@ class NATSConfig(BaseModel):
     tls_client_cert: Path | None = None   # placeholder (full mTLS OOS)
     tls_client_key: Path | None = None    # placeholder
 
+    # Note: name default with node_role suffix is populated in
+    # _build_event_transport (node_role lives on ProctorConfig, not here).
+    # Falls back to hostname-only if role is unknown.
     @model_validator(mode="after")
-    def _populate_name_default(self) -> Self:
+    def _populate_name_fallback(self) -> Self:
         if not self.name:
             self.name = f"proctor-{socket.gethostname()}"
         return self
@@ -823,6 +853,31 @@ async def wait_for_events(
             await asyncio.wait_for(queue.get(), timeout=timeout)
         )
     return events
+
+
+# --- Toxiproxy fixture for reconnect tests ---
+
+@pytest.fixture
+async def nats_via_toxiproxy():
+    """NATS behind Toxiproxy for programmable network injection.
+
+    toxi.disable() → client sees disconnect; toxi.enable() → client
+    auto-reconnects. Used for honest reconnect tests without killing
+    the NATS container (which would change port mapping).
+    """
+    from testcontainers.nats import NatsContainer
+    # testcontainers[toxiproxy] provides ToxiproxyContainer
+    from testcontainers.toxiproxy import ToxiproxyContainer
+
+    with NatsContainer("nats:2-alpine") as nats, \
+         ToxiproxyContainer() as toxy:
+        # Bridge: clients connect to toxiproxy; toxiproxy forwards to NATS.
+        proxy = toxy.create_proxy(
+            "nats-proxy",
+            upstream=f"{nats.get_container_host_ip()}:{nats.get_exposed_port(4222)}",
+            listen="0.0.0.0:4223",
+        )
+        yield proxy, f"nats://{toxy.get_container_host_ip()}:{toxy.get_exposed_port(4223)}"
 ```
 
 ### Must-have tests (beyond cross-node signature)
@@ -937,7 +992,7 @@ markers = [
 - [ ] `_RateLimitedLogger` helper with `asyncio.Lock` concurrency.
 - [ ] `LocalEventTransport` implements NATS-wildcard semantics (`*`, `>`, literal; no `?`, no `[...]`).
 - [ ] `LocalEventTransport.publish` enforces `max_payload` via `strict_size_check=True` default.
-- [ ] `_DedupCache` delivers same-handler-overlapping-subscriptions exactly once via `(id(handler), Nats-Msg-Id)` with weak-refs.
+- [ ] `_DedupCache` delivers same-handler-overlapping-subscriptions exactly once via `(id(handler), Nats-Msg-Id)` with weak-refs. Tested handler types: `async def` function, async lambda, bound method (via `WeakMethod`), `functools.partial(async_fn, arg)`, class with `async def __call__`. Each case: same handler subscribed to two overlapping patterns → called exactly once per event.
 - [ ] `EventBus` thin wrapper; no default transport (`EventBus()` → TypeError).
 - [ ] `Application(config, *, event_transport=None)` DI.
 - [ ] Application-level subscribes in `Application.__init__` (buffered, registered at start + flush).
@@ -947,7 +1002,9 @@ markers = [
 - [ ] `WebhookPathConfig.source_name` validator tightened to same charset (all existing source_names pass).
 - [ ] `EventsConfig` with `max_payload`, `drain_timeout` fields.
 - [ ] Audit of all `Event(type=...)` construction sites (constant, f-string, dynamic, external); representative fuzz-test per dynamic source.
-- [ ] Codemod (`EventBus()` → `EventBus(LocalEventTransport())`) applied across 61 call-sites.
+- [ ] Codemod (`EventBus()` → `EventBus(LocalEventTransport())`) applied across 61 call-sites (verified via `rg 'EventBus\s*\(\s*\)' --type py | wc -l`).
+- [ ] Release note documents `WebhookPathConfig.source_name` charset change with migration example (`my-service` → `my_service`). Config load with dash produces clear `ValidationError` pointing at field + recommended rename.
+- [ ] Handler dispatch via `asyncio.create_task` with `self._handler_tasks` tracking set; `drain()` awaits all outstanding tasks within timeout then cancels remainder (ADR #21).
 - [ ] LABS-65/66/67 integration tests all still green — regression firewall.
 - [ ] ADR doc `docs/superpowers/adr/2026-04-15-nats-transport.md` committed.
 
@@ -968,6 +1025,11 @@ markers = [
 - [ ] `publish` during DISCONNECTED/RECONNECTING → `TransportUnavailableError`; no buffering.
 - [ ] `drain()` wraps `nc.drain()` + handler-task await.
 - [ ] Listener handle-based add/remove; sync or async callbacks.
+- [ ] `_DECODERS: dict[tuple[str, int], Callable[[bytes], Event]]` decoder registry with default `("*", 1) → Event.model_validate_json` registered at module import. Lookup on receive: `_DECODERS.get((event_type, v)) or _DECODERS.get(("*", v))`.
+- [ ] Test: publish v1 + receive via default decoder — pass.
+- [ ] Test: register custom decoder for `("trigger.webhook.github", 2)`, publish v2 message — custom decoder used instead of default.
+- [ ] Test: malformed `schema-version` header (`"abc"`, missing) → `EventSchemaError` caught internally, rate-limited WARN, message dropped, transport survives.
+- [ ] NATS client `name` includes `node_role` when resolved by `_build_event_transport` (e.g. `proctor-core-hostname`); fallback to hostname-only when `NATSConfig.name` explicitly set by user.
 - [ ] **Signature test** `test_cross_node_event_delivery` using Queue + `wait_for_events` (no polling).
 - [ ] Schema-version mismatch dropped + logged (forward-compat).
 - [ ] Backward-compat decoder registry test (v1 bytes in v2 receiver).
@@ -977,6 +1039,44 @@ markers = [
 - [ ] Smoke benchmark (`@pytest.mark.benchmark`, optional).
 - [ ] CI `integration-nats` job on Py 3.11 + 3.12 with GHA `services: nats`.
 - [ ] README `## Multi-node deployment` + `## Running NATS integration tests` + ADR summary + rollback note.
+
+## Open questions (acknowledged, deferred)
+
+Items that surfaced during design but were deliberately deferred or
+parked. Listed so reviewers know they are not oversights.
+
+1. **Handler dispatch concurrency tuning.** ADR #21 commits to
+   `asyncio.create_task` per matching handler (fire-and-forget with
+   drain-time tracking). If in practice some Proctor deployments want
+   strict sequential ordering between N handlers of the same event,
+   add `EventsConfig.handler_dispatch: Literal["concurrent", "sequential"]`
+   — out of scope for LABS-68, flag if the need surfaces.
+2. **`source_name` migration policy.** LABS-68 tightens charset to
+   underscores only. Current dev code uses only underscores already,
+   so no migration needed in-repo. **External operators with dash in
+   their webhook configs will hit a clear `ValidationError` on
+   startup** — release notes + migration example in README. No
+   auto-migration, no deprecation period.
+3. **Toxiproxy fixture network wiring.** Spec shows sketch; real
+   implementation may need to bind Toxiproxy to host network instead
+   of container network, depending on testcontainers version. Allow
+   ~0.5 day buffer in 68b plan for fixture discovery.
+4. **`drain_timeout` default tuning.** 60s is conservative; LLM-heavy
+   workflows may need 120s+. Configurable per deployment; revisit if
+   production observation shows systematic drain timeouts.
+5. **Breaking change coupling with LABS-69.** `NATSConnectionManager`
+   refactor (ADR #10) happens in LABS-69 and will require
+   `NATSEventTransport.__init__` signature change. Flagged but
+   deferred.
+
+## Toolchain requirements
+
+- **`uv >= 0.5`** for PEP 735 `[dependency-groups]` syntax (used for
+  dev-deps in `pyproject.toml`). Current project uv pin verified
+  against `.python-version` / CI toolchain notes before 68b merge.
+- **Python 3.11+** (already project-wide requirement).
+- **Docker** for local integration test runs (testcontainers).
+  Tests skip cleanly with clear message when Docker unavailable.
 
 ## Related issues
 
