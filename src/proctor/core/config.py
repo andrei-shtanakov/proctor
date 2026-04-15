@@ -35,6 +35,14 @@ class NATSConfig(BaseModel):
     max_reconnect_attempts: int = 60
 
 
+class EventsConfig(BaseModel):
+    """Shared events configuration across all EventTransport backends."""
+
+    model_config = ConfigDict(extra="forbid")
+    max_payload: int = 65_536  # bytes; shared with NATS server limits
+    drain_timeout: float = 60.0  # seconds; LLM-heavy handlers need headroom
+
+
 class ScheduleItemConfig(BaseModel):
     """A single scheduled task definition."""
 
@@ -140,7 +148,7 @@ class WebhookPathConfig(BaseModel):
     auth: AuthConfig
 
 
-_SOURCE_NAME_RE = re.compile(r"[a-z][a-z0-9_-]*")
+_SOURCE_NAME_RE = re.compile(r"[a-z][a-z0-9_]*")
 
 
 class WebhookConfig(BaseModel):
@@ -175,7 +183,7 @@ class WebhookConfig(BaseModel):
                 raise ValueError(
                     f"webhook path {path!r}: source_name "
                     f"{effective!r} must match "
-                    f"^[a-z][a-z0-9_-]*$"
+                    f"^[a-z][a-z0-9_]*$"
                 )
             if effective in {"", "*", "?"}:
                 raise ValueError(
@@ -202,6 +210,7 @@ class ProctorConfig(BaseModel):
     log_level: str = "INFO"
     llm: LLMConfig = LLMConfig()
     nats: NATSConfig = NATSConfig()
+    events: EventsConfig = EventsConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     webhook: WebhookConfig | None = None

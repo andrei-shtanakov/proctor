@@ -662,6 +662,68 @@ class TestAuthConfig:
             NoneAuthConfig(secret_env="X")  # type: ignore[call-arg]
 
 
+class TestEventsConfig:
+    def test_defaults(self) -> None:
+        from proctor.core.config import EventsConfig
+
+        cfg = EventsConfig()
+        assert cfg.max_payload == 65_536
+        assert cfg.drain_timeout == 60.0
+
+    def test_in_proctor_config(self) -> None:
+        from proctor.core.config import ProctorConfig
+
+        cfg = ProctorConfig()
+        assert cfg.events.max_payload == 65_536
+
+    def test_extra_forbid(self) -> None:
+        from proctor.core.config import EventsConfig
+
+        with pytest.raises(ValueError):
+            EventsConfig(unknown_field=1)  # type: ignore[call-arg]
+
+
+class TestSourceNameTightened:
+    def test_dash_rejected(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        with pytest.raises(ValueError, match="source_name"):
+            WebhookConfig(
+                paths={
+                    "/webhook/test": WebhookPathConfig(
+                        source_name="my-service",
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+    def test_underscore_ok(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        cfg = WebhookConfig(
+            paths={
+                "/webhook/test": WebhookPathConfig(
+                    source_name="my_service",
+                    auth=HMACAuthConfig(secret_env="X"),
+                ),
+            }
+        )
+        assert cfg.paths["/webhook/test"].source_name == "my_service"
+
+    def test_existing_examples_still_pass(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        for name in ["github", "ci", "heartbeat", "gitlab_push"]:
+            WebhookConfig(
+                paths={
+                    f"/webhook/{name}": WebhookPathConfig(
+                        source_name=name,
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+
 class TestWebhookConfigValidation:
     def test_empty_paths_raises(self) -> None:
         from proctor.core.config import WebhookConfig
