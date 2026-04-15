@@ -86,6 +86,8 @@ class WorkflowEngine:
 
         async def step_runner(step: Step, results: dict[str, StepResult]) -> StepResult:
             """Run a single DAG step by calling LLM with step context."""
+            from proctor.workers.llm import step_id_ctx
+
             # Build prompt from step inputs and dependency outputs
             dep_context = ""
             for dep_id in step.depends_on:
@@ -97,7 +99,11 @@ class WorkflowEngine:
             if dep_context:
                 prompt = f"{prompt}\n\nContext:{dep_context}"
 
-            output = await self._llm_call(prompt)
+            token = step_id_ctx.set(step.id)
+            try:
+                output = await self._llm_call(prompt)
+            finally:
+                step_id_ctx.reset(token)
             return StepResult(step_id=step.id, output=output)
 
         try:

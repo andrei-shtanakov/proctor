@@ -253,6 +253,52 @@ class TestUnsupportedModes:
 # ── Import tests ────────────────────────────────────────────────
 
 
+class TestStepIdContext:
+    @pytest.mark.anyio()
+    async def test_step_runner_sets_step_id_ctx(self) -> None:
+        """DAG step runner sets step_id_ctx around each llm_call."""
+        from proctor.workers.llm import step_id_ctx
+
+        captured: list[str | None] = []
+
+        async def llm_call_recording_ctx(_prompt: str) -> str:
+            captured.append(step_id_ctx.get())
+            return "ok"
+
+        engine = WorkflowEngine(llm_call_recording_ctx)
+        spec = WorkflowSpec(
+            workflow_id="wf-1",
+            mode=WorkflowMode.DAG,
+            steps=[
+                Step(id="a", description="do a", depends_on=[]),
+                Step(id="b", description="do b", depends_on=["a"]),
+            ],
+        )
+        await engine.execute(spec)
+
+        assert set(captured) == {"a", "b"}
+
+    @pytest.mark.anyio()
+    async def test_simple_mode_leaves_step_id_none(self) -> None:
+        """Simple mode does not set step_id_ctx."""
+        from proctor.workers.llm import step_id_ctx
+
+        captured: list[str | None] = []
+
+        async def llm_call_recording_ctx(_prompt: str) -> str:
+            captured.append(step_id_ctx.get())
+            return "ok"
+
+        engine = WorkflowEngine(llm_call_recording_ctx)
+        spec = WorkflowSpec(workflow_id="wf-2", mode=WorkflowMode.SIMPLE, prompt="hi")
+        await engine.execute(spec)
+
+        assert captured == [None]
+
+
+# ── Import tests ────────────────────────────────────────────────
+
+
 class TestImports:
     def test_import_from_package(self) -> None:
         from proctor.workflow import WorkflowEngine, WorkflowResult
