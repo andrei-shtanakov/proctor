@@ -85,7 +85,7 @@ Currently only `standalone` is functional. Other roles are defined for future di
 
 ### LLM Setup
 
-Proctor uses [LiteLLM](https://docs.litellm.ai/) for provider abstraction (dependency installed, full wiring planned for Phase 2). Internally, LLM calls are abstracted behind a `Callable[[str], Awaitable[str]]` interface, allowing easy mocking in tests. Set the appropriate API key:
+Proctor uses [LiteLLM](https://docs.litellm.ai/) for provider abstraction. The call path `llm_call(prompt) -> str` (see `src/proctor/workers/llm.py`) delegates to `litellm.acompletion`, retries the primary model on transient errors (`max_retries` attempts, flat 1 s backoff), then falls back to `fallback_model` if it is set. Every attempt is persisted to the `llm_calls` table in `episodes.db` with token counts, latency, model, and any error. Set the appropriate API key:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-...    # for Claude models
@@ -115,6 +115,27 @@ uv run ruff format .
 # Type check
 pyrefly check
 ```
+
+### Running integration tests
+
+Integration tests against external services (currently: Ollama) are marked
+with the `integration` pytest marker and skipped by default.
+
+To run them, start a local Ollama server and pull the default model:
+
+```bash
+ollama serve
+ollama pull llama3.2
+```
+
+Then:
+
+```bash
+uv run pytest -m integration
+```
+
+If Ollama is not reachable at `localhost:11434`, the tests skip cleanly — no
+action required for the default `uv run pytest` run.
 
 ## Project Structure
 
