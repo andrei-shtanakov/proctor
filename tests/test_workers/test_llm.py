@@ -426,3 +426,46 @@ class TestUsageExtraction:
         rows = await _fetch_rows(memory)
         assert rows[0]["cache_write_tokens"] == 30
         assert rows[0]["cache_read_tokens"] == 80
+
+
+class TestTelemetryMechanics:
+    async def test_latency_measured(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        async def slow_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            import anyio as _anyio
+
+            await _anyio.sleep(0.02)
+            return _make_response()
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", slow_acompletion)
+
+        cfg = LLMConfig()
+        call = build_llm_call(cfg, memory)
+        await call("hi")
+
+        rows = await _fetch_rows(memory)
+        assert rows[0]["latency_ms"] is not None
+        assert rows[0]["latency_ms"] >= 15  # 20 - 5ms slack
+
+    async def test_num_retries_zero_in_kwargs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        seen: list[dict[str, Any]] = []
+
+        async def capture_kwargs(**kwargs: Any) -> SimpleNamespace:
+            seen.append(kwargs)
+            return _make_response()
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", capture_kwargs)
+
+        cfg = LLMConfig()
+        call = build_llm_call(cfg, memory)
+        await call("hi")
+
+        assert seen[0]["num_retries"] == 0
+        assert seen[0]["timeout"] == cfg.request_timeout
