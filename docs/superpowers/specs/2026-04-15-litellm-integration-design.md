@@ -183,31 +183,57 @@ DAG mode (per step):
 Inside `llm_call` (produced by `build_llm_call`):
 
 ```
-start = monotonic()
 chosen = model or config.default_model
+
+# Primary attempt + up to config.max_retries retries on transient errors.
+for attempt in range(config.max_retries + 1):
+    start = monotonic()
+    try:
+        resp = await litellm.acompletion(
+            model=chosen,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=config.max_tokens,
+            temperature=config.temperature,
+            timeout=config.request_timeout,
+            num_retries=0,               # our retry/fallback logic owns retries
+        )
+        _persist(record_success(...))
+        return resp.choices[0].message.content
+
+    except _TRANSIENT as exc:
+        _persist(record_failure(model=chosen, fallback_used=False, error=...))
+        if attempt < config.max_retries:
+            await anyio.sleep(1.0)       # flat 1s backoff between attempts
+            continue
+        logger.warning("Primary model %s exhausted retries (%s), falling back to %s",
+                       chosen, type(exc).__name__, config.fallback_model)
+        break                            # exit loop → fallback below
+
+    except Exception as exc:
+        _persist(record_failure(model=chosen, fallback_used=False, error=...))
+        raise                            # non-transient → no fallback
+
+# All primary attempts exhausted with transient errors.
+if config.fallback_model is None:
+    raise RuntimeError(
+        f"Primary model {chosen} failed with transient error and "
+        f"fallback_model is not configured"
+    ) from exc
+
+start = monotonic()
 try:
     resp = await litellm.acompletion(
-        model=chosen,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=config.max_tokens,
-        temperature=config.temperature,
-        timeout=config.request_timeout,
-        num_retries=0,                   # our fallback logic owns retries
+        model=config.fallback_model, ..., num_retries=0,
     )
-    record success → memory.save_llm_call(...)
+    _persist(record_success(model=config.fallback_model, fallback_used=True, ...))
     return resp.choices[0].message.content
-
-except TRANSIENT as exc:
-    log WARNING
-    record failure of `chosen` → memory.save_llm_call(... error=..., fallback_used=False)
-    try second attempt on config.fallback_model
-    record outcome (success or error, fallback_used=True)
-    return text or raise
-
-except Exception as exc:
-    record failure → memory.save_llm_call(... error=..., fallback_used=False)
-    raise
+except Exception as fb_exc:
+    _persist(record_failure(model=config.fallback_model, fallback_used=True, error=...))
+    raise                                # both primary and fallback failed
 ```
+
+`_persist` wraps `memory.save_llm_call` with exception-swallowing (see
+[Records on failure — persistence is non-fatal](#records-on-failure)).
 
 ## Error handling
 
@@ -231,16 +257,30 @@ falling back to Ollama would hide them.
 
 ### Retry policy
 
-- One attempt on primary, one attempt on fallback. No retry within either.
-- LiteLLM's built-in retries are disabled via `num_retries=0` so our
-  `llm_calls` rows reflect actual network events rather than hidden retries.
+- Primary model: up to `config.max_retries + 1` total attempts on transient
+  errors, with a flat 1-second pause between attempts. Default
+  `max_retries=1` (i.e. one retry). Non-transient errors fail immediately
+  without retry.
+- Fallback model: single attempt, no retry.
+- LiteLLM's built-in retries are disabled via `num_retries=0` so every
+  retry event is visible as its own row in `llm_calls` rather than hidden
+  inside LiteLLM.
+- If `config.fallback_model is None`, the final primary transient error is
+  wrapped in a `RuntimeError` with context and raised.
 
 ### Records on failure
 
-Every outcome — success, primary-transient, primary-fatal, fallback-success,
-fallback-fatal — writes exactly one `LLMCallRecord`. A full fallback cycle
-therefore writes 2 rows (primary failure + fallback outcome); a fatal primary
-writes 1.
+Every attempt — successful or failed, primary or fallback — writes exactly
+one `LLMCallRecord`. A full cycle with primary retried once then fallback
+successful writes 3 rows (2 primary failures + 1 fallback success); a fatal
+non-transient primary writes 1.
+
+**Persistence is non-fatal.** If `memory.save_llm_call(record)` itself raises
+(SQLite busy, disk full, database closed), the exception is caught, logged
+at `WARNING` with `exc_info=True`, and swallowed. The LLM response must
+still be returned to the caller — losing a valid model answer because
+telemetry failed is the wrong trade-off. This applies to every `_persist`
+site including the error-path records.
 
 ### Usage extraction (safe against missing fields)
 
@@ -267,11 +307,17 @@ Ollama usage fields may be absent — all columns are nullable.
 ```python
 class LLMConfig(BaseModel):
     default_model: str = "claude-sonnet-4-20250514"
-    fallback_model: str = "ollama/llama3.2"
+    fallback_model: str | None = None    # CHANGED: opt-in, not default ollama
     max_tokens: int = 4096
     temperature: float = 0.7
     request_timeout: float = 60.0        # NEW
+    max_retries: int = 1                 # NEW: retries of primary on transient errors
 ```
+
+Rationale for `fallback_model` defaulting to `None`: on a fresh checkout
+without Ollama, a non-`None` default guarantees a second failure after every
+transient primary error. Explicit opt-in (set `fallback_model: ollama/llama3.2`
+in `proctor.yaml` only when Ollama is actually running) is safer.
 
 Environment variables for provider credentials (e.g. `ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`) are read by LiteLLM directly; no additional wiring in
@@ -293,14 +339,18 @@ Cases:
 
 1. **happy path** — text + usage → 1 row, `fallback_used=0`, `error IS NULL`, correct tokens.
 2. **explicit model override** — `llm_call(prompt, model="gpt-4o")` uses the override; record.model matches.
-3. **fallback transient** — first call raises `RateLimitError`, second succeeds → 2 rows (failure of primary, success of fallback with `fallback_used=1`).
-4. **fallback itself fails** — both raise → 2 error rows, exception propagates.
-5. **non-transient propagates** — `AuthenticationError` → 1 error row, fallback model not invoked (mock call count = 1), exception propagates.
-6. **contextvars flow** — set `task_id_ctx`/`step_id_ctx`/`episode_id_ctx`, run call, verify columns.
-7. **missing usage** — mock returns response without `usage`; row created with NULL tokens.
-8. **cache tokens** — mock returns `cache_creation_input_tokens` and `cache_read_input_tokens`; verify mapping to `cache_write_tokens`/`cache_read_tokens`.
-9. **latency measured** — mock awaits `anyio.sleep(0.01)`; `latency_ms >= 10`.
-10. **num_retries=0 enforced** — intercept kwargs of mocked `acompletion`, assert `num_retries=0`.
+3. **retry then success** — `max_retries=1`, first call raises `RateLimitError`, second (same model) succeeds → 2 rows, no fallback call, return value is from second attempt.
+4. **fallback transient** — `max_retries=0`, primary raises `RateLimitError`, fallback succeeds → 2 rows (failure of primary + success of fallback with `fallback_used=1`).
+5. **retries exhausted then fallback** — `max_retries=1`, primary raises transient twice, fallback succeeds → 3 rows.
+6. **fallback itself fails** — primary transient × (max_retries+1), fallback also raises → (max_retries+2) error rows, exception propagates.
+7. **fallback_model is None** — primary raises transient, fallback not configured → retries happen, final attempt wraps in `RuntimeError` and raises; no fallback call made (mock count asserts).
+8. **non-transient propagates** — `AuthenticationError` → 1 error row, no retry, no fallback (mock call count = 1), exception propagates.
+9. **contextvars flow** — set `task_id_ctx`/`step_id_ctx`/`episode_id_ctx`, run call, verify columns.
+10. **missing usage** — mock returns response without `usage`; row created with NULL tokens.
+11. **cache tokens** — mock returns `cache_creation_input_tokens` and `cache_read_input_tokens`; verify mapping to `cache_write_tokens`/`cache_read_tokens`.
+12. **latency measured** — mock awaits `anyio.sleep(0.01)`; `latency_ms >= 10`.
+13. **num_retries=0 enforced** — intercept kwargs of mocked `acompletion`, assert `num_retries=0`.
+14. **save_llm_call failure is non-fatal** — monkeypatch `memory.save_llm_call` to raise `sqlite3.OperationalError`; `llm_call` still returns the text from a successful `acompletion` and logs `WARNING`.
 
 ### Memory tests — additions to `tests/test_memory.py`
 
@@ -321,8 +371,8 @@ async def test_ollama_real_call(tmp_path):
     except Exception:
         pytest.skip("Ollama not running at localhost:11434")
 
-    cfg = LLMConfig(default_model="ollama/llama3.2",
-                    fallback_model="ollama/llama3.2")
+    cfg = LLMConfig(default_model="ollama/llama3.2", fallback_model=None,
+                    max_retries=0)
     memory = EpisodicMemory(tmp_path / "episodes.db")
     await memory.initialize()
     call = build_llm_call(cfg, memory)
@@ -348,9 +398,14 @@ command and marker usage.
 - [ ] `src/proctor/workers/llm.py` exports `llm_call` (via `build_llm_call`
       factory) built on `litellm.acompletion`.
 - [ ] `default_model` / `fallback_model` / `max_tokens` / `temperature` /
-      `request_timeout` read from `LLMConfig`.
-- [ ] Automatic fallback on transient errors only (per the classes above),
-      with `WARNING` log on fallback.
+      `request_timeout` / `max_retries` read from `LLMConfig`.
+      `fallback_model` defaults to `None`.
+- [ ] Retry of primary on transient errors up to `max_retries` times with a
+      1-second flat pause, then fall back to `fallback_model` if set, else
+      raise a `RuntimeError` wrapping the last transient exception.
+- [ ] `WARNING` log when retries are exhausted and fallback engages.
+- [ ] `save_llm_call` persistence failures are caught and logged at
+      `WARNING` without blocking the returned response.
 - [ ] Token accounting in `llm_calls` table with `prompt_tokens`,
       `completion_tokens`, `cache_read_tokens`, `cache_write_tokens`.
 - [ ] Unit tests covering the cases listed above.
@@ -365,5 +420,14 @@ command and marker usage.
 - **LiteLLM exception hierarchy drift.** The transient class list is taken
   from current LiteLLM; if a future release renames classes we re-check on
   upgrade.
+- **Aggregation semantics for retries and fallback.** A single logical
+  `llm_call` invocation can write multiple rows (retries, primary failure +
+  fallback success). Naive `SUM(prompt_tokens + completion_tokens) GROUP BY
+  episode_id` is usually safe because failed attempts have `usage=None`, but
+  any future analytics query that treats rows as "one call each" should
+  filter on `error IS NULL` and likely additionally group by
+  `COALESCE(step_id, episode_id)` picking the final successful row. A
+  canonical aggregation view / `SQL` snippet will be defined alongside the
+  first cost dashboard (Phase 5).
 - **Cost not persisted.** `response.cost` (when available) is not stored in
   this iteration — easy addition later, but cross-provider semantics vary.
