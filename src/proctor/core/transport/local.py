@@ -12,10 +12,26 @@ import re
 import time
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
-from proctor.core.transport.base import Handler
-from proctor.core.transport.errors import InvalidSubjectError
+from proctor.core.models import Event
+from proctor.core.transport.base import (
+    ConnectionState,
+    DisconnectCallback,
+    EventTransport,
+    Handler,
+    ListenerHandle,
+    SubscriptionHandle,
+)
+from proctor.core.transport.errors import (
+    EventTooLargeError,
+    InvalidSubjectError,
+    TransportDrainingError,
+    TransportLifecycleError,
+    TransportUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +183,178 @@ def _match_tokens(sub: list[str], pat: list[str]) -> bool:
     if pat[0] == "*" or pat[0] == sub[0]:
         return _match_tokens(sub[1:], pat[1:])
     return False
+
+
+@dataclass(eq=False)  # eq=False preserves id-based __hash__ for set storage
+class _LocalSubscription:
+    subject: str
+    handler: Handler
+    transport: LocalEventTransport
+    _removed: bool = field(default=False)
+
+    async def unsubscribe(self) -> None:
+        if self._removed:
+            return
+        self._removed = True
+        self.transport._subscriptions.discard(self)
+
+
+@dataclass
+class _LocalListenerHandle:
+    callback: DisconnectCallback
+    transport: LocalEventTransport
+    disconnect: bool  # True = disconnect listener, False = reconnect
+
+    def remove(self) -> None:
+        bucket = (
+            self.transport._disconnect_listeners
+            if self.disconnect
+            else self.transport._reconnect_listeners
+        )
+        if self.callback in bucket:
+            bucket.remove(self.callback)
+
+
+class _SubHandleAdapter:
+    """Adapter wrapping _LocalSubscription to satisfy SubscriptionHandle."""
+
+    def __init__(self, sub: _LocalSubscription) -> None:
+        self._sub = sub
+
+    @property
+    def subject(self) -> str:
+        return self._sub.subject
+
+    async def unsubscribe(self) -> None:
+        await self._sub.unsubscribe()
+
+
+class LocalEventTransport(EventTransport):
+    """In-process EventTransport. No network; identical observable
+    behaviour to NATSEventTransport for the contract surface.
+    """
+
+    def __init__(
+        self,
+        *,
+        strict_size_check: bool = True,
+        max_payload: int = 65_536,
+    ) -> None:
+        self._strict_size_check = strict_size_check
+        self._max_payload = max_payload
+        self._state: ConnectionState = ConnectionState.DISCONNECTED
+        self._started = False
+        self._draining = False
+        self._subscriptions: set[_LocalSubscription] = set()
+        self._handler_tasks: set[asyncio.Task[None]] = set()
+        self._dedup = _DedupCache()
+        self._disconnect_listeners: list[DisconnectCallback] = []
+        self._reconnect_listeners: list[DisconnectCallback] = []
+        self._rl = _RateLimitedLogger(logger)
+
+    # --- lifecycle ---
+
+    async def start(self) -> None:
+        if self._started:
+            raise TransportLifecycleError("LocalEventTransport already started")
+        self._started = True
+        self._state = ConnectionState.CONNECTED
+        logger.info(
+            "LocalEventTransport started; %d buffered subscriptions active",
+            len(self._subscriptions),
+        )
+
+    async def stop(self) -> None:
+        self._state = ConnectionState.DISCONNECTED
+        self._started = False
+        logger.info("LocalEventTransport stopped")
+
+    async def drain(self, timeout: float = 60.0) -> None:
+        self._draining = True
+        if self._handler_tasks:
+            gather_fut: asyncio.Future[Any] = asyncio.gather(
+                *self._handler_tasks, return_exceptions=True
+            )
+            try:
+                await asyncio.wait_for(gather_fut, timeout=timeout)
+            except TimeoutError:
+                remaining = sum(1 for t in self._handler_tasks if not t.done())
+                logger.warning(
+                    "LocalEventTransport drain timed out with %d tasks",
+                    remaining,
+                )
+                for t in list(self._handler_tasks):
+                    if not t.done():
+                        t.cancel()
+
+    async def flush(self, timeout: float = 5.0) -> None:
+        return
+
+    # --- publish / subscribe ---
+
+    async def publish(self, event: Event) -> None:
+        if self._draining:
+            raise TransportDrainingError("LocalEventTransport is draining")
+        if self._state != ConnectionState.CONNECTED:
+            await self._rl.warn(
+                "publish_unavailable",
+                "Publish while not connected: event.type=%s",
+                event.type,
+            )
+            raise TransportUnavailableError(
+                f"LocalEventTransport is {self._state.value}"
+            )
+        if self._strict_size_check:
+            data = event.model_dump_json().encode("utf-8")
+            if len(data) > self._max_payload:
+                raise EventTooLargeError(
+                    f"Event {event.type!r} serialized {len(data)} bytes "
+                    f"exceeds max_payload {self._max_payload}"
+                )
+        msg_id = str(uuid4())
+        self._dispatch(event, msg_id)
+
+    def subscribe(self, subject: str, handler: Handler) -> SubscriptionHandle:
+        _validate_subject(subject, allow_wildcards=True)
+        sub = _LocalSubscription(subject=subject, handler=handler, transport=self)
+        self._subscriptions.add(sub)
+        return _SubHandleAdapter(sub)
+
+    # --- listeners ---
+
+    def add_disconnect_listener(self, cb: DisconnectCallback) -> ListenerHandle:
+        self._disconnect_listeners.append(cb)
+        return _LocalListenerHandle(cb, self, disconnect=True)
+
+    def add_reconnect_listener(self, cb: DisconnectCallback) -> ListenerHandle:
+        self._reconnect_listeners.append(cb)
+        return _LocalListenerHandle(cb, self, disconnect=False)
+
+    @property
+    def connection_state(self) -> ConnectionState:
+        return self._state
+
+    # --- internal ---
+
+    def _dispatch(self, event: Event, msg_id: str) -> None:
+        for sub in list(self._subscriptions):
+            if not _match_subject(event.type, sub.subject):
+                continue
+            if self._dedup.seen(sub.handler, msg_id):
+                continue
+            task = asyncio.create_task(self._safe_invoke(sub.handler, event))
+            self._handler_tasks.add(task)
+            task.add_done_callback(self._handler_tasks.discard)
+
+    async def _safe_invoke(self, handler: Handler, event: Event) -> None:
+        try:
+            await handler(event)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "Event handler error: type=%s handler=%s event_id=%s",
+                event.type,
+                handler,
+                event.id,
+            )

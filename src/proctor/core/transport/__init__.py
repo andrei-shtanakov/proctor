@@ -23,6 +23,7 @@ from proctor.core.transport.errors import (
     TransportLifecycleError,
     TransportUnavailableError,
 )
+from proctor.core.transport.local import LocalEventTransport
 
 __all__ = [
     "ConnectionState",
@@ -34,6 +35,7 @@ __all__ = [
     "HandlerTimeoutError",
     "InvalidSubjectError",
     "ListenerHandle",
+    "LocalEventTransport",
     "SubscriptionHandle",
     "TransportConnectionError",
     "TransportDrainingError",
