@@ -97,3 +97,113 @@ class TestRouterHappyPath:
         assert spec.workflow_id == "heartbeat"
         assert spec.mode == WorkflowMode.SIMPLE
         assert spec.prompt == "Check system status"
+
+    @pytest.mark.anyio
+    async def test_prompt_from_payload_resolves(self, bus: EventBus) -> None:
+        workflows = {
+            "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.telegram",
+                workflow_id="chat",
+                prompt_from_payload="text",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(
+            type="trigger.telegram",
+            source="telegram",
+            payload={"text": "hello", "chat_id": 1},
+        )
+        spec = await router.route(event)
+
+        assert spec is not None
+        assert spec.prompt == "hello"
+
+    @pytest.mark.anyio
+    async def test_prompt_from_payload_nested(self, bus: EventBus) -> None:
+        workflows = {
+            "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.telegram",
+                workflow_id="chat",
+                prompt_from_payload="message.text",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(
+            type="trigger.telegram",
+            source="telegram",
+            payload={"message": {"text": "nested hello"}},
+        )
+        spec = await router.route(event)
+
+        assert spec is not None
+        assert spec.prompt == "nested hello"
+
+    @pytest.mark.anyio
+    async def test_first_match_wins(self, bus: EventBus) -> None:
+        workflows = {
+            "first": WorkflowSpec(workflow_id="first", mode=WorkflowMode.SIMPLE),
+            "second": WorkflowSpec(workflow_id="second", mode=WorkflowMode.SIMPLE),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.telegram",
+                workflow_id="first",
+                prompt_from_payload="text",
+            ),
+            RouteRule(
+                event_pattern="trigger.*",
+                workflow_id="second",
+                prompt_from_payload="text",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(
+            type="trigger.telegram",
+            source="telegram",
+            payload={"text": "hi"},
+        )
+        spec = await router.route(event)
+
+        assert spec is not None
+        assert spec.workflow_id == "first"
+
+    @pytest.mark.anyio
+    async def test_model_copy_preserves_other_fields(self, bus: EventBus) -> None:
+        """Cloning via model_copy preserves mode, steps, and other
+        catalog fields — only prompt is overridden."""
+        from proctor.workflow.spec import Step
+
+        workflows = {
+            "pipeline": WorkflowSpec(
+                workflow_id="pipeline",
+                mode=WorkflowMode.DAG,
+                description="original description",
+                steps=[Step(id="a")],
+            ),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.terminal",
+                workflow_id="pipeline",
+                prompt="go",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(type="trigger.terminal", source="terminal", payload={})
+        spec = await router.route(event)
+
+        assert spec is not None
+        assert spec.mode == WorkflowMode.DAG
+        assert spec.description == "original description"
+        assert len(spec.steps) == 1
+        assert spec.prompt == "go"
