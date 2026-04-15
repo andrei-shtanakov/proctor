@@ -1,75 +1,59 @@
-"""Internal async pub/sub EventBus with wildcard pattern matching."""
+"""EventBus — thin wrapper over EventTransport.
 
-import logging
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
-from fnmatch import fnmatch
-from uuid import uuid4
+Transport is plumbing; EventBus is the stable caller-facing contract.
+Future observability hooks (metrics, tracing, event enrichment) wire
+at this level, not in Transport.
+"""
 
-import anyio
+from __future__ import annotations
 
 from proctor.core.models import Event
-
-logger = logging.getLogger(__name__)
-
-Handler = Callable[[Event], Awaitable[None]]
-
-
-@dataclass
-class _Subscription:
-    """Single subscription: pattern + async handler + unique ID."""
-
-    pattern: str
-    handler: Handler
-    id: str = field(default_factory=lambda: str(uuid4()))
+from proctor.core.transport import (
+    ConnectionState,
+    DisconnectCallback,
+    EventTransport,
+    Handler,
+    ListenerHandle,
+    SubscriptionHandle,
+)
 
 
 class EventBus:
-    """Async pub/sub bus with fnmatch wildcard pattern matching.
+    """Application-facing event bus. Requires explicit transport."""
 
-    Handlers run concurrently via a task group. Exceptions in one
-    handler do not affect others or the bus itself.
-    """
+    def __init__(self, transport: EventTransport) -> None:
+        self._transport = transport
 
-    def __init__(self) -> None:
-        self._subscriptions: list[_Subscription] = []
+    async def start(self) -> None:
+        await self._transport.start()
 
-    def subscribe(self, pattern: str, handler: Handler) -> str:
-        """Subscribe handler to events matching pattern.
+    async def stop(self) -> None:
+        await self._transport.stop()
 
-        Args:
-            pattern: fnmatch pattern (e.g. "trigger.*").
-            handler: Async callable receiving an Event.
+    async def drain(self, timeout: float = 60.0) -> None:
+        await self._transport.drain(timeout)
 
-        Returns:
-            Subscription ID for later unsubscribe.
-        """
-        sub = _Subscription(pattern=pattern, handler=handler)
-        self._subscriptions.append(sub)
-        return sub.id
-
-    def unsubscribe(self, sub_id: str) -> None:
-        """Remove a subscription by its ID."""
-        self._subscriptions = [s for s in self._subscriptions if s.id != sub_id]
+    async def flush(self, timeout: float = 5.0) -> None:
+        await self._transport.flush(timeout)
 
     async def publish(self, event: Event) -> None:
-        """Publish event to all matching subscribers.
+        await self._transport.publish(event)
 
-        Each matching handler runs concurrently in a task group.
-        Exceptions are caught and logged per handler.
-        """
-        async with anyio.create_task_group() as tg:
-            for sub in self._subscriptions:
-                if fnmatch(event.type, sub.pattern):
-                    tg.start_soon(self._safe_call, sub, event)
+    def subscribe(
+        self, subject: str, handler: Handler
+    ) -> SubscriptionHandle:
+        return self._transport.subscribe(subject, handler)
 
-    async def _safe_call(self, sub: _Subscription, event: Event) -> None:
-        """Invoke handler, catching and logging any exception."""
-        try:
-            await sub.handler(event)
-        except Exception:
-            logger.exception(
-                "Handler error for pattern=%r event=%s",
-                sub.pattern,
-                event.type,
-            )
+    @property
+    def connection_state(self) -> ConnectionState:
+        return self._transport.connection_state
+
+    def add_disconnect_listener(
+        self, cb: DisconnectCallback
+    ) -> ListenerHandle:
+        return self._transport.add_disconnect_listener(cb)
+
+    def add_reconnect_listener(
+        self, cb: DisconnectCallback
+    ) -> ListenerHandle:
+        return self._transport.add_reconnect_listener(cb)
