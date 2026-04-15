@@ -3,11 +3,11 @@
 import logging
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Any, Self
+from typing import Annotated, Any, Literal, Self
 
 import yaml
 from croniter import croniter
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from proctor.workflow.spec import WorkflowSpec
 
@@ -91,6 +91,44 @@ class TelegramConfig(BaseModel):
     bot_token: str
     allowed_chat_ids: list[int] = Field(default_factory=list)
     poll_timeout: int = 30
+
+
+class HMACAuthConfig(BaseModel):
+    """HMAC-SHA256 auth for a webhook path."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["hmac"] = "hmac"
+    secret_env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
+    header: str = "X-Hub-Signature-256"
+    # Header-value prefix stripped before hex comparison. Configures
+    # header SHAPE only, not the HMAC base string — Slack and Stripe
+    # sign a constructed string (e.g. "v0:{timestamp}:{body}"), which
+    # this implementation does NOT produce. Real Slack/Stripe support
+    # needs dedicated auth.type: "slack" / "stripe" — see Risks in
+    # docs/superpowers/specs/2026-04-15-webhook-trigger-design.md.
+    prefix: str = "sha256="
+
+
+class BearerAuthConfig(BaseModel):
+    """Bearer-token auth for a webhook path (RFC 6750)."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["bearer"] = "bearer"
+    secret_env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
+    header: str = "Authorization"
+
+
+class NoneAuthConfig(BaseModel):
+    """No authentication. Explicit opt-in. Triggers startup WARNING."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["none"] = "none"
+
+
+AuthConfig = Annotated[
+    HMACAuthConfig | BearerAuthConfig | NoneAuthConfig,
+    Field(discriminator="type"),
+]
 
 
 class ProctorConfig(BaseModel):

@@ -609,3 +609,54 @@ class TestPublicExports:
         assert SchedulerConfig is not None
         assert TelegramConfig is not None
         assert load_config is not None
+
+
+class TestAuthConfig:
+    def test_hmac_defaults(self) -> None:
+        from proctor.core.config import HMACAuthConfig
+
+        cfg = HMACAuthConfig(secret_env="TEST_SECRET")
+        assert cfg.type == "hmac"
+        assert cfg.header == "X-Hub-Signature-256"
+        assert cfg.prefix == "sha256="
+
+    def test_bearer_defaults(self) -> None:
+        from proctor.core.config import BearerAuthConfig
+
+        cfg = BearerAuthConfig(secret_env="TEST_TOKEN")
+        assert cfg.type == "bearer"
+        assert cfg.header == "Authorization"
+
+    def test_none_has_no_fields(self) -> None:
+        from proctor.core.config import NoneAuthConfig
+
+        cfg = NoneAuthConfig()
+        assert cfg.type == "none"
+
+    def test_secret_env_format_rejected(self) -> None:
+        from proctor.core.config import BearerAuthConfig, HMACAuthConfig
+
+        with pytest.raises(ValueError):
+            HMACAuthConfig(secret_env="lowercase")
+        with pytest.raises(ValueError):
+            BearerAuthConfig(secret_env="")
+        with pytest.raises(ValueError):
+            HMACAuthConfig(secret_env="123_BAD_START")
+
+    def test_hmac_extra_field_forbidden(self) -> None:
+        from proctor.core.config import HMACAuthConfig
+
+        with pytest.raises(ValueError):
+            HMACAuthConfig(secret_env="X", extra_field="bad")  # type: ignore[call-arg]
+
+    def test_bearer_extra_field_forbidden(self) -> None:
+        from proctor.core.config import BearerAuthConfig
+
+        with pytest.raises(ValueError):
+            BearerAuthConfig(secret_env="X", header_wrong="bad")  # type: ignore[call-arg]
+
+    def test_none_extra_field_forbidden(self) -> None:
+        from proctor.core.config import NoneAuthConfig
+
+        with pytest.raises(ValueError):
+            NoneAuthConfig(secret_env="X")  # type: ignore[call-arg]
