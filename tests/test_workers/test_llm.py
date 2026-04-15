@@ -469,3 +469,32 @@ class TestTelemetryMechanics:
 
         assert seen[0]["num_retries"] == 0
         assert seen[0]["timeout"] == cfg.request_timeout
+
+
+class TestPersistenceIsNonFatal:
+    async def test_save_failure_does_not_break_return(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        async def fake_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            return _make_response(content="still works")
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        async def broken_save(_record: Any) -> None:
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(memory, "save_llm_call", broken_save)
+
+        cfg = LLMConfig()
+        call = build_llm_call(cfg, memory)
+
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="proctor.workers.llm"):
+            result = await call("hi")
+
+        assert result == "still works"
+        assert any("Failed to persist" in rec.message for rec in caplog.records)
