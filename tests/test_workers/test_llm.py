@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import litellm
 import pytest
 
 from proctor.core.config import LLMConfig
@@ -106,3 +107,40 @@ class TestHappyPath:
         assert seen_models == ["gpt-4o"]
         rows = await _fetch_rows(memory)
         assert rows[0]["model"] == "gpt-4o"
+
+
+class TestRetry:
+    async def test_retry_then_success(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        calls: list[int] = []
+
+        async def fake_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            calls.append(1)
+            if len(calls) == 1:
+                raise litellm.RateLimitError("429", model="m", llm_provider="test")
+            return _make_response(content="ok after retry")
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        # Use a no-op sleep to keep the test fast
+        async def no_sleep(_seconds: float) -> None:
+            return None
+
+        monkeypatch.setattr("proctor.workers.llm.anyio.sleep", no_sleep)
+
+        cfg = LLMConfig(max_retries=1, fallback_model=None)
+        call = build_llm_call(cfg, memory)
+        result = await call("hi")
+
+        assert result == "ok after retry"
+        assert len(calls) == 2
+        rows = await _fetch_rows(memory)
+        assert len(rows) == 2
+        assert rows[0]["error"] is not None  # first attempt failed
+        assert rows[0]["fallback_used"] == 0
+        assert rows[1]["error"] is None  # second attempt succeeded
+        assert rows[1]["fallback_used"] == 0
+        assert rows[1]["model"] == cfg.default_model

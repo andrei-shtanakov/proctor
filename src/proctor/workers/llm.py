@@ -13,6 +13,7 @@ from contextvars import ContextVar
 from time import monotonic
 from typing import Any
 
+import anyio
 import litellm
 
 from proctor.core.config import LLMConfig
@@ -20,6 +21,16 @@ from proctor.core.memory import EpisodicMemory
 from proctor.core.models import LLMCallRecord
 
 logger = logging.getLogger(__name__)
+
+_TRANSIENT: tuple[type[Exception], ...] = (
+    litellm.RateLimitError,
+    litellm.APIConnectionError,
+    litellm.Timeout,
+    litellm.ServiceUnavailableError,
+    litellm.InternalServerError,
+)
+
+_RETRY_BACKOFF_SECONDS = 1.0
 
 task_id_ctx: ContextVar[str | None] = ContextVar("task_id_ctx", default=None)
 step_id_ctx: ContextVar[str | None] = ContextVar("step_id_ctx", default=None)
@@ -40,30 +51,71 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
 
     async def _call(prompt: str, model: str | None = None) -> str:
         chosen = model or config.default_model
-        start = monotonic()
-        # litellm.acompletion is declared as returning
-        # Union[ModelResponse, CustomStreamWrapper]. We never pass stream=True,
-        # so the result is always ModelResponse — pyrefly can't narrow this.
-        resp = await litellm.acompletion(  # type: ignore[misc]
-            model=chosen,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=config.max_tokens,
-            temperature=config.temperature,
-            timeout=config.request_timeout,
-            num_retries=0,
-        )
-        latency_ms = int((monotonic() - start) * 1000)
-        text, usage = _extract_text_and_usage(resp)
-        await _persist(
-            memory,
-            _record(
-                model=chosen,
-                fallback_used=False,
-                usage=usage,
-                latency_ms=latency_ms,
-            ),
-        )
-        return text
+        last_transient: BaseException | None = None
+
+        for attempt in range(config.max_retries + 1):
+            start = monotonic()
+            try:
+                # litellm.acompletion is declared as returning
+                # Union[ModelResponse, CustomStreamWrapper]. We never pass
+                # stream=True, so the result is always ModelResponse —
+                # pyrefly can't narrow this.
+                resp = await litellm.acompletion(  # type: ignore[misc]
+                    model=chosen,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    timeout=config.request_timeout,
+                    num_retries=0,
+                )
+                latency_ms = int((monotonic() - start) * 1000)
+                text, usage = _extract_text_and_usage(resp)
+                await _persist(
+                    memory,
+                    _record(
+                        model=chosen,
+                        fallback_used=False,
+                        usage=usage,
+                        latency_ms=latency_ms,
+                    ),
+                )
+                return text
+
+            except _TRANSIENT as exc:
+                latency_ms = int((monotonic() - start) * 1000)
+                last_transient = exc
+                await _persist(
+                    memory,
+                    _record(
+                        model=chosen,
+                        fallback_used=False,
+                        latency_ms=latency_ms,
+                        error=f"{type(exc).__name__}: {exc}",
+                    ),
+                )
+                if attempt < config.max_retries:
+                    await anyio.sleep(_RETRY_BACKOFF_SECONDS)
+                    continue
+                # Retries exhausted — fall through to fallback handling.
+                break
+
+            except Exception as exc:
+                latency_ms = int((monotonic() - start) * 1000)
+                await _persist(
+                    memory,
+                    _record(
+                        model=chosen,
+                        fallback_used=False,
+                        latency_ms=latency_ms,
+                        error=f"{type(exc).__name__}: {exc}",
+                    ),
+                )
+                raise
+
+        # If we get here, all primary attempts failed with transient errors.
+        # Fallback handling is added in Task 6; for now we just raise.
+        assert last_transient is not None
+        raise last_transient
 
     return _call
 
