@@ -106,6 +106,7 @@ class ProctorConfig(BaseModel):
     telegram: TelegramConfig | None = None
     schedules: list[ScheduleItemConfig] = []
     workflows: dict[str, WorkflowSpec] = Field(default_factory=dict)
+    routes: list[RouteRule] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_catalog_keys(self) -> Self:
@@ -115,6 +116,17 @@ class ProctorConfig(BaseModel):
                 raise ValueError(
                     f"workflow catalog key {key!r} does not match "
                     f"spec.workflow_id {spec.workflow_id!r}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_route_refs(self) -> Self:
+        for i, rule in enumerate(self.routes):
+            if rule.workflow_id not in self.workflows:
+                raise ValueError(
+                    f"route #{i} pattern={rule.event_pattern!r} references "
+                    f"unknown workflow_id {rule.workflow_id!r}. "
+                    f"Known workflows: {sorted(self.workflows)}"
                 )
         return self
 

@@ -9,6 +9,7 @@ from proctor.core.config import (
     LLMConfig,
     NATSConfig,
     ProctorConfig,
+    RouteRule,
     ScheduleItemConfig,
     SchedulerConfig,
     TelegramConfig,
@@ -477,6 +478,42 @@ class TestWorkflowCatalog:
                         mode=WorkflowMode.SIMPLE,
                     ),
                 }
+            )
+
+
+class TestRoutes:
+    def test_empty_routes_valid(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.routes == []
+
+    def test_routes_referencing_existing_workflow(self) -> None:
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            },
+            routes=[
+                RouteRule(
+                    event_pattern="trigger.terminal",
+                    workflow_id="chat",
+                    prompt_from_payload="text",
+                ),
+            ],
+        )
+        assert len(cfg.routes) == 1
+
+    def test_orphan_workflow_id_raises(self) -> None:
+        with pytest.raises(ValueError, match="unknown workflow_id"):
+            ProctorConfig(
+                workflows={
+                    "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+                },
+                routes=[
+                    RouteRule(
+                        event_pattern="trigger.terminal",
+                        workflow_id="missing",
+                        prompt_from_payload="text",
+                    ),
+                ],
             )
 
 
