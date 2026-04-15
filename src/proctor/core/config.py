@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import yaml
 from croniter import croniter
@@ -54,6 +54,24 @@ class ScheduleItemConfig(BaseModel):
             raise ValueError(f"Invalid cron expression: {self.cron!r}")
         if self.interval_seconds is not None and self.interval_seconds <= 0:
             raise ValueError("interval_seconds must be greater than 0")
+        return self
+
+
+class RouteRule(BaseModel):
+    """Declarative rule: event pattern → catalog workflow + prompt binding."""
+
+    event_pattern: str
+    workflow_id: str
+    prompt: str | None = None
+    prompt_from_payload: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_prompt_source(self) -> Self:
+        sources = (self.prompt is not None, self.prompt_from_payload is not None)
+        if sum(sources) != 1:
+            raise ValueError(
+                "RouteRule must specify exactly one of: prompt, prompt_from_payload"
+            )
         return self
 
 

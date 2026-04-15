@@ -410,6 +410,50 @@ class TestLoadConfig:
             assert cfg.llm.default_model == "claude-sonnet-4-20250514"
 
 
+class TestRouteRule:
+    def test_literal_prompt(self) -> None:
+        from proctor.core.config import RouteRule
+
+        rule = RouteRule(
+            event_pattern="trigger.terminal",
+            workflow_id="chat",
+            prompt="hi",
+        )
+        assert rule.prompt == "hi"
+        assert rule.prompt_from_payload is None
+
+    def test_payload_prompt(self) -> None:
+        from proctor.core.config import RouteRule
+
+        rule = RouteRule(
+            event_pattern="trigger.terminal",
+            workflow_id="chat",
+            prompt_from_payload="text",
+        )
+        assert rule.prompt is None
+        assert rule.prompt_from_payload == "text"
+
+    def test_both_sources_raises(self) -> None:
+        from proctor.core.config import RouteRule
+
+        with pytest.raises(ValueError, match="exactly one"):
+            RouteRule(
+                event_pattern="trigger.terminal",
+                workflow_id="chat",
+                prompt="hi",
+                prompt_from_payload="text",
+            )
+
+    def test_neither_source_raises(self) -> None:
+        from proctor.core.config import RouteRule
+
+        with pytest.raises(ValueError, match="exactly one"):
+            RouteRule(
+                event_pattern="trigger.terminal",
+                workflow_id="chat",
+            )
+
+
 class TestPublicExports:
     def test_import_from_core(self) -> None:
         from proctor.core import (
