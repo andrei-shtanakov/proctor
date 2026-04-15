@@ -251,27 +251,32 @@ class NATSEventTransport(EventTransport):
     async def flush(self, timeout: float = 5.0) -> None:
         """Wait until buffered wire traffic is ACKed and pending handler
         tasks finish — symmetric with LocalEventTransport.flush().
+
+        Awaits handler tasks FIRST so any post-start subscribe() tasks
+        finish issuing `nc.subscribe()` before the final `nc.flush()`
+        forces the subscription out to the server.
         """
-        if self._nc is not None and self._state == ConnectionState.CONNECTED:
-            try:
-                await self._nc.flush(timeout=int(timeout))
-            except Exception:
-                logger.exception("NATS flush failed")
         deadline = time.monotonic() + timeout
         while True:
             pending = [t for t in self._handler_tasks if not t.done()]
             if not pending:
-                return
+                break
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                return
+                break
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*pending, return_exceptions=True),  # type: ignore[arg-type]
                     timeout=remaining,
                 )
             except TimeoutError:
-                return
+                break
+        if self._nc is not None and self._state == ConnectionState.CONNECTED:
+            remaining = max(1, int(deadline - time.monotonic()) or 1)
+            try:
+                await self._nc.flush(timeout=remaining)
+            except Exception:
+                logger.exception("NATS flush failed")
 
     # ------------------------------------------------------------------
     # Publish / subscribe
