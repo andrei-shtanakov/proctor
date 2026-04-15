@@ -78,6 +78,13 @@ Out of scope (tracked as follow-ups):
 
 ### New module: `src/proctor/triggers/webhook.py`
 
+**Note on `Trigger` ABC:** `src/proctor/triggers/base.py:8` defines
+`class Trigger(ABC)` with abstract `start(bus)` and `stop()`. All three
+existing triggers (`TerminalTrigger`, `TelegramTrigger`,
+`SchedulerTrigger`) already inherit from it — verified via `grep -n
+"class.*Trigger" src/proctor/triggers/*.py`. `WebhookTrigger` follows
+the same pattern; no refactoring of other triggers required.
+
 Public surface:
 
 ```python
@@ -143,8 +150,13 @@ class HMACAuthConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal["hmac"] = "hmac"
     secret_env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
-    header: str = "X-Hub-Signature-256"      # examples: "X-Slack-Signature"
-    prefix: str = "sha256="                   # examples: "v0=" (Slack-ish)
+    header: str = "X-Hub-Signature-256"
+    # Header-value prefix stripped before hex comparison. Configures
+    # header SHAPE only, not the HMAC base string — Slack and Stripe
+    # sign a constructed string (e.g. "v0:{timestamp}:{body}"), which
+    # this implementation does NOT produce. Real Slack/Stripe support
+    # needs dedicated auth.type: "slack" / "stripe" — see Risks.
+    prefix: str = "sha256="
 
 
 class BearerAuthConfig(BaseModel):
@@ -175,7 +187,10 @@ class WebhookPathConfig(BaseModel):
 class WebhookConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     host: str = "127.0.0.1"
-    port: int = 8080
+    port: int = Field(default=8080, ge=0, le=65535)          # ge=0 permits
+                                                              # ephemeral port
+                                                              # (OS-assigned)
+                                                              # in tests
     paths: dict[str, WebhookPathConfig] = Field(min_length=1)
     max_in_flight: int = 20
     max_body_bytes: int = 1_048_576
@@ -256,30 +271,43 @@ Reverse proxy (TLS term, per-IP rate limiting, forwards raw body + headers)
 aiohttp server (host, port, client_max_size=max_body_bytes)
   ↓
 _handle_webhook(request):
-  1. cfg = self._paths[request.path]                       # per-path registration → KeyError impossible
-  2. if not await self._limiter.try_acquire():             # admission check
-         return 503 + Retry-After: 1
-  3. try:
-         raw_body = await request.read()                   # aiohttp enforces size; 413 auto
-         if not _verify_auth(cfg.auth, request, raw_body): # HMAC/Bearer/none
-             return 401
-         body = json.loads(raw_body) if raw_body else {}   # 400 on JSONDecodeError
-         headers = _safe_headers(request.headers)          # whitelist filter
-         event = Event(
-             type=f"trigger.webhook.{cfg.source_name}",
-             source="webhook",
-             payload={"path": request.path, "headers": headers, "body": body},
-         )
-         try:
-             await self._bus.publish(event)
-         except asyncio.CancelledError:
-             raise                                          # let shutdown cancel
-         except Exception:
-             logger.exception(...)
-             return 503 + Retry-After: 5
-         return 202 + {"accepted": True, "correlation_id": event.id}
-     finally:
-         await self._limiter.release()
+  # Outer guard: any unexpected exception (I/O glitch in request.read,
+  # env-var disappearing mid-request, bug in _safe_headers, etc.) turns
+  # into 503+Retry-After, never 500. aiohttp HTTPException and
+  # asyncio.CancelledError are re-raised so aiohttp routing errors and
+  # shutdown cancellation propagate correctly.
+  try:
+      cfg = self._paths[request.path]                      # per-path registration → KeyError impossible
+      if not await self._limiter.try_acquire():            # admission check
+          return 503 + Retry-After: 1
+      try:
+          raw_body = await request.read()                  # aiohttp enforces size; 413 auto
+          if not _verify_auth(cfg.auth, request, raw_body):
+              return 401
+          body = json.loads(raw_body) if raw_body else {}  # 400 on JSONDecodeError
+          headers = _safe_headers(request.headers)         # whitelist filter
+          event = Event(
+              type=f"trigger.webhook.{cfg.source_name}",
+              source="webhook",
+              payload={"path": request.path, "headers": headers, "body": body},
+          )
+          try:
+              await self._bus.publish(event)
+          except asyncio.CancelledError:
+              raise
+          except Exception:
+              logger.exception(...)
+              return 503 + Retry-After: 5
+          return 202 + {"accepted": True, "correlation_id": event.id}
+      finally:
+          await self._limiter.release()
+  except asyncio.CancelledError:
+      raise
+  except web.HTTPException:
+      raise                                                 # aiohttp's own 4xx/5xx pass through
+  except Exception:
+      logger.exception("webhook handler unexpected error for %s", request.path)
+      return 503 + Retry-After: 5
 ```
 
 ### Status code contract
@@ -353,6 +381,13 @@ def _safe_headers(headers: Mapping[str, str]) -> dict[str, str]:
     Multi-value headers: last-wins via dict conversion. Duplicate
     headers are rare in webhook traffic; if a future use case needs
     them preserved, switch to list[tuple[str, str]].
+
+    Header casing: keys preserve whatever the client sent (HTTP
+    headers are case-insensitive, but Python dicts are not).
+    Downstream consumers that parse these values should use
+    case-insensitive lookup — or expect clients to conform to common
+    capitalization (e.g. GitHub sends "X-GitHub-Event", Stripe sends
+    "Stripe-Signature").
     """
     result: dict[str, str] = {}
     for k, v in headers.items():
@@ -534,6 +569,25 @@ Auth failures are `INFO`, not `WARNING`: unauthenticated scans are
 routine on public endpoints, and WARNING would drown real signals.
 Reverse-proxy + fail2ban sees IP-level patterns better.
 
+**Auth-failure `reason` is a short code only**, never a raw header
+value, signature, or token. Enumerated reasons:
+
+```python
+_AUTH_REASONS = {
+    "missing_header",        # expected header not present
+    "bad_prefix",            # HMAC header missing configured prefix
+    "bad_signature",         # HMAC digest mismatch
+    "non_bearer_scheme",     # Authorization header not "Bearer ..."
+    "wrong_token",           # Bearer token mismatch
+}
+```
+
+`_verify_auth` returns `bool`; the handler logs the reason code it
+observed based on which branch failed. Raw values never touch the
+log line. This is a contract, not a nicety — logs often get
+aggregated into systems with broader read access than `episodes.db`,
+and leaking a signature/token there is a real incident.
+
 ### At-least-once delivery (explicit contract)
 
 Webhook events are delivered **at least once**. Duplicates can arise
@@ -595,6 +649,24 @@ external monitoring concerns, not bus events.
 Module-scoped `webhook` fixture to share one aiohttp server across
 ~40 tests (saves ~4-8s on CI). Tests vary payload / headers / auth,
 not config.
+
+**Module-scoped fixture + env setup note:** pytest's built-in
+`monkeypatch` fixture is function-scoped — using it inside a
+`scope="module"` fixture raises `ScopeMismatch`. Use
+`pytest.MonkeyPatch()` directly:
+
+```python
+@pytest.fixture(scope="module")
+async def webhook():
+    mp = pytest.MonkeyPatch()
+    mp.setenv("TEST_HMAC_SECRET", "topsecret")
+    mp.setenv("TEST_BEARER_TOKEN", "alpha-beta-gamma")
+    try:
+        # ... create config, start trigger, yield ...
+    finally:
+        mp.undo()
+        # ... stop trigger ...
+```
 
 ```python
 # Fixture sketch — subscriber uses async callable (EventBus contract)
@@ -695,6 +767,12 @@ Test classes:
 1. Mock `bus.publish` to raise `asyncio.CancelledError` → handler
    propagates (no 503), request task cancelled cleanly.
 
+**`TestOuterErrorGuard`** (1 test):
+1. Monkeypatch `_safe_headers` (or another inner helper) to raise
+   `ValueError`. Expect **503**, not **500**. Log contains
+   `"webhook handler unexpected error"`. No event published. No
+   client sees a 500 leak.
+
 **`TestLifecycle`** (4 tests):
 1. `start()` with missing env → `RuntimeError` listing **all** missing
    vars, not just the first.
@@ -768,6 +846,11 @@ Test classes:
 - [ ] In-flight cap: 503 + `Retry-After: 1`. Default `max_in_flight=20`.
 - [ ] `asyncio.CancelledError` re-raised in all `except Exception`
       blocks inside the handler.
+- [ ] Outer guard around `_handle_webhook` body converts any
+      unexpected exception to 503 + `Retry-After: 5` (never 500).
+      `web.HTTPException` passes through.
+- [ ] Auth-failure logs contain **only** a short reason code from the
+      enumerated set — never raw header values, signatures, or tokens.
 - [ ] Graceful drain: stop accepting → `wait_idle(shutdown_timeout)` →
       force-close; idempotent; WARNING on timeout.
 - [ ] `Application.stop()` stops `WebhookTrigger` **before** other
