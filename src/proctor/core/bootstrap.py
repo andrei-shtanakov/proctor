@@ -8,12 +8,12 @@ from proctor.core.bus import EventBus
 from proctor.core.config import ProctorConfig
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event, Task, TaskStatus
+from proctor.core.router import Router
 from proctor.core.state import StateManager
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.workers.llm import episode_id_ctx, task_id_ctx
 from proctor.workflow.engine import WorkflowEngine
-from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ class Application:
         self.is_running = False
         self._llm_call: LLMCall | None = None
         self._engine: WorkflowEngine | None = None
+        self._router: Router | None = None
         self._telegram_trigger: TelegramTrigger | None = None
         self._scheduler: SchedulerTrigger | None = None
 
@@ -48,7 +49,12 @@ class Application:
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
         await self.state.initialize()
         await self.memory.initialize()
-        self.bus.subscribe("trigger.terminal", self._handle_terminal)
+        self._router = Router(
+            bus=self.bus,
+            routes=self.config.routes,
+            workflows=self.config.workflows,
+        )
+        self.bus.subscribe("trigger.*", self._handle_trigger_event)
 
         if self.config.telegram is not None:
             self._telegram_trigger = TelegramTrigger(self.config.telegram)
@@ -75,48 +81,44 @@ class Application:
         await self.state.close()
         logger.info("Application stopped")
 
-    async def _handle_terminal(self, event: Event) -> None:
-        """Handle terminal trigger events.
+    async def _handle_trigger_event(self, event: Event) -> None:
+        """Route trigger.* events to workflows via the Router.
 
-        Creates a Task and a pre-execution Episode, sets
-        ``task_id_ctx``/``episode_id_ctx``, runs the workflow, then
-        updates the Episode row with the real agent_response.
+        On matched + bound rule, runs the standard task+episode+ctxvar
+        lifecycle. On unmatched / binding-failed, the Router has already
+        published routing.* observability events and logged a WARNING;
+        we simply skip task creation.
         """
-        text = event.payload.get("text", "")
-        if not text:
-            return
-
-        if self._engine is None:
+        if self._router is None or self._engine is None:
             await self.bus.publish(
                 Event(
                     type="task.failed",
                     source="application",
-                    payload={"error": "No LLM configured"},
+                    payload={
+                        "error": "Application not fully started "
+                        "(router or engine missing)",
+                    },
                 )
             )
             return
 
-        task = Task(trigger_event=event.id, spec={"prompt": text})
+        spec = await self._router.route(event)
+        if spec is None:
+            return  # router already emitted routing.*
+
+        resolved_prompt = spec.prompt or ""
+        task = Task(trigger_event=event.id, spec=spec.model_dump())
         await self.state.save_task(task)
         task.status = TaskStatus.RUNNING
         task.updated_at = datetime.now(UTC)
         await self.state.save_task(task)
 
-        # Pre-execution Episode so llm_calls rows can reference episode_id.
-        # We update agent_response after execute (save_episode is
-        # idempotent via ON CONFLICT(id) DO UPDATE).
         episode = Episode(
             trigger_type=event.source,
-            user_input=text,
+            user_input=resolved_prompt,
             agent_response="",
         )
         await self.memory.save_episode(episode)
-
-        spec = WorkflowSpec(
-            workflow_id=task.id,
-            mode=WorkflowMode.SIMPLE,
-            prompt=text,
-        )
 
         task_token = task_id_ctx.set(task.id)
         episode_token = episode_id_ctx.set(episode.id)
