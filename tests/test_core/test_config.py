@@ -517,6 +517,79 @@ class TestRoutes:
             )
 
 
+class TestShadowDetection:
+    def test_narrow_before_broad_passes(self) -> None:
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            },
+            routes=[
+                RouteRule(
+                    event_pattern="trigger.telegram",
+                    workflow_id="chat",
+                    prompt_from_payload="text",
+                ),
+                RouteRule(
+                    event_pattern="trigger.*",
+                    workflow_id="chat",
+                    prompt_from_payload="text",
+                ),
+            ],
+        )
+        assert len(cfg.routes) == 2
+
+    def test_broad_before_narrow_raises(self) -> None:
+        with pytest.raises(ValueError, match="shadows"):
+            ProctorConfig(
+                workflows={
+                    "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+                },
+                routes=[
+                    RouteRule(
+                        event_pattern="trigger.*",
+                        workflow_id="chat",
+                        prompt_from_payload="text",
+                    ),
+                    RouteRule(
+                        event_pattern="trigger.telegram",
+                        workflow_id="chat",
+                        prompt_from_payload="text",
+                    ),
+                ],
+            )
+
+    def test_intersecting_but_not_subsuming_passes(self) -> None:
+        """Patterns that overlap without one subsuming the other."""
+        cfg = ProctorConfig(
+            workflows={
+                "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
+            },
+            routes=[
+                RouteRule(
+                    event_pattern="trigger.a.*",
+                    workflow_id="chat",
+                    prompt="x",
+                ),
+                RouteRule(
+                    event_pattern="trigger.*.b",
+                    workflow_id="chat",
+                    prompt="x",
+                ),
+            ],
+        )
+        assert len(cfg.routes) == 2
+
+
+def test_is_strictly_broader_direct() -> None:
+    from proctor.core.config import _is_strictly_broader
+
+    assert _is_strictly_broader("trigger.*", "trigger.telegram") is True
+    assert _is_strictly_broader("trigger.telegram", "trigger.*") is False
+    assert _is_strictly_broader("trigger.telegram", "trigger.telegram") is False
+    assert _is_strictly_broader("trigger.a.*", "trigger.*.b") is False
+    assert _is_strictly_broader("trigger.*.b", "trigger.a.*") is False
+
+
 class TestPublicExports:
     def test_import_from_core(self) -> None:
         from proctor.core import (

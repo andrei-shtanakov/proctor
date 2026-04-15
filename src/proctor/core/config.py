@@ -1,6 +1,7 @@
 """Configuration system: YAML loading with pydantic models and defaults."""
 
 import logging
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any, Self
 
@@ -129,6 +130,29 @@ class ProctorConfig(BaseModel):
                     f"Known workflows: {sorted(self.workflows)}"
                 )
         return self
+
+    @model_validator(mode="after")
+    def _no_shadowed_routes(self) -> Self:
+        for i, earlier in enumerate(self.routes):
+            for j_offset, later in enumerate(self.routes[i + 1 :]):
+                j = i + 1 + j_offset
+                if _is_strictly_broader(earlier.event_pattern, later.event_pattern):
+                    raise ValueError(
+                        f"route #{i} pattern={earlier.event_pattern!r} "
+                        f"shadows route #{j} pattern={later.event_pattern!r}. "
+                        "Put specific rules before catch-all rules."
+                    )
+        return self
+
+
+def _is_strictly_broader(a: str, b: str) -> bool:
+    """True if fnmatch pattern `a` strictly subsumes pattern `b`.
+
+    Heuristic: treat `b` as a literal string. If ``fnmatch(b, a)`` matches
+    and ``fnmatch(a, b)`` does not, then `a` covers every concrete event
+    that `b` covers, plus more.
+    """
+    return fnmatchcase(b, a) and not fnmatchcase(a, b)
 
 
 def load_config(path: Path | str | None = None) -> ProctorConfig:
