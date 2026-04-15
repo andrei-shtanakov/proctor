@@ -1,8 +1,15 @@
 """Tests for the Router component."""
 
+from collections.abc import AsyncGenerator
 from typing import Any
 
-from proctor.core.router import _resolve_path
+import pytest
+
+from proctor.core.bus import EventBus
+from proctor.core.config import RouteRule
+from proctor.core.models import Event
+from proctor.core.router import Router, _resolve_path
+from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
 
 class TestResolvePath:
@@ -49,3 +56,44 @@ class TestResolvePath:
         assert value is None
         assert reason is not None
         assert "expected str" in reason
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest.fixture
+async def bus() -> AsyncGenerator[EventBus]:
+    b = EventBus()
+    yield b
+
+
+class TestRouterHappyPath:
+    @pytest.mark.anyio
+    async def test_matched_literal_prompt(self, bus: EventBus) -> None:
+        workflows = {
+            "heartbeat": WorkflowSpec(
+                workflow_id="heartbeat", mode=WorkflowMode.SIMPLE
+            ),
+        }
+        routes = [
+            RouteRule(
+                event_pattern="trigger.scheduler",
+                workflow_id="heartbeat",
+                prompt="Check system status",
+            ),
+        ]
+        router = Router(bus=bus, routes=routes, workflows=workflows)
+
+        event = Event(
+            type="trigger.scheduler",
+            source="scheduler:heartbeat",
+            payload={},
+        )
+        spec = await router.route(event)
+
+        assert spec is not None
+        assert spec.workflow_id == "heartbeat"
+        assert spec.mode == WorkflowMode.SIMPLE
+        assert spec.prompt == "Check system status"
