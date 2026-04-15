@@ -20,9 +20,11 @@ class TestLLMConfig:
     def test_defaults(self) -> None:
         cfg = LLMConfig()
         assert cfg.default_model == "claude-sonnet-4-20250514"
-        assert cfg.fallback_model == "ollama/llama3.2"
+        assert cfg.fallback_model is None
         assert cfg.max_tokens == 4096
         assert cfg.temperature == 0.7
+        assert cfg.request_timeout == 60.0
+        assert cfg.max_retries == 1
 
     def test_custom_values(self) -> None:
         cfg = LLMConfig(
@@ -35,6 +37,30 @@ class TestLLMConfig:
         assert cfg.fallback_model == "local/model"
         assert cfg.max_tokens == 2048
         assert cfg.temperature == 0.5
+
+
+class TestLLMConfigExtended:
+    def test_fallback_model_default_none(self) -> None:
+        cfg = LLMConfig()
+        assert cfg.fallback_model is None
+
+    def test_request_timeout_default(self) -> None:
+        cfg = LLMConfig()
+        assert cfg.request_timeout == 60.0
+
+    def test_max_retries_default(self) -> None:
+        cfg = LLMConfig()
+        assert cfg.max_retries == 1
+
+    def test_overrides(self) -> None:
+        cfg = LLMConfig(
+            fallback_model="ollama/llama3.2",
+            request_timeout=10.0,
+            max_retries=3,
+        )
+        assert cfg.fallback_model == "ollama/llama3.2"
+        assert cfg.request_timeout == 10.0
+        assert cfg.max_retries == 3
 
 
 class TestNATSConfig:
@@ -158,7 +184,7 @@ class TestProctorConfig:
     def test_nested_llm_defaults(self) -> None:
         cfg = ProctorConfig()
         assert cfg.llm.default_model == "claude-sonnet-4-20250514"
-        assert cfg.llm.fallback_model == "ollama/llama3.2"
+        assert cfg.llm.fallback_model is None
         assert cfg.llm.max_tokens == 4096
         assert cfg.llm.temperature == 0.7
 
@@ -250,7 +276,7 @@ class TestLoadConfig:
         assert cfg.log_level == "DEBUG"
         assert cfg.llm.default_model == "gpt-4"
         assert cfg.llm.max_tokens == 2048
-        assert cfg.llm.fallback_model == "ollama/llama3.2"
+        assert cfg.llm.fallback_model is None
         assert cfg.scheduler.enabled is False
 
     def test_load_from_string_path(self, tmp_path: Path) -> None:

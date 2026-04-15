@@ -74,3 +74,21 @@ class Envelope(BaseModel):
     correlation_id: str | None = None
     timestamp: datetime = Field(default_factory=_utcnow)
     ttl_seconds: int | None = None
+
+
+class LLMCallRecord(BaseModel):
+    """Record of a single LLM API call attempt (success or failure)."""
+
+    id: str = Field(default_factory=_uuid)
+    episode_id: str | None = None
+    task_id: str | None = None
+    step_id: str | None = None
+    model: str
+    fallback_used: bool = False
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    latency_ms: int | None = None
+    error: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)

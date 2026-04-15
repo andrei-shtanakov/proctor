@@ -15,9 +15,11 @@ class LLMConfig(BaseModel):
     """LLM provider configuration."""
 
     default_model: str = "claude-sonnet-4-20250514"
-    fallback_model: str = "ollama/llama3.2"
+    fallback_model: str | None = None
     max_tokens: int = 4096
     temperature: float = 0.7
+    request_timeout: float = 60.0
+    max_retries: int = 1
 
 
 class NATSConfig(BaseModel):

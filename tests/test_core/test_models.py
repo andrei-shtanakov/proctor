@@ -3,7 +3,13 @@
 import json
 from datetime import UTC, datetime
 
-from proctor.core.models import Envelope, Event, Task, TaskStatus
+from proctor.core.models import (
+    Envelope,
+    Event,
+    LLMCallRecord,
+    Task,
+    TaskStatus,
+)
 
 
 class TestTaskStatus:
@@ -180,6 +186,43 @@ class TestEnvelope:
         assert restored.type == env.type
         assert restored.correlation_id == "c-456"
         assert restored.ttl_seconds == 60
+
+
+class TestLLMCallRecord:
+    def test_defaults(self) -> None:
+        rec = LLMCallRecord(model="claude-sonnet-4-20250514")
+        assert rec.id
+        assert rec.created_at <= datetime.now(UTC)
+        assert rec.model == "claude-sonnet-4-20250514"
+        assert rec.fallback_used is False
+        assert rec.prompt_tokens is None
+        assert rec.completion_tokens is None
+        assert rec.cache_read_tokens is None
+        assert rec.cache_write_tokens is None
+        assert rec.latency_ms is None
+        assert rec.error is None
+        assert rec.episode_id is None
+        assert rec.task_id is None
+        assert rec.step_id is None
+
+    def test_all_fields_set(self) -> None:
+        rec = LLMCallRecord(
+            id="llm-1",
+            episode_id="ep-1",
+            task_id="task-1",
+            step_id="step-a",
+            model="ollama/llama3.2",
+            fallback_used=True,
+            prompt_tokens=120,
+            completion_tokens=45,
+            cache_read_tokens=10,
+            cache_write_tokens=20,
+            latency_ms=350,
+            error=None,
+        )
+        assert rec.fallback_used is True
+        assert rec.prompt_tokens == 120
+        assert rec.cache_write_tokens == 20
 
 
 class TestPublicExports:
