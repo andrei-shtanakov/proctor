@@ -145,9 +145,9 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
             resp = await litellm.acompletion(  # type: ignore[misc]
                 model=fb_model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=config.max_tokens,
-                temperature=config.temperature,
-                timeout=config.request_timeout,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout=request_timeout,
                 num_retries=0,
             )
             latency_ms = int((monotonic() - start) * 1000)
