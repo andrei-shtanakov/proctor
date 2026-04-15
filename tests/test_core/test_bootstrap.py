@@ -827,3 +827,34 @@ class TestWebhookBootstrap:
 
         await app.stop()
         assert order.index("webhook") < order.index("memory")
+
+
+class TestApplicationDI:
+    def test_event_transport_override(self, tmp_path: Path) -> None:
+        from proctor.core.bootstrap import Application
+        from proctor.core.config import ProctorConfig
+        from proctor.core.transport import LocalEventTransport
+
+        custom = LocalEventTransport()
+        cfg = ProctorConfig(data_dir=tmp_path)
+        app = Application(cfg, event_transport=custom)
+        assert app.bus._transport is custom
+
+    @pytest.mark.anyio
+    async def test_subscribes_in_init_buffered_until_start(
+        self, tmp_path: Path
+    ) -> None:
+        from proctor.core.bootstrap import Application
+        from proctor.core.config import ProctorConfig
+        from proctor.core.transport import ConnectionState, LocalEventTransport
+
+        cfg = ProctorConfig(data_dir=tmp_path)
+        app = Application(cfg)
+        assert app.bus.connection_state == ConnectionState.DISCONNECTED
+        # Subscription was registered in __init__
+        assert isinstance(app.bus._transport, LocalEventTransport)  # noqa: SLF001
+        assert len(app.bus._transport._subscriptions) >= 1  # noqa: SLF001
+        await app.start()
+        assert app.bus.connection_state == ConnectionState.CONNECTED
+        await app.stop()
+        assert app.bus.connection_state == ConnectionState.DISCONNECTED

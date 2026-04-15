@@ -10,7 +10,7 @@ from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.router import Router
 from proctor.core.state import StateManager
-from proctor.core.transport import LocalEventTransport
+from proctor.core.transport import EventTransport, LocalEventTransport
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.triggers.webhook import WebhookTrigger
@@ -29,9 +29,17 @@ class Application:
     event handlers. Entry point for ``python -m proctor``.
     """
 
-    def __init__(self, config: ProctorConfig) -> None:
+    def __init__(
+        self,
+        config: ProctorConfig,
+        *,
+        event_transport: EventTransport | None = None,
+    ) -> None:
         self.config = config
-        self.bus = EventBus(LocalEventTransport())
+        transport = event_transport or LocalEventTransport(
+            max_payload=config.events.max_payload,
+        )
+        self.bus = EventBus(transport)
         self.state = StateManager(config.data_dir / "state.db")
         self.memory = EpisodicMemory(config.data_dir / "episodes.db")
         self.is_running = False
@@ -41,6 +49,10 @@ class Application:
         self._telegram_trigger: TelegramTrigger | None = None
         self._scheduler: SchedulerTrigger | None = None
         self._webhook_trigger: WebhookTrigger | None = None
+        # Subscribe in __init__ (ADR #19 — buffered until bus.start()).
+        # Router and engine are nil until start(); _handle_trigger_event
+        # checks before dispatching.
+        self.bus.subscribe("trigger.>", self._handle_trigger_event)
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -48,7 +60,7 @@ class Application:
         self._engine = WorkflowEngine(llm_call)
 
     async def start(self) -> None:
-        """Initialize state and memory, subscribe handlers, set running."""
+        """Initialize state and memory, start bus and triggers, set running."""
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
         await self.bus.start()
         await self.state.initialize()
@@ -58,9 +70,6 @@ class Application:
             routes=self.config.routes,
             workflows=self.config.workflows,
         )
-        # "trigger.>" — NATS multi-token wildcard; matches trigger.terminal,
-        # trigger.scheduler, trigger.webhook.github, trigger.telegram, etc.
-        self.bus.subscribe("trigger.>", self._handle_trigger_event)
 
         if self.config.telegram is not None:
             self._telegram_trigger = TelegramTrigger(self.config.telegram)
@@ -93,6 +102,8 @@ class Application:
         if self._scheduler is not None:
             await self._scheduler.stop()
             self._scheduler = None
+        # Drain in-flight handlers before transport shutdown.
+        await self.bus.drain(timeout=self.config.events.drain_timeout)
         await self.memory.close()
         await self.state.close()
         await self.bus.stop()
