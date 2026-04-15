@@ -378,3 +378,51 @@ class TestContextVars:
         assert rows[0]["task_id"] is None
         assert rows[0]["step_id"] is None
         assert rows[0]["episode_id"] is None
+
+
+class TestUsageExtraction:
+    async def test_missing_usage_writes_null_tokens(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        async def fake_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            message = SimpleNamespace(content="hi")
+            choice = SimpleNamespace(message=message)
+            return SimpleNamespace(choices=[choice])
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        cfg = LLMConfig()
+        call = build_llm_call(cfg, memory)
+        result = await call("hi")
+
+        assert result == "hi"
+        rows = await _fetch_rows(memory)
+        assert rows[0]["prompt_tokens"] is None
+        assert rows[0]["completion_tokens"] is None
+        assert rows[0]["cache_read_tokens"] is None
+        assert rows[0]["cache_write_tokens"] is None
+
+    async def test_cache_tokens_are_mapped(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        async def fake_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            return _make_response(
+                prompt_tokens=50,
+                completion_tokens=10,
+                cache_creation=30,
+                cache_read=80,
+            )
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        cfg = LLMConfig()
+        call = build_llm_call(cfg, memory)
+        await call("hi")
+
+        rows = await _fetch_rows(memory)
+        assert rows[0]["cache_write_tokens"] == 30
+        assert rows[0]["cache_read_tokens"] == 80
