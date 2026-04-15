@@ -10,6 +10,7 @@ import anyio
 from proctor import __version__
 from proctor.core.bootstrap import Application
 from proctor.core.config import load_config
+from proctor.workers.llm import build_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ async def main() -> None:
 
     print(f"Proctor v{__version__} starting...", flush=True)
     app = Application(config)
+    app.set_llm_call(build_llm_call(config.llm, app.memory))
     await app.start()
 
     try:
