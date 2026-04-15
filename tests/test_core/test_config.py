@@ -660,3 +660,141 @@ class TestAuthConfig:
 
         with pytest.raises(ValueError):
             NoneAuthConfig(secret_env="X")  # type: ignore[call-arg]
+
+
+class TestWebhookConfigValidation:
+    def test_empty_paths_raises(self) -> None:
+        from proctor.core.config import WebhookConfig
+
+        with pytest.raises(ValueError):
+            WebhookConfig(paths={})
+
+    def test_valid_single_path(self) -> None:
+        from proctor.core.config import (
+            HMACAuthConfig,
+            WebhookConfig,
+            WebhookPathConfig,
+        )
+
+        cfg = WebhookConfig(
+            paths={
+                "/webhook/github": WebhookPathConfig(
+                    source_name="github",
+                    auth=HMACAuthConfig(secret_env="X"),
+                ),
+            }
+        )
+        assert "/webhook/github" in cfg.paths
+        assert cfg.port == 8080
+        assert cfg.max_in_flight == 20
+        assert cfg.max_body_bytes == 1_048_576
+        assert cfg.shutdown_timeout == 30.0
+        assert cfg.keepalive_timeout == 75.0
+        assert cfg.host == "127.0.0.1"
+
+    def test_path_must_start_with_slash(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        with pytest.raises(ValueError, match="must start with"):
+            WebhookConfig(
+                paths={
+                    "webhook/github": WebhookPathConfig(
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+    def test_path_fnmatch_meta_rejected(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        with pytest.raises(ValueError, match="metacharacter"):
+            WebhookConfig(
+                paths={
+                    "/webhook/*": WebhookPathConfig(
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+    def test_trailing_slash_rejected(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        with pytest.raises(ValueError, match="trailing"):
+            WebhookConfig(
+                paths={
+                    "/webhook/github/": WebhookPathConfig(
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+    def test_source_name_uniqueness_enforced(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        with pytest.raises(ValueError, match="uniqueness"):
+            WebhookConfig(
+                paths={
+                    "/webhook/gh-prod": WebhookPathConfig(
+                        source_name="github",
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                    "/webhook/gh-stage": WebhookPathConfig(
+                        source_name="github",
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+    def test_source_name_format_rejected(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        with pytest.raises(ValueError, match="source_name"):
+            WebhookConfig(
+                paths={
+                    "/webhook/GH": WebhookPathConfig(
+                        source_name="GitHub",  # uppercase
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+    def test_source_name_derived_from_basename(self) -> None:
+        from proctor.core.config import (
+            BearerAuthConfig,
+            WebhookConfig,
+            WebhookPathConfig,
+        )
+
+        cfg = WebhookConfig(
+            paths={
+                "/webhook/ci": WebhookPathConfig(
+                    auth=BearerAuthConfig(secret_env="T"),
+                ),
+            }
+        )
+        assert cfg.paths["/webhook/ci"].source_name == "ci"
+
+    def test_port_range_enforced(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        WebhookConfig(
+            paths={
+                "/webhook/x": WebhookPathConfig(
+                    auth=HMACAuthConfig(secret_env="X"),
+                ),
+            },
+            port=0,  # ephemeral — test allowance
+        )
+        with pytest.raises(ValueError):
+            WebhookConfig(
+                paths={
+                    "/webhook/x": WebhookPathConfig(
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                },
+                port=70000,  # type: ignore[arg-type]
+            )
+
+    def test_proctor_config_webhook_optional(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.webhook is None
