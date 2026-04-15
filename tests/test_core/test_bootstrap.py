@@ -190,6 +190,7 @@ class TestEventBusFunctional:
             app.bus.subscribe("test.*", handler)
             event = Event(type="test.ping", source="test")
             await app.bus.publish(event)
+            await app.bus.flush()
             assert len(received) == 1
             assert received[0].id == event.id
         finally:
@@ -222,6 +223,7 @@ class TestEventBusFunctional:
                     payload={"text": "hello"},
                 )
             )
+            await app.bus.flush()
             assert len(results) == 1
             assert results[0].type == "task.completed"
             assert results[0].payload["output"] == "echo: hello"
@@ -252,6 +254,7 @@ class TestHandleTerminal:
                     payload={"text": "hello"},
                 )
             )
+            await app.bus.flush()
             assert len(results) == 1
             assert results[0].type == "task.failed"
             assert "engine" in results[0].payload["error"].lower()
@@ -291,6 +294,7 @@ class TestHandleTerminal:
                     payload={"text": ""},
                 )
             )
+            await app.bus.flush()
             # Router matched → task created with empty prompt → a task event emitted
             # (completed or failed depending on LLM handling of empty string)
             assert len(results) == 1
@@ -324,6 +328,7 @@ class TestHandleTerminal:
                     payload={"text": "test"},
                 )
             )
+            await app.bus.flush()
             assert len(results) == 1
             assert results[0].type == "task.failed"
             assert "LLM down" in results[0].payload["error"]
@@ -350,6 +355,7 @@ class TestHandleTerminal:
                     payload={"text": "hello"},
                 )
             )
+            await app.bus.flush()
             episodes = await app.memory.list_episodes(limit=10)
             assert len(episodes) == 1
             ep = episodes[0]
@@ -380,6 +386,7 @@ class TestHandleTerminal:
                     payload={"text": "test"},
                 )
             )
+            await app.bus.flush()
             episodes = await app.memory.list_episodes(limit=10)
             assert len(episodes) == 1
             ep = episodes[0]
@@ -724,14 +731,20 @@ class TestRouterIntegration:
 
     @pytest.mark.anyio
     async def test_subscribe_pattern_is_trigger_star(self, tmp_path: Path) -> None:
-        """Application subscribes to trigger.*, not trigger.terminal."""
+        """Application subscribes to trigger.>, not trigger.terminal.
+
+        The NATS multi-token wildcard "trigger.>" matches any number of
+        trailing tokens (trigger.terminal, trigger.webhook.github, etc.),
+        unlike "trigger.*" which matches exactly one.
+        """
         cfg = ProctorConfig(data_dir=tmp_path / "proctor_data")
         app = Application(cfg)
         await app.start()
         try:
-            # _subscriptions is a list[_Subscription] with .pattern attribute
-            patterns = {sub.pattern for sub in app.bus._subscriptions}
-            assert "trigger.*" in patterns
+            # LocalEventTransport exposes _subscriptions (set of _LocalSubscription)
+            transport = app.bus._transport
+            patterns = {sub.subject for sub in transport._subscriptions}  # type: ignore[attr-defined]
+            assert "trigger.>" in patterns
             assert "trigger.terminal" not in patterns
         finally:
             await app.stop()

@@ -9,7 +9,15 @@ import pytest
 from proctor.core.bus import EventBus
 from proctor.core.config import ScheduleItemConfig
 from proctor.core.models import Event
+from proctor.core.transport import LocalEventTransport
 from proctor.triggers.scheduler import SchedulerTrigger
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    """LocalEventTransport uses asyncio primitives."""
+    return "asyncio"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -123,7 +131,8 @@ class TestSchedulerTriggerInit:
 class TestIntervalScheduling:
     @pytest.mark.anyio
     async def test_interval_fires_events(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -146,7 +155,8 @@ class TestIntervalScheduling:
 
     @pytest.mark.anyio
     async def test_multiple_interval_items(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -178,7 +188,8 @@ class TestCronScheduling:
     @pytest.mark.anyio
     async def test_cron_publishes_correct_event_type(self) -> None:
         """Verify _publish produces the right event shape."""
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -191,6 +202,7 @@ class TestCronScheduling:
 
         # Call _publish directly to avoid waiting for real cron delay
         await trigger._publish(item, bus)
+        await bus.flush()
 
         assert len(received) == 1
         assert received[0].type == "trigger.scheduler"
@@ -200,7 +212,8 @@ class TestCronScheduling:
     @pytest.mark.anyio
     async def test_cron_fires_event_via_start(self) -> None:
         """Cron schedule publishes an event on the bus after firing."""
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -236,7 +249,8 @@ class TestCronScheduling:
     @pytest.mark.anyio
     async def test_cron_event_has_correct_fields(self) -> None:
         """Event from cron has correct type, source, and payload."""
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -279,7 +293,8 @@ class TestCronScheduling:
 class TestDisabledSchedules:
     @pytest.mark.anyio
     async def test_disabled_items_not_started(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -306,7 +321,8 @@ class TestDisabledSchedules:
 
     @pytest.mark.anyio
     async def test_all_disabled_no_tasks(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -334,7 +350,8 @@ class TestDisabledSchedules:
 class TestLifecycle:
     @pytest.mark.anyio
     async def test_stop_cancels_all_tasks(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         items = [
             _interval_item(name="a", interval_seconds=0.02),
             _interval_item(name="b", interval_seconds=0.02),
@@ -350,7 +367,8 @@ class TestLifecycle:
         self,
     ) -> None:
         """stop() cleanly cancels cron tasks without errors."""
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         items = [
             _cron_item(name="cron-a"),
             _cron_item(name="cron-b"),
@@ -364,7 +382,8 @@ class TestLifecycle:
     @pytest.mark.anyio
     async def test_stop_cancels_mixed_tasks(self) -> None:
         """stop() cleanly cancels a mix of cron and interval tasks."""
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         items = [
             _cron_item(name="cron-mix"),
             _interval_item(name="interval-mix", interval_seconds=10),
@@ -383,7 +402,8 @@ class TestLifecycle:
 
     @pytest.mark.anyio
     async def test_empty_schedules(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = SchedulerTrigger(schedules=[])
         await trigger.start(bus)
         assert trigger._task_group is not None

@@ -39,21 +39,15 @@ class EventBus:
     async def publish(self, event: Event) -> None:
         await self._transport.publish(event)
 
-    def subscribe(
-        self, subject: str, handler: Handler
-    ) -> SubscriptionHandle:
+    def subscribe(self, subject: str, handler: Handler) -> SubscriptionHandle:
         return self._transport.subscribe(subject, handler)
 
     @property
     def connection_state(self) -> ConnectionState:
         return self._transport.connection_state
 
-    def add_disconnect_listener(
-        self, cb: DisconnectCallback
-    ) -> ListenerHandle:
+    def add_disconnect_listener(self, cb: DisconnectCallback) -> ListenerHandle:
         return self._transport.add_disconnect_listener(cb)
 
-    def add_reconnect_listener(
-        self, cb: DisconnectCallback
-    ) -> ListenerHandle:
+    def add_reconnect_listener(self, cb: DisconnectCallback) -> ListenerHandle:
         return self._transport.add_reconnect_listener(cb)

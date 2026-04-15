@@ -8,7 +8,6 @@ from proctor.core.bus import EventBus
 from proctor.core.models import Event
 from proctor.core.transport import ConnectionState, LocalEventTransport
 
-
 pytestmark = pytest.mark.anyio
 
 
@@ -31,8 +30,10 @@ class TestEventBus:
 
     async def test_publish_subscribe(self) -> None:
         received: list[Event] = []
+
         async def h(e: Event) -> None:
             received.append(e)
+
         bus = EventBus(LocalEventTransport())
         bus.subscribe("test.ok", h)
         await bus.start()

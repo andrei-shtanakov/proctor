@@ -10,6 +10,7 @@ from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.router import Router
 from proctor.core.state import StateManager
+from proctor.core.transport import LocalEventTransport
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.triggers.webhook import WebhookTrigger
@@ -30,7 +31,7 @@ class Application:
 
     def __init__(self, config: ProctorConfig) -> None:
         self.config = config
-        self.bus = EventBus()
+        self.bus = EventBus(LocalEventTransport())
         self.state = StateManager(config.data_dir / "state.db")
         self.memory = EpisodicMemory(config.data_dir / "episodes.db")
         self.is_running = False
@@ -49,6 +50,7 @@ class Application:
     async def start(self) -> None:
         """Initialize state and memory, subscribe handlers, set running."""
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
+        await self.bus.start()
         await self.state.initialize()
         await self.memory.initialize()
         self._router = Router(
@@ -56,7 +58,9 @@ class Application:
             routes=self.config.routes,
             workflows=self.config.workflows,
         )
-        self.bus.subscribe("trigger.*", self._handle_trigger_event)
+        # "trigger.>" — NATS multi-token wildcard; matches trigger.terminal,
+        # trigger.scheduler, trigger.webhook.github, trigger.telegram, etc.
+        self.bus.subscribe("trigger.>", self._handle_trigger_event)
 
         if self.config.telegram is not None:
             self._telegram_trigger = TelegramTrigger(self.config.telegram)
@@ -91,6 +95,7 @@ class Application:
             self._scheduler = None
         await self.memory.close()
         await self.state.close()
+        await self.bus.stop()
         logger.info("Application stopped")
 
     async def _handle_trigger_event(self, event: Event) -> None:

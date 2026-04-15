@@ -288,7 +288,15 @@ class LocalEventTransport(EventTransport):
                         t.cancel()
 
     async def flush(self, timeout: float = 5.0) -> None:
-        return
+        """Wait for all pending handler tasks to complete.
+
+        For parity with NATSEventTransport.flush() (which blocks until
+        the wire has drained), the local variant blocks until scheduled
+        handler callbacks finish — including any events they publish,
+        transitively. Timeout bounds the total wait.
+        """
+        deadline = time.monotonic() + timeout
+        await self._drain_handler_tasks(deadline)
 
     # --- publish / subscribe ---
 
@@ -345,6 +353,31 @@ class LocalEventTransport(EventTransport):
             task = asyncio.create_task(self._safe_invoke(sub.handler, event))
             self._handler_tasks.add(task)
             task.add_done_callback(self._handler_tasks.discard)
+
+    async def _drain_handler_tasks(self, deadline: float | None = None) -> None:
+        """Await completion of all pending handler tasks until deadline.
+
+        Re-iterates because handlers may chain new publishes that
+        schedule fresh tasks. Bounded by the deadline (None = no
+        bound).
+        """
+        while True:
+            pending = [t for t in self._handler_tasks if not t.done()]
+            if not pending:
+                return
+            if deadline is None:
+                await asyncio.gather(*pending, return_exceptions=True)
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*pending, return_exceptions=True),  # type: ignore[arg-type]
+                    timeout=remaining,
+                )
+            except TimeoutError:
+                return
 
     async def _safe_invoke(self, handler: Handler, event: Event) -> None:
         try:

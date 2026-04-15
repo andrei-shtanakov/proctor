@@ -4,7 +4,14 @@ import pytest
 
 from proctor.core.bus import EventBus
 from proctor.core.models import Event
+from proctor.core.transport import LocalEventTransport
 from proctor.triggers.terminal import QUIT_COMMANDS, TerminalTrigger
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    """LocalEventTransport uses asyncio primitives."""
+    return "asyncio"
 
 
 class TestProcessLine:
@@ -12,7 +19,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_non_empty_line_publishes_event(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
         received: list[Event] = []
 
@@ -22,6 +30,7 @@ class TestProcessLine:
         bus.subscribe("trigger.terminal", handler)
 
         result = await trigger._process_line("hello world", bus)
+        await bus.flush()
 
         assert result is None
         assert len(received) == 1
@@ -31,7 +40,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_empty_line_ignored(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
         received: list[Event] = []
 
@@ -47,7 +57,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_whitespace_only_ignored(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
         received: list[Event] = []
 
@@ -63,7 +74,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_quit_command(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
         received: list[Event] = []
 
@@ -79,7 +91,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_exit_command(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
 
         result = await trigger._process_line("/exit", bus)
@@ -88,7 +101,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_q_command(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
 
         result = await trigger._process_line("/q", bus)
@@ -97,7 +111,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_quit_case_insensitive(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
 
         result = await trigger._process_line("/QUIT", bus)
@@ -106,7 +121,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_quit_with_surrounding_whitespace(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
 
         result = await trigger._process_line("  /quit  ", bus)
@@ -115,7 +131,8 @@ class TestProcessLine:
 
     @pytest.mark.anyio
     async def test_line_stripped_before_publish(self) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
         received: list[Event] = []
 
@@ -125,6 +142,7 @@ class TestProcessLine:
         bus.subscribe("trigger.terminal", handler)
 
         await trigger._process_line("  hello  ", bus)
+        await bus.flush()
 
         assert received[0].payload == {"text": "hello"}
 
@@ -132,7 +150,8 @@ class TestProcessLine:
     async def test_multiple_lines_publish_multiple_events(
         self,
     ) -> None:
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = TerminalTrigger()
         received: list[Event] = []
 
@@ -143,6 +162,7 @@ class TestProcessLine:
 
         await trigger._process_line("first", bus)
         await trigger._process_line("second", bus)
+        await bus.flush()
 
         assert len(received) == 2
         assert received[0].payload == {"text": "first"}

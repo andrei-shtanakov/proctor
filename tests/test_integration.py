@@ -20,6 +20,7 @@ from proctor.core.config import (
     WebhookPathConfig,
 )
 from proctor.core.models import Event, TaskStatus
+from proctor.core.transport import LocalEventTransport
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
@@ -84,6 +85,7 @@ class TestTerminalToResult:
                     payload={"text": "Tell me about RISC-V"},
                 )
             )
+            await app.bus.flush()
 
             assert len(results) == 1
             assert results[0].type == "task.completed"
@@ -112,6 +114,7 @@ class TestTerminalToResult:
                     payload={"text": "hello"},
                 )
             )
+            await app.bus.flush()
 
             tasks = await app.state.list_tasks(status=TaskStatus.COMPLETED)
             assert len(tasks) == 1
@@ -157,6 +160,7 @@ class TestTerminalToResult:
                     payload={"text": "test"},
                 )
             )
+            await app.bus.flush()
 
             assert statuses == [
                 TaskStatus.PENDING,
@@ -193,6 +197,7 @@ class TestTerminalToResult:
                     payload={"text": "test"},
                 )
             )
+            await app.bus.flush()
 
             # Event emitted
             assert len(results) == 1
@@ -233,6 +238,7 @@ class TestTerminalToResult:
                     payload={"text": "ping"},
                 )
             )
+            await app.bus.flush()
 
             assert results[0].type == "task.completed"
             assert results[0].payload["output"] == "via-engine: ping"
@@ -249,7 +255,8 @@ class TestSchedulerTriggerIntegration:
         WHEN it runs for ~0.5s
         THEN at least 2 trigger.scheduler events are received.
         """
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -283,7 +290,8 @@ class TestSchedulerTriggerIntegration:
         WHEN stop() is called
         THEN no more events are published and tasks list is empty.
         """
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -377,8 +385,14 @@ class TestWebhookIntegration:
                 ) as r,
             ):
                 assert r.status == 202
-            # Give the workflow a moment to complete.
-            await asyncio.sleep(0.1)
+            # Give the workflow a moment to complete. Poll a few times
+            # since the webhook's publish is decoupled from the response.
+            for _ in range(20):
+                await asyncio.sleep(0.05)
+                await app.bus.flush()
+                episodes = await app.memory.list_episodes(limit=10)
+                if episodes:
+                    break
             episodes = await app.memory.list_episodes(limit=10)
             assert any(
                 ep.agent_response == "echo: hello from github" for ep in episodes
