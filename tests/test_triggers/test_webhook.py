@@ -1,10 +1,18 @@
 """Tests for WebhookTrigger and its helpers."""
 
 import asyncio
+import hashlib
+import hmac
+from unittest.mock import MagicMock
 
 import pytest
 
-from proctor.triggers.webhook import InflightLimiter, _safe_headers
+from proctor.core.config import (
+    BearerAuthConfig,
+    HMACAuthConfig,
+    NoneAuthConfig,
+)
+from proctor.triggers.webhook import InflightLimiter, _safe_headers, _verify_auth
 
 
 @pytest.fixture
@@ -96,3 +104,113 @@ class TestSafeHeaders:
     def test_case_insensitive_match(self) -> None:
         result = _safe_headers({"x-github-event": "push"})
         assert result == {"x-github-event": "push"}
+
+
+def _sign_hmac(
+    body: bytes,
+    secret: str,
+    *,
+    prefix: str = "sha256=",
+) -> str:
+    """Build HMAC header value: '<prefix><hex>'."""
+    return prefix + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+def _mock_request(headers: dict[str, str]) -> MagicMock:
+    req = MagicMock()
+    req.headers = headers
+    return req
+
+
+class TestVerifyAuthHMAC:
+    def test_valid_signature(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_SECRET", "topsecret")
+        body = b'{"x": 1}'
+        cfg = HMACAuthConfig(secret_env="TEST_SECRET")
+        sig = _sign_hmac(body, "topsecret")
+        req = _mock_request({"X-Hub-Signature-256": sig})
+        assert _verify_auth(cfg, req, body) is True
+
+    def test_missing_header(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_SECRET", "topsecret")
+        cfg = HMACAuthConfig(secret_env="TEST_SECRET")
+        req = _mock_request({})
+        assert _verify_auth(cfg, req, b"") is False
+
+    def test_bad_prefix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_SECRET", "topsecret")
+        body = b'{"x": 1}'
+        cfg = HMACAuthConfig(secret_env="TEST_SECRET", prefix="v0=")
+        sig = _sign_hmac(body, "topsecret", prefix="sha256=")
+        req = _mock_request({"X-Hub-Signature-256": sig})
+        assert _verify_auth(cfg, req, body) is False
+
+    def test_bad_signature(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_SECRET", "topsecret")
+        cfg = HMACAuthConfig(secret_env="TEST_SECRET")
+        req = _mock_request({"X-Hub-Signature-256": "sha256=" + "a" * 64})
+        assert _verify_auth(cfg, req, b"body") is False
+
+    def test_custom_header_and_prefix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Non-GitHub shape: header name + prefix parameterizable.
+
+        Does NOT make Proctor Slack-compatible: real Slack signs
+        'v0:{timestamp}:{body}', not just the body.
+        """
+        monkeypatch.setenv("TEST_SECRET", "topsecret")
+        body = b'{"x": 1}'
+        cfg = HMACAuthConfig(
+            secret_env="TEST_SECRET",
+            header="X-Slack-Signature",
+            prefix="v0=",
+        )
+        sig = _sign_hmac(body, "topsecret", prefix="v0=")
+        req = _mock_request({"X-Slack-Signature": sig})
+        assert _verify_auth(cfg, req, body) is True
+
+    def test_empty_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_SECRET", "topsecret")
+        cfg = HMACAuthConfig(secret_env="TEST_SECRET")
+        sig = _sign_hmac(b"", "topsecret")
+        req = _mock_request({"X-Hub-Signature-256": sig})
+        assert _verify_auth(cfg, req, b"") is True
+
+
+class TestVerifyAuthBearer:
+    def test_valid_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_TOKEN", "alpha-beta-gamma")
+        cfg = BearerAuthConfig(secret_env="TEST_TOKEN")
+        req = _mock_request({"Authorization": "Bearer alpha-beta-gamma"})
+        assert _verify_auth(cfg, req, b"") is True
+
+    def test_case_insensitive_scheme(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """RFC 6750 §2.1 — scheme name case-insensitive."""
+        monkeypatch.setenv("TEST_TOKEN", "alpha-beta-gamma")
+        cfg = BearerAuthConfig(secret_env="TEST_TOKEN")
+        req = _mock_request({"Authorization": "bearer alpha-beta-gamma"})
+        assert _verify_auth(cfg, req, b"") is True
+
+    def test_missing_header(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_TOKEN", "alpha-beta-gamma")
+        cfg = BearerAuthConfig(secret_env="TEST_TOKEN")
+        req = _mock_request({})
+        assert _verify_auth(cfg, req, b"") is False
+
+    def test_wrong_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_TOKEN", "alpha-beta-gamma")
+        cfg = BearerAuthConfig(secret_env="TEST_TOKEN")
+        req = _mock_request({"Authorization": "Bearer wrong"})
+        assert _verify_auth(cfg, req, b"") is False
+
+    def test_non_bearer_scheme(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TEST_TOKEN", "alpha-beta-gamma")
+        cfg = BearerAuthConfig(secret_env="TEST_TOKEN")
+        req = _mock_request({"Authorization": "Basic xxx"})
+        assert _verify_auth(cfg, req, b"") is False
+
+
+class TestVerifyAuthNone:
+    def test_always_true(self) -> None:
+        cfg = NoneAuthConfig()
+        req = _mock_request({})
+        assert _verify_auth(cfg, req, b"") is True
