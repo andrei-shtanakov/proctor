@@ -26,6 +26,25 @@ telegram:
   allowed_chat_ids: []
   poll_timeout: 30
 
+webhook:
+  host: 127.0.0.1
+  port: 8080
+  max_in_flight: 20
+  max_body_bytes: 1048576
+  shutdown_timeout: 30.0
+  paths:
+    /webhook/github:
+      source_name: github
+      auth:
+        type: hmac
+        secret_env: GITHUB_WEBHOOK_SECRET
+        header: X-Hub-Signature-256
+        prefix: "sha256="
+    /webhook/ci:
+      auth:
+        type: bearer
+        secret_env: PROCTOR_CI_TOKEN
+
 workflows:
   chat:
     workflow_id: chat
@@ -44,6 +63,12 @@ routes:
   - event_pattern: "trigger.scheduler"
     workflow_id: heartbeat
     prompt_from_payload: prompt
+  - event_pattern: "trigger.webhook.github"
+    workflow_id: chat
+    prompt_from_payload: body.head_commit.message
+  - event_pattern: "trigger.webhook.ci"
+    workflow_id: chat
+    prompt_from_payload: body.message
 
 schedules:
   - name: heartbeat
