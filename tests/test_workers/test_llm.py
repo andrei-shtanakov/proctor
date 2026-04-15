@@ -293,3 +293,37 @@ class TestFallback:
         rows = await _fetch_rows(memory)
         assert len(rows) == 2  # both primary attempts recorded
         assert all(r["model"] == "primary" for r in rows)
+
+
+class TestNonTransient:
+    async def test_authentication_error_propagates_immediately(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        call_count = 0
+
+        async def fake_acompletion(**_kwargs: Any) -> SimpleNamespace:
+            nonlocal call_count
+            call_count += 1
+            raise litellm.AuthenticationError(
+                "bad key", model="primary", llm_provider="test"
+            )
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        cfg = LLMConfig(
+            default_model="primary",
+            fallback_model="fallback",
+            max_retries=3,  # would retry if it were transient
+        )
+        call = build_llm_call(cfg, memory)
+
+        with pytest.raises(litellm.AuthenticationError):
+            await call("hi")
+
+        assert call_count == 1  # no retry, no fallback
+        rows = await _fetch_rows(memory)
+        assert len(rows) == 1
+        assert rows[0]["error"] is not None
+        assert rows[0]["fallback_used"] == 0
