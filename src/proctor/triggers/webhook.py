@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import os
 from collections.abc import Mapping
@@ -248,5 +249,92 @@ class WebhookTrigger(Trigger):
         logger.info("WebhookTrigger stopped")
 
     async def _handle_webhook(self, request: web.Request) -> web.Response:
-        # Placeholder — full implementation in Task 7.
-        return web.json_response({"stub": True}, status=501)
+        try:
+            cfg = self._paths[request.path]
+
+            if not await self._limiter.try_acquire():
+                logger.warning(
+                    "webhook overloaded: rejected %s (in_flight=%d/%d)",
+                    request.path,
+                    self._limiter.in_flight,
+                    self._limiter.limit,
+                )
+                return web.json_response(
+                    {"error": "overloaded"},
+                    status=503,
+                    headers={"Retry-After": "1"},
+                )
+            try:
+                raw_body = await request.read()
+
+                if not _verify_auth(cfg.auth, request, raw_body):
+                    logger.info(
+                        "webhook auth failed: path=%s",
+                        request.path,
+                    )
+                    return web.json_response(
+                        {"error": "unauthorized"},
+                        status=401,
+                    )
+
+                try:
+                    body = json.loads(raw_body) if raw_body else {}
+                except json.JSONDecodeError:
+                    return web.json_response(
+                        {"error": "bad request"},
+                        status=400,
+                    )
+
+                headers = _safe_headers(request.headers)
+                assert cfg.source_name is not None  # guaranteed by validator
+                event = Event(
+                    type=f"trigger.webhook.{cfg.source_name}",
+                    source="webhook",
+                    payload={
+                        "path": request.path,
+                        "headers": headers,
+                        "body": body,
+                    },
+                )
+                assert self._bus is not None  # set in start()
+                try:
+                    await self._bus.publish(event)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception(
+                        "webhook failed to publish event for %s",
+                        request.path,
+                    )
+                    return web.json_response(
+                        {"error": "service unavailable"},
+                        status=503,
+                        headers={"Retry-After": "5"},
+                    )
+
+                logger.debug(
+                    "webhook accepted: path=%s source=%s event_id=%s",
+                    request.path,
+                    cfg.source_name,
+                    event.id,
+                )
+                return web.json_response(
+                    {"accepted": True, "correlation_id": event.id},
+                    status=202,
+                )
+            finally:
+                await self._limiter.release()
+        except asyncio.CancelledError:
+            raise
+        except web.HTTPException:
+            raise
+        except Exception:
+            logger.exception(
+                "webhook handler unexpected error for %s",
+                request.path,
+            )
+            return web.json_response(
+                {"error": "service unavailable"},
+                status=503,
+                headers={"Retry-After": "5"},
+            )

@@ -4,8 +4,10 @@ import asyncio
 import hashlib
 import hmac
 import logging
+from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock
 
+import aiohttp
 import pytest
 
 from proctor.core.bus import EventBus
@@ -16,6 +18,7 @@ from proctor.core.config import (
     WebhookConfig,
     WebhookPathConfig,
 )
+from proctor.core.models import Event
 from proctor.triggers.webhook import (
     InflightLimiter,
     WebhookTrigger,
@@ -24,7 +27,7 @@ from proctor.triggers.webhook import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def anyio_backend() -> str:
     return "asyncio"
 
@@ -286,3 +289,210 @@ class TestLifecycle:
         )
         trigger = WebhookTrigger(cfg)
         assert trigger.bound_port is None
+
+
+@pytest.fixture(scope="module")
+async def webhook_env() -> AsyncGenerator[tuple[WebhookTrigger, EventBus, str], None]:
+    """Module-scoped fixture: env vars + a started WebhookTrigger on
+    an ephemeral port. Uses pytest.MonkeyPatch() directly because
+    the built-in monkeypatch fixture is function-scoped.
+    """
+    mp = pytest.MonkeyPatch()
+    mp.setenv("TEST_HMAC_SECRET", "topsecret")
+    mp.setenv("TEST_BEARER_TOKEN", "alpha-beta-gamma")
+    try:
+        cfg = WebhookConfig(
+            host="127.0.0.1",
+            port=0,
+            paths={
+                "/webhook/hmac": WebhookPathConfig(
+                    auth=HMACAuthConfig(secret_env="TEST_HMAC_SECRET"),
+                ),
+                "/webhook/bearer": WebhookPathConfig(
+                    auth=BearerAuthConfig(secret_env="TEST_BEARER_TOKEN"),
+                ),
+                "/webhook/open": WebhookPathConfig(
+                    auth=NoneAuthConfig(),
+                ),
+            },
+        )
+        bus = EventBus()
+        trigger = WebhookTrigger(cfg)
+        await trigger.start(bus)
+        yield trigger, bus, f"http://127.0.0.1:{trigger.bound_port}"
+        await trigger.stop()
+    finally:
+        mp.undo()
+
+
+@pytest.fixture
+def captured(
+    webhook_env: tuple[WebhookTrigger, EventBus, str],
+) -> tuple[list[Event], asyncio.Event]:
+    trigger, bus, _ = webhook_env
+    events: list[Event] = []
+    arrived = asyncio.Event()
+
+    async def _collect(e: Event) -> None:
+        events.append(e)
+        arrived.set()
+
+    bus.subscribe("trigger.webhook.*", _collect)
+    return events, arrived
+
+
+async def _post(
+    session: aiohttp.ClientSession,
+    url: str,
+    body: bytes,
+    headers: dict[str, str],
+) -> tuple[int, dict]:
+    async with session.post(url, data=body, headers=headers) as resp:
+        try:
+            data = await resp.json()
+        except aiohttp.ContentTypeError:
+            data = {}
+        return resp.status, data
+
+
+class TestHappyPathHMAC:
+    async def test_valid_signature_returns_202_and_event(
+        self,
+        webhook_env: tuple[WebhookTrigger, EventBus, str],
+        captured: tuple[list[Event], asyncio.Event],
+    ) -> None:
+        _, _, url = webhook_env
+        events, arrived = captured
+
+        body = b'{"hello": "world"}'
+        sig = _sign_hmac(body, "topsecret")
+
+        async with aiohttp.ClientSession() as s:
+            status, data = await _post(
+                s,
+                f"{url}/webhook/hmac",
+                body,
+                {
+                    "Content-Type": "application/json",
+                    "X-Hub-Signature-256": sig,
+                    "X-GitHub-Event": "push",
+                    "X-GitHub-Delivery": "del-1",
+                },
+            )
+
+        assert status == 202
+        assert data["accepted"] is True
+        assert "correlation_id" in data
+
+        await arrived.wait()
+        assert len(events) == 1
+        ev = events[0]
+        assert ev.type == "trigger.webhook.hmac"
+        assert ev.source == "webhook"
+        assert ev.payload["path"] == "/webhook/hmac"
+        assert ev.payload["body"] == {"hello": "world"}
+        assert ev.payload["headers"]["X-GitHub-Event"] == "push"
+        assert "X-Hub-Signature-256" not in ev.payload["headers"]
+        assert data["correlation_id"] == ev.id
+
+
+class TestStatusCodes:
+    async def test_unregistered_path_404(
+        self, webhook_env: tuple[WebhookTrigger, EventBus, str]
+    ) -> None:
+        _, _, url = webhook_env
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(f"{url}/webhook/nope", data=b"{}") as r,
+        ):
+            assert r.status == 404
+
+    async def test_wrong_method_405(
+        self, webhook_env: tuple[WebhookTrigger, EventBus, str]
+    ) -> None:
+        _, _, url = webhook_env
+        async with (
+            aiohttp.ClientSession() as s,
+            s.get(f"{url}/webhook/open") as r,
+        ):
+            assert r.status == 405
+
+    async def test_bad_signature_401(
+        self, webhook_env: tuple[WebhookTrigger, EventBus, str]
+    ) -> None:
+        _, _, url = webhook_env
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(
+                f"{url}/webhook/hmac",
+                data=b'{"x": 1}',
+                headers={"X-Hub-Signature-256": "sha256=" + "a" * 64},
+            ) as r,
+        ):
+            assert r.status == 401
+            data = await r.json()
+            assert data == {"error": "unauthorized"}
+
+    async def test_missing_auth_header_401(
+        self, webhook_env: tuple[WebhookTrigger, EventBus, str]
+    ) -> None:
+        _, _, url = webhook_env
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(f"{url}/webhook/bearer", data=b"{}") as r,
+        ):
+            assert r.status == 401
+
+    async def test_malformed_json_400(
+        self, webhook_env: tuple[WebhookTrigger, EventBus, str]
+    ) -> None:
+        _, _, url = webhook_env
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(f"{url}/webhook/open", data=b"{not json") as r,
+        ):
+            assert r.status == 400
+
+    async def test_empty_body_accepted(
+        self,
+        webhook_env: tuple[WebhookTrigger, EventBus, str],
+        captured: tuple[list[Event], asyncio.Event],
+    ) -> None:
+        _, _, url = webhook_env
+        events, arrived = captured
+        async with (
+            aiohttp.ClientSession() as s,
+            s.post(f"{url}/webhook/open", data=b"") as r,
+        ):
+            assert r.status == 202
+        await arrived.wait()
+        assert events[-1].payload["body"] == {}
+
+    async def test_body_too_large_413(
+        self,
+    ) -> None:
+        mp = pytest.MonkeyPatch()
+        try:
+            cfg = WebhookConfig(
+                host="127.0.0.1",
+                port=0,
+                max_body_bytes=100,
+                paths={
+                    "/webhook/tiny": WebhookPathConfig(
+                        auth=NoneAuthConfig(),
+                    ),
+                },
+            )
+            trigger = WebhookTrigger(cfg)
+            await trigger.start(EventBus())
+            try:
+                url = f"http://127.0.0.1:{trigger.bound_port}"
+                async with (
+                    aiohttp.ClientSession() as s,
+                    s.post(f"{url}/webhook/tiny", data=b"x" * 500) as r,
+                ):
+                    assert r.status == 413
+            finally:
+                await trigger.stop()
+        finally:
+            mp.undo()
