@@ -496,3 +496,65 @@ class TestStatusCodes:
                 await trigger.stop()
         finally:
             mp.undo()
+
+
+class TestHappyPathBearer:
+    async def test_valid_bearer_returns_202(
+        self, webhook_env, captured
+    ) -> None:
+        _, _, url = webhook_env
+        events, arrived = captured
+        async with aiohttp.ClientSession() as s:
+            status, data = await _post(
+                s,
+                f"{url}/webhook/bearer",
+                b'{"x": 1}',
+                {"Authorization": "Bearer alpha-beta-gamma"},
+            )
+        assert status == 202
+        await arrived.wait()
+        assert events[-1].type == "trigger.webhook.bearer"
+
+
+class TestHeaderWhitelistE2E:
+    async def test_auth_headers_never_in_payload(
+        self, webhook_env, captured
+    ) -> None:
+        _, _, url = webhook_env
+        events, arrived = captured
+        async with aiohttp.ClientSession() as s:
+            status, _ = await _post(
+                s,
+                f"{url}/webhook/bearer",
+                b'{"x": 1}',
+                {
+                    "Authorization": "Bearer alpha-beta-gamma",
+                    "Cookie": "sid=secret",
+                    "Stripe-Signature": "t=1,v1=x",
+                    "X-GitHub-Event": "push",
+                    "Content-Type": "application/json",
+                },
+            )
+        assert status == 202
+        await arrived.wait()
+        headers = events[-1].payload["headers"]
+        assert "Authorization" not in headers
+        assert "Cookie" not in headers
+        assert "Stripe-Signature" not in headers
+        assert headers.get("X-GitHub-Event") == "push"
+        assert headers.get("Content-Type") == "application/json"
+
+
+class TestUnauthenticatedOpenPath:
+    async def test_open_path_accepts_anything(
+        self, webhook_env, captured
+    ) -> None:
+        _, _, url = webhook_env
+        events, arrived = captured
+        async with aiohttp.ClientSession() as s:
+            status, _ = await _post(
+                s, f"{url}/webhook/open", b'{"x": 1}', {}
+            )
+        assert status == 202
+        await arrived.wait()
+        assert events[-1].type == "trigger.webhook.open"
