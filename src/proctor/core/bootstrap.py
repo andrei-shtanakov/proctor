@@ -1,11 +1,16 @@
 """Application bootstrap — lifecycle management and component wiring."""
 
 import logging
+import socket
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Literal
 
 from proctor.core.bus import EventBus
-from proctor.core.config import ProctorConfig
+from proctor.core.config import (
+    ProctorConfig,
+    _resolve_transport_mode_static,
+)
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.router import Router
@@ -22,6 +27,32 @@ logger = logging.getLogger(__name__)
 LLMCall = Callable[[str], Awaitable[str]]
 
 
+def _resolve_transport_mode(
+    config: ProctorConfig,
+) -> Literal["local", "nats"]:
+    """Resolve config.transport to an effective mode."""
+    return _resolve_transport_mode_static(config.transport, config.node_role)
+
+
+def _build_event_transport(config: ProctorConfig) -> EventTransport:
+    """Construct the EventTransport implementation selected by config."""
+    mode = _resolve_transport_mode(config)
+    if mode == "local":
+        return LocalEventTransport(
+            max_payload=config.events.max_payload,
+        )
+
+    from proctor.core.transport.nats import NATSEventTransport
+
+    nats_cfg = config.nats
+    hostname = socket.gethostname()
+    if nats_cfg.name == f"proctor-{hostname}":
+        nats_cfg = nats_cfg.model_copy(
+            update={"name": f"proctor-{config.node_role}-{hostname}"}
+        )
+    return NATSEventTransport(nats_cfg, events_config=config.events)
+
+
 class Application:
     """Main application container.
 
@@ -36,9 +67,7 @@ class Application:
         event_transport: EventTransport | None = None,
     ) -> None:
         self.config = config
-        transport = event_transport or LocalEventTransport(
-            max_payload=config.events.max_payload,
-        )
+        transport = event_transport or _build_event_transport(config)
         self.bus = EventBus(transport)
         self.state = StateManager(config.data_dir / "state.db")
         self.memory = EpisodicMemory(config.data_dir / "episodes.db")

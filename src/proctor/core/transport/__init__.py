@@ -43,3 +43,14 @@ __all__ = [
     "TransportLifecycleError",
     "TransportUnavailableError",
 ]
+
+try:
+    from proctor.core.transport.nats import (
+        NATSEventTransport,
+        register_decoder,
+    )
+
+    __all__ += ["NATSEventTransport", "register_decoder"]
+except ImportError:  # pragma: no cover
+    # nats-py not installed — standalone deployment
+    pass

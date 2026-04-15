@@ -1,7 +1,9 @@
 # Proctor configuration
 node_role: standalone
 node_id: node-local
-nats_url: nats://localhost:4222
+# transport: "auto" (default) resolves to "local" for standalone, "nats"
+# for core/worker. Override with "local" or "nats" to force.
+transport: auto
 data_dir: data
 log_level: INFO
 
@@ -12,10 +14,13 @@ llm:
   temperature: 0.7
 
 nats:
-  url: nats://localhost:4222
+  servers:
+    - nats://localhost:4222
+  subject_prefix: proctor
   connect_timeout: 5.0
   reconnect_time_wait: 2.0
-  max_reconnect_attempts: 60
+  reconnect_jitter: 0.5
+  max_reconnect_attempts: -1
 
 scheduler:
   poll_interval_seconds: 30
