@@ -41,6 +41,9 @@ def build_llm_call(config: LLMConfig, memory: EpisodicMemory) -> LLMCall:
     async def _call(prompt: str, model: str | None = None) -> str:
         chosen = model or config.default_model
         start = monotonic()
+        # litellm.acompletion is declared as returning
+        # Union[ModelResponse, CustomStreamWrapper]. We never pass stream=True,
+        # so the result is always ModelResponse — pyrefly can't narrow this.
         resp = await litellm.acompletion(  # type: ignore[misc]
             model=chosen,
             messages=[{"role": "user", "content": prompt}],
