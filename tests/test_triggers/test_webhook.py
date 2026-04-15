@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from proctor.triggers.webhook import InflightLimiter
+from proctor.triggers.webhook import InflightLimiter, _safe_headers
 
 
 @pytest.fixture
@@ -52,3 +52,47 @@ class TestInflightLimiter:
         await asyncio.gather(*[acquire_release() for _ in range(10)])
         assert lim.in_flight == 0
         assert await lim.wait_idle(0.5) is True
+
+
+class TestSafeHeaders:
+    def test_auth_headers_excluded(self) -> None:
+        result = _safe_headers(
+            {
+                "Authorization": "Bearer xyz",
+                "X-Hub-Signature-256": "sha256=abc",
+                "Stripe-Signature": "t=1,v1=x",
+                "Cookie": "sid=1",
+                "Proxy-Authorization": "Basic xxx",
+            }
+        )
+        assert result == {}
+
+    def test_safe_headers_preserved(self) -> None:
+        result = _safe_headers(
+            {
+                "Content-Type": "application/json",
+                "User-Agent": "test/1.0",
+                "X-GitHub-Event": "push",
+                "X-GitHub-Delivery": "abc-123",
+                "X-GitHub-Hook-Id": "42",
+                "X-Forwarded-For": "1.2.3.4",
+                "X-Forwarded-Proto": "https",
+                "X-Real-IP": "1.2.3.4",
+                "X-Request-Id": "req-1",
+                "X-GitLab-Event": "Push Hook",
+                "X-Gitlab-Event-UUID": "uuid-1",
+            }
+        )
+        assert result["Content-Type"] == "application/json"
+        assert result["X-GitHub-Event"] == "push"
+        assert result["X-Forwarded-For"] == "1.2.3.4"
+        assert result["X-GitLab-Event"] == "Push Hook"
+        assert len(result) == 11
+
+    def test_unknown_header_dropped(self) -> None:
+        result = _safe_headers({"X-Custom-Header": "data"})
+        assert result == {}
+
+    def test_case_insensitive_match(self) -> None:
+        result = _safe_headers({"x-github-event": "push"})
+        assert result == {"x-github-event": "push"}

@@ -11,8 +11,49 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 
 logger = logging.getLogger(__name__)
+
+
+_SAFE_HEADER_NAMES: frozenset[str] = frozenset(
+    {
+        "content-type",
+        "user-agent",
+        "x-real-ip",
+        "x-request-id",
+        "x-github-event",
+        "x-github-delivery",
+        "x-github-hook-id",
+        "x-gitlab-event",
+        "x-gitlab-event-uuid",
+    }
+)
+_SAFE_HEADER_PREFIXES: tuple[str, ...] = ("x-forwarded-",)
+
+
+def _safe_headers(headers: Mapping[str, str]) -> dict[str, str]:
+    """Whitelist-filter request headers before publishing to the bus.
+
+    Auth headers (Authorization, X-Hub-Signature-256, Stripe-Signature,
+    Cookie, etc.) MUST be excluded: event.payload is persisted to
+    episodes.db; leaking credentials there is a security incident.
+
+    Multi-value headers: last-wins via dict conversion. Duplicate
+    headers are rare in webhook traffic; if a future use case needs
+    them preserved, switch to list[tuple[str, str]].
+
+    Header casing: keys preserve whatever the client sent (HTTP
+    headers are case-insensitive, but Python dicts are not).
+    Downstream consumers should use case-insensitive lookup if
+    portability across clients matters.
+    """
+    result: dict[str, str] = {}
+    for k, v in headers.items():
+        kl = k.lower()
+        if kl in _SAFE_HEADER_NAMES or kl.startswith(_SAFE_HEADER_PREFIXES):
+            result[k] = v
+    return result
 
 
 class InflightLimiter:
