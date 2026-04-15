@@ -82,3 +82,24 @@ class TestHappyPath:
         assert row["error"] is None
         assert row["prompt_tokens"] == 10
         assert row["completion_tokens"] == 5
+
+    async def test_explicit_model_override(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        memory: EpisodicMemory,
+    ) -> None:
+        seen_models: list[str] = []
+
+        async def fake_acompletion(**kwargs: Any) -> SimpleNamespace:
+            seen_models.append(kwargs["model"])
+            return _make_response()
+
+        monkeypatch.setattr("proctor.workers.llm.litellm.acompletion", fake_acompletion)
+
+        cfg = LLMConfig(default_model="claude-sonnet-4-20250514")
+        call = build_llm_call(cfg, memory)
+        await call("hi", model="gpt-4o")  # type: ignore[call-arg]
+
+        assert seen_models == ["gpt-4o"]
+        rows = await _fetch_rows(memory)
+        assert rows[0]["model"] == "gpt-4o"
