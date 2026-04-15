@@ -1,5 +1,6 @@
 """Tests for Application bootstrap: lifecycle, state, and event wiring."""
 
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -519,3 +520,39 @@ class TestPublicExports:
         from proctor.core import LLMCall
 
         assert LLMCall is not None
+
+
+class TestContextVarWiring:
+    @pytest.mark.anyio
+    async def test_ids_set_during_workflow_execute(self, tmp_path: Path) -> None:
+        """task_id_ctx and episode_id_ctx are set during workflow execution."""
+        from proctor.core.bootstrap import Application
+        from proctor.core.config import ProctorConfig
+        from proctor.core.models import Event
+        from proctor.workers.llm import episode_id_ctx, task_id_ctx
+
+        captured: list[tuple[str | None, str | None]] = []
+
+        async def llm_recording_ctx(_prompt: str) -> str:
+            captured.append((task_id_ctx.get(), episode_id_ctx.get()))
+            return "ok"
+
+        cfg = ProctorConfig(data_dir=tmp_path / "proctor_data")
+        app = Application(cfg)
+        app.set_llm_call(llm_recording_ctx)
+        await app.start()
+        try:
+            await app._handle_terminal(
+                Event(
+                    type="trigger.terminal",
+                    source="terminal",
+                    payload={"text": "hi"},
+                )
+            )
+        finally:
+            await app.stop()
+
+        assert captured, "LLM call was not made"
+        task_id, episode_id = captured[0]
+        assert task_id is not None
+        assert episode_id is not None

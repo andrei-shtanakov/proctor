@@ -11,6 +11,7 @@ from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.state import StateManager
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
+from proctor.workers.llm import episode_id_ctx, task_id_ctx
 from proctor.workflow.engine import WorkflowEngine
 from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
@@ -77,9 +78,9 @@ class Application:
     async def _handle_terminal(self, event: Event) -> None:
         """Handle terminal trigger events.
 
-        Creates a Task, builds a simple WorkflowSpec, executes via
-        WorkflowEngine, persists status transitions, and publishes
-        the result as task.completed or task.failed.
+        Creates a Task and a pre-execution Episode, sets
+        ``task_id_ctx``/``episode_id_ctx``, runs the workflow, then
+        updates the Episode row with the real agent_response.
         """
         text = event.payload.get("text", "")
         if not text:
@@ -95,57 +96,32 @@ class Application:
             )
             return
 
-        # Create and persist task
-        task = Task(
-            trigger_event=event.id,
-            spec={"prompt": text},
-        )
+        task = Task(trigger_event=event.id, spec={"prompt": text})
         await self.state.save_task(task)
-
-        # Transition to RUNNING
         task.status = TaskStatus.RUNNING
         task.updated_at = datetime.now(UTC)
         await self.state.save_task(task)
 
-        # Build workflow and execute
+        # Pre-execution Episode so llm_calls rows can reference episode_id.
+        # We update agent_response after execute (save_episode is
+        # idempotent via ON CONFLICT(id) DO UPDATE).
+        episode = Episode(
+            trigger_type=event.source,
+            user_input=text,
+            agent_response="",
+        )
+        await self.memory.save_episode(episode)
+
         spec = WorkflowSpec(
             workflow_id=task.id,
             mode=WorkflowMode.SIMPLE,
             prompt=text,
         )
 
+        task_token = task_id_ctx.set(task.id)
+        episode_token = episode_id_ctx.set(episode.id)
         try:
             result = await self._engine.execute(spec)
-
-            if result.error:
-                task.status = TaskStatus.FAILED
-                task.result = {"error": result.error}
-            else:
-                task.status = TaskStatus.COMPLETED
-                task.result = {"output": result.output}
-
-            task.updated_at = datetime.now(UTC)
-            await self.state.save_task(task)
-
-            episode = Episode(
-                trigger_type=event.source,
-                user_input=text,
-                agent_response=result.output or "",
-                workflow_result=task.result,
-            )
-            await self.memory.save_episode(episode)
-
-            await self.bus.publish(
-                Event(
-                    type=(
-                        "task.completed"
-                        if task.status == TaskStatus.COMPLETED
-                        else "task.failed"
-                    ),
-                    source="application",
-                    payload=task.result,
-                )
-            )
         except Exception as exc:
             logger.exception("Workflow execution failed")
             task.status = TaskStatus.FAILED
@@ -153,12 +129,7 @@ class Application:
             task.updated_at = datetime.now(UTC)
             await self.state.save_task(task)
 
-            episode = Episode(
-                trigger_type=event.source,
-                user_input=text,
-                agent_response="",
-                workflow_result=task.result,
-            )
+            episode.workflow_result = task.result
             await self.memory.save_episode(episode)
 
             await self.bus.publish(
@@ -168,3 +139,33 @@ class Application:
                     payload={"error": str(exc)},
                 )
             )
+            return
+        finally:
+            task_id_ctx.reset(task_token)
+            episode_id_ctx.reset(episode_token)
+
+        if result.error:
+            task.status = TaskStatus.FAILED
+            task.result = {"error": result.error}
+        else:
+            task.status = TaskStatus.COMPLETED
+            task.result = {"output": result.output}
+
+        task.updated_at = datetime.now(UTC)
+        await self.state.save_task(task)
+
+        episode.agent_response = result.output or ""
+        episode.workflow_result = task.result
+        await self.memory.save_episode(episode)
+
+        await self.bus.publish(
+            Event(
+                type=(
+                    "task.completed"
+                    if task.status == TaskStatus.COMPLETED
+                    else "task.failed"
+                ),
+                source="application",
+                payload=task.result,
+            )
+        )
