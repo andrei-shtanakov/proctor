@@ -27,12 +27,45 @@ class LLMConfig(BaseModel):
 
 
 class NATSConfig(BaseModel):
-    """NATS messaging configuration."""
+    """NATS client configuration."""
 
-    url: str = "nats://localhost:4222"
+    model_config = ConfigDict(extra="forbid")
+
+    servers: list[str] = ["nats://localhost:4222"]
+    name: str = ""
+    subject_prefix: str = "proctor"
     connect_timeout: float = 5.0
     reconnect_time_wait: float = 2.0
-    max_reconnect_attempts: int = 60
+    reconnect_jitter: float = Field(default=0.5, ge=0.0, le=5.0)
+    max_reconnect_attempts: int = -1
+    user: str | None = None
+    user_env: str | None = None
+    password_env: str | None = None
+    tls_ca: Path | None = None
+    tls_client_cert: Path | None = None
+    tls_client_key: Path | None = None
+
+    @model_validator(mode="after")
+    def _populate_name_fallback(self) -> Self:
+        if not self.name:
+            import socket
+
+            self.name = f"proctor-{socket.gethostname()}"
+        return self
+
+    @model_validator(mode="after")
+    def _user_exclusive(self) -> Self:
+        if self.user and self.user_env:
+            raise ValueError("Set either NATSConfig.user or user_env, not both")
+        return self
+
+
+class EventsConfig(BaseModel):
+    """Shared events configuration across all EventTransport backends."""
+
+    model_config = ConfigDict(extra="forbid")
+    max_payload: int = 65_536  # bytes; shared with NATS server limits
+    drain_timeout: float = 60.0  # seconds; LLM-heavy handlers need headroom
 
 
 class ScheduleItemConfig(BaseModel):
@@ -140,7 +173,7 @@ class WebhookPathConfig(BaseModel):
     auth: AuthConfig
 
 
-_SOURCE_NAME_RE = re.compile(r"[a-z][a-z0-9_-]*")
+_SOURCE_NAME_RE = re.compile(r"[a-z][a-z0-9_]*")
 
 
 class WebhookConfig(BaseModel):
@@ -175,7 +208,7 @@ class WebhookConfig(BaseModel):
                 raise ValueError(
                     f"webhook path {path!r}: source_name "
                     f"{effective!r} must match "
-                    f"^[a-z][a-z0-9_-]*$"
+                    f"^[a-z][a-z0-9_]*$"
                 )
             if effective in {"", "*", "?"}:
                 raise ValueError(
@@ -195,19 +228,37 @@ class WebhookConfig(BaseModel):
 class ProctorConfig(BaseModel):
     """Root configuration model with nested configs."""
 
-    node_role: str = "standalone"
+    node_role: Literal["standalone", "core", "worker"] = "standalone"
     node_id: str = "node-1"
+    transport: Literal["auto", "local", "nats"] = "auto"
     nats_url: str = "nats://localhost:4222"
     data_dir: Path = Path("data")
     log_level: str = "INFO"
     llm: LLMConfig = LLMConfig()
     nats: NATSConfig = NATSConfig()
+    events: EventsConfig = EventsConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     webhook: WebhookConfig | None = None
     schedules: list[ScheduleItemConfig] = []
     workflows: dict[str, WorkflowSpec] = Field(default_factory=dict)
     routes: list[RouteRule] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_transport_consistency(self) -> Self:
+        """Cross-field validation: transport mode vs nats config."""
+        mode = _resolve_transport_mode_static(self.transport, self.node_role)
+        if mode == "nats" and not self.nats.servers:
+            raise ValueError(
+                "transport resolves to 'nats' but nats.servers is empty. "
+                "Set nats.servers or transport='local'."
+            )
+        if mode == "local" and self.nats != NATSConfig():
+            logger.warning(
+                "transport resolved to 'local'; nats config is set "
+                "but will be ignored. Use transport='nats' to enforce."
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_catalog_keys(self) -> Self:
@@ -243,6 +294,16 @@ class ProctorConfig(BaseModel):
                         "Put specific rules before catch-all rules."
                     )
         return self
+
+
+def _resolve_transport_mode_static(
+    transport: Literal["auto", "local", "nats"],
+    node_role: Literal["standalone", "core", "worker"],
+) -> Literal["local", "nats"]:
+    """Resolve effective transport mode: auto → role-based; else explicit."""
+    if transport != "auto":
+        return transport
+    return "local" if node_role == "standalone" else "nats"
 
 
 def _is_strictly_broader(a: str, b: str) -> bool:

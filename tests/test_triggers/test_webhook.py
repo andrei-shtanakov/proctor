@@ -19,6 +19,7 @@ from proctor.core.config import (
     WebhookPathConfig,
 )
 from proctor.core.models import Event
+from proctor.core.transport import LocalEventTransport
 from proctor.triggers.webhook import (
     InflightLimiter,
     WebhookTrigger,
@@ -247,7 +248,7 @@ class TestLifecycle:
         )
         trigger = WebhookTrigger(cfg)
         with pytest.raises(RuntimeError, match="MISSING_ONE.*MISSING_TWO"):
-            await trigger.start(EventBus())
+            await trigger.start(EventBus(LocalEventTransport()))
 
     async def test_unauthenticated_path_logs_warning(
         self,
@@ -262,7 +263,7 @@ class TestLifecycle:
         )
         trigger = WebhookTrigger(cfg)
         with caplog.at_level(logging.WARNING, logger="proctor.triggers.webhook"):
-            await trigger.start(EventBus())
+            await trigger.start(EventBus(LocalEventTransport()))
         try:
             assert any("NO AUTHENTICATION" in r.message for r in caplog.records)
         finally:
@@ -276,7 +277,7 @@ class TestLifecycle:
             },
         )
         trigger = WebhookTrigger(cfg)
-        await trigger.start(EventBus())
+        await trigger.start(EventBus(LocalEventTransport()))
         await trigger.stop()
         await trigger.stop()  # second call must be a no-op
 
@@ -316,11 +317,13 @@ async def webhook_env() -> AsyncGenerator[tuple[WebhookTrigger, EventBus, str], 
                 ),
             },
         )
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         trigger = WebhookTrigger(cfg)
         await trigger.start(bus)
         yield trigger, bus, f"http://127.0.0.1:{trigger.bound_port}"
         await trigger.stop()
+        await bus.stop()
     finally:
         mp.undo()
 
@@ -484,7 +487,7 @@ class TestStatusCodes:
                 },
             )
             trigger = WebhookTrigger(cfg)
-            await trigger.start(EventBus())
+            await trigger.start(EventBus(LocalEventTransport()))
             try:
                 url = f"http://127.0.0.1:{trigger.bound_port}"
                 async with (
@@ -568,7 +571,8 @@ class TestInflightCap:
                     ),
                 },
             )
-            bus = EventBus()
+            bus = EventBus(LocalEventTransport())
+            await bus.start()
             hold = asyncio.Event()
 
             async def blocking_publish(_evt: Event) -> None:
@@ -690,7 +694,8 @@ class TestDrainOnStop:
                     ),
                 },
             )
-            bus = EventBus()
+            bus = EventBus(LocalEventTransport())
+            await bus.start()
             published = asyncio.Event()
             proceed = asyncio.Event()
 

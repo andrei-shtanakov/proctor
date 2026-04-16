@@ -1,11 +1,12 @@
 """Core data models: Event, Task, Envelope, TaskStatus."""
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter, field_validator
 
 
 class TaskStatus(StrEnum):
@@ -29,11 +30,42 @@ def _utcnow() -> datetime:
 class Event(BaseModel):
     """Typed event for inter-component communication."""
 
+    _TYPE_RE: ClassVar[re.Pattern[str]] = re.compile(
+        r"[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*"
+    )
+
     id: str = Field(default_factory=_uuid)
     type: str
     source: str
     payload: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=_utcnow)
+
+    @field_validator("type")
+    @classmethod
+    def _type_charset(cls, v: str) -> str:
+        if not cls._TYPE_RE.fullmatch(v):
+            raise ValueError(
+                f"Event.type {v!r} must match [a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*"
+            )
+        return v
+
+    @field_validator("timestamp")
+    @classmethod
+    def _timestamp_must_be_utc(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("Event.timestamp must be timezone-aware (UTC)")
+        if v.utcoffset() != timedelta(0):
+            raise ValueError("Event.timestamp must be in UTC (offset=0)")
+        return v
+
+    @field_validator("payload")
+    @classmethod
+    def _payload_serializable(cls, v: dict[str, Any]) -> dict[str, Any]:
+        try:
+            TypeAdapter(dict[str, Any]).dump_json(v)
+        except Exception as e:
+            raise ValueError(f"Event.payload not serializable by pydantic: {e}") from e
+        return v
 
 
 class Task(BaseModel):

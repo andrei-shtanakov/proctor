@@ -68,20 +68,29 @@ class TestLLMConfigExtended:
 class TestNATSConfig:
     def test_defaults(self) -> None:
         cfg = NATSConfig()
-        assert cfg.url == "nats://localhost:4222"
+        assert cfg.servers == ["nats://localhost:4222"]
+        assert cfg.subject_prefix == "proctor"
         assert cfg.connect_timeout == 5.0
         assert cfg.reconnect_time_wait == 2.0
-        assert cfg.max_reconnect_attempts == 60
+        assert cfg.reconnect_jitter == 0.5
+        assert cfg.max_reconnect_attempts == -1
+        assert cfg.name.startswith("proctor-")
 
     def test_custom_values(self) -> None:
         cfg = NATSConfig(
-            url="nats://remote:4222",
+            servers=["nats://remote:4222"],
             connect_timeout=10.0,
             max_reconnect_attempts=100,
+            name="my-node",
         )
-        assert cfg.url == "nats://remote:4222"
+        assert cfg.servers == ["nats://remote:4222"]
         assert cfg.connect_timeout == 10.0
         assert cfg.max_reconnect_attempts == 100
+        assert cfg.name == "my-node"
+
+    def test_user_user_env_mutually_exclusive(self) -> None:
+        with pytest.raises(ValueError, match="user or user_env, not both"):
+            NATSConfig(user="alice", user_env="NATS_USER")
 
 
 class TestSchedulerConfig:
@@ -192,7 +201,7 @@ class TestProctorConfig:
 
     def test_nested_nats_defaults(self) -> None:
         cfg = ProctorConfig()
-        assert cfg.nats.url == "nats://localhost:4222"
+        assert cfg.nats.servers == ["nats://localhost:4222"]
         assert cfg.nats.connect_timeout == 5.0
 
     def test_nested_scheduler_defaults(self) -> None:
@@ -302,7 +311,7 @@ class TestLoadConfig:
 
         cfg = load_config(config_file)
         assert cfg.llm.default_model == "claude-sonnet-4-20250514"
-        assert cfg.nats.url == "nats://localhost:4222"
+        assert cfg.nats.servers == ["nats://localhost:4222"]
         assert cfg.scheduler.enabled is True
 
     def test_full_yaml_roundtrip(self, tmp_path: Path) -> None:
@@ -320,7 +329,7 @@ class TestLoadConfig:
                 "temperature": 0.3,
             },
             "nats": {
-                "url": "nats://remote:4222",
+                "servers": ["nats://remote:4222"],
                 "connect_timeout": 10.0,
                 "reconnect_time_wait": 5.0,
                 "max_reconnect_attempts": 120,
@@ -593,6 +602,7 @@ def test_is_strictly_broader_direct() -> None:
 class TestPublicExports:
     def test_import_from_core(self) -> None:
         from proctor.core import (
+            EventsConfig,
             LLMConfig,
             NATSConfig,
             ProctorConfig,
@@ -602,6 +612,7 @@ class TestPublicExports:
             load_config,
         )
 
+        assert EventsConfig is not None
         assert LLMConfig is not None
         assert NATSConfig is not None
         assert ProctorConfig is not None
@@ -660,6 +671,68 @@ class TestAuthConfig:
 
         with pytest.raises(ValueError):
             NoneAuthConfig(secret_env="X")  # type: ignore[call-arg]
+
+
+class TestEventsConfig:
+    def test_defaults(self) -> None:
+        from proctor.core.config import EventsConfig
+
+        cfg = EventsConfig()
+        assert cfg.max_payload == 65_536
+        assert cfg.drain_timeout == 60.0
+
+    def test_in_proctor_config(self) -> None:
+        from proctor.core.config import ProctorConfig
+
+        cfg = ProctorConfig()
+        assert cfg.events.max_payload == 65_536
+
+    def test_extra_forbid(self) -> None:
+        from proctor.core.config import EventsConfig
+
+        with pytest.raises(ValueError):
+            EventsConfig(unknown_field=1)  # type: ignore[call-arg]
+
+
+class TestSourceNameTightened:
+    def test_dash_rejected(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        with pytest.raises(ValueError, match="source_name"):
+            WebhookConfig(
+                paths={
+                    "/webhook/test": WebhookPathConfig(
+                        source_name="my-service",
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
+
+    def test_underscore_ok(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        cfg = WebhookConfig(
+            paths={
+                "/webhook/test": WebhookPathConfig(
+                    source_name="my_service",
+                    auth=HMACAuthConfig(secret_env="X"),
+                ),
+            }
+        )
+        assert cfg.paths["/webhook/test"].source_name == "my_service"
+
+    def test_existing_examples_still_pass(self) -> None:
+        from proctor.core.config import HMACAuthConfig, WebhookConfig, WebhookPathConfig
+
+        for name in ["github", "ci", "heartbeat", "gitlab_push"]:
+            WebhookConfig(
+                paths={
+                    f"/webhook/{name}": WebhookPathConfig(
+                        source_name=name,
+                        auth=HMACAuthConfig(secret_env="X"),
+                    ),
+                }
+            )
 
 
 class TestWebhookConfigValidation:
@@ -798,3 +871,43 @@ class TestWebhookConfigValidation:
     def test_proctor_config_webhook_optional(self) -> None:
         cfg = ProctorConfig()
         assert cfg.webhook is None
+
+
+class TestTransportResolution:
+    @pytest.mark.parametrize(
+        "transport,node_role,nats_servers,expected",
+        [
+            ("auto", "standalone", None, "local"),
+            ("auto", "standalone", ["nats://x:4222"], "local"),
+            ("auto", "core", ["nats://x:4222"], "nats"),
+            ("auto", "worker", ["nats://x:4222"], "nats"),
+            ("auto", "core", [], "ValueError"),
+            ("local", "standalone", None, "local"),
+            ("local", "core", ["nats://x:4222"], "local"),
+            ("nats", "standalone", ["nats://x:4222"], "nats"),
+            ("nats", "worker", [], "ValueError"),
+        ],
+    )
+    def test_transport_mode_resolution_matrix(
+        self,
+        transport: str,
+        node_role: str,
+        nats_servers: list[str] | None,
+        expected: str,
+    ) -> None:
+        from proctor.core.bootstrap import _resolve_transport_mode
+        from proctor.core.config import NATSConfig, ProctorConfig
+
+        kwargs: dict[str, object] = {
+            "transport": transport,
+            "node_role": node_role,
+        }
+        if nats_servers is not None:
+            kwargs["nats"] = NATSConfig(servers=nats_servers)
+        if expected == "ValueError":
+            with pytest.raises(ValueError):
+                ProctorConfig(**kwargs)  # type: ignore[arg-type]
+            return
+        cfg = ProctorConfig(**kwargs)  # type: ignore[arg-type]
+        mode = _resolve_transport_mode(cfg)
+        assert mode == expected

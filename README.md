@@ -45,7 +45,7 @@ All fields have sensible pydantic defaults — a config file is entirely optiona
 ```yaml
 node_role: standalone     # standalone | core | worker
 node_id: node-local
-nats_url: nats://localhost:4222
+transport: auto           # auto | local | nats
 data_dir: data
 log_level: INFO
 
@@ -56,10 +56,13 @@ llm:
   temperature: 0.7
 
 nats:
-  url: nats://localhost:4222
+  servers:
+    - nats://localhost:4222
+  subject_prefix: proctor
   connect_timeout: 5.0
   reconnect_time_wait: 2.0
-  max_reconnect_attempts: 60
+  reconnect_jitter: 0.5
+  max_reconnect_attempts: -1
 
 scheduler:
   poll_interval_seconds: 30
@@ -81,13 +84,31 @@ schedules:
 
 ### Node Roles
 
-Currently only `standalone` is functional. Other roles are defined for future distributed operation (Phase 3).
-
 | Role | Description |
 |------|-------------|
-| `standalone` | All-in-one: core + worker in single process (current) |
-| `core` | Coordinator only: task queue, scheduler, routing (planned) |
-| `worker` | Executor only: picks tasks, runs agents (planned) |
+| `standalone` | All-in-one: core + worker in single process (default) |
+| `core` | Coordinator: task queue, scheduler, routing — delivered over NATS |
+| `worker` | Executor: picks tasks, runs agents — delivered over NATS |
+
+### Transport mode
+
+`transport` selects the EventTransport backend:
+
+| Value | Behaviour |
+|-------|-----------|
+| `auto` (default) | `standalone` → `local`; `core`/`worker` → `nats` |
+| `local` | In-process EventBus — zero external dependencies |
+| `nats` | NATS-backed, multi-node safe — requires `pip install proctor[nats]` |
+
+`local` and `nats` expose identical observable behaviour (wildcard matching,
+dedup, drain semantics). See
+`docs/superpowers/adr/2026-04-15-nats-transport.md` for the 21 ADRs behind
+the design. Hot-fix rollback: set `transport: local` and restart.
+
+Validator rules:
+- `transport: nats` with empty `nats.servers` raises at startup.
+- `transport: local` with a non-default `nats:` block warns (kept for
+  forward-compat, not used).
 
 ### LLM Setup
 
@@ -301,6 +322,68 @@ Set `terminationGracePeriodSeconds` on the Proctor Deployment to at
 least `shutdown_timeout + 15s` (default 45s) so the pod has time to
 drain HTTP handlers before SIGKILL.
 
+## Multi-node deployment
+
+For distributed operation split the system into a `core` coordinator
+plus one or more `worker` executors connected by a shared NATS cluster.
+
+### Core node (`core.yaml`)
+
+```yaml
+node_role: core
+node_id: core-1
+transport: nats
+nats:
+  servers:
+    - nats://nats-1.internal:4222
+    - nats://nats-2.internal:4222
+  subject_prefix: proctor-prod   # namespace env-wise (prod / staging)
+  reconnect_jitter: 0.5
+```
+
+### Worker node (`worker.yaml`)
+
+```yaml
+node_role: worker
+node_id: worker-7
+transport: nats
+nats:
+  servers:
+    - nats://nats-1.internal:4222
+    - nats://nats-2.internal:4222
+  subject_prefix: proctor-prod
+```
+
+### Docker Compose topology
+
+```yaml
+services:
+  nats:
+    image: nats:2-alpine
+    ports: ["4222:4222"]
+  core:
+    image: proctor:latest
+    command: python -m proctor --config /etc/proctor/core.yaml
+    depends_on: [nats]
+  worker:
+    image: proctor:latest
+    command: python -m proctor --config /etc/proctor/worker.yaml
+    depends_on: [nats]
+    deploy: { replicas: 3 }
+```
+
+### Rollback to single-node
+
+If NATS is unavailable and you need a fast hot-fix, switch the stack to
+the in-process transport — no code changes required:
+
+```yaml
+transport: local
+```
+
+A warning is logged if `nats:` is still populated; the `nats` block is
+ignored. Revert to `transport: nats` when the cluster is healthy again.
+
 ## Development
 
 ```bash
@@ -344,6 +427,37 @@ uv run pytest -m integration
 
 If Ollama is not reachable at `localhost:11434`, the tests skip cleanly — no
 action required for the default `uv run pytest` run.
+
+### Running NATS integration tests
+
+NATS-backed contract and reconnect tests are gated by the `nats` marker.
+They require `pip install proctor[nats]` and either `NATS_URL` in the
+environment or a working docker/podman daemon for `testcontainers`.
+
+```bash
+uv sync --extra nats
+
+# With testcontainers (auto-starts NATS + Toxiproxy containers)
+uv run pytest -m nats
+
+# With a pre-running NATS server
+export NATS_URL=nats://localhost:4222
+uv run pytest -m nats tests/integration/test_transport_contract.py
+```
+
+On podman hosts the tests work with the compatibility socket:
+
+```bash
+export DOCKER_HOST=unix://$(podman info --format '{{.Host.RemoteSocket.Path}}')
+export TESTCONTAINERS_RYUK_DISABLED=true
+# If the system Docker config has `credsStore: desktop`, point to a clean one:
+mkdir -p /tmp/empty-docker-config && echo '{}' > /tmp/empty-docker-config/config.json
+export DOCKER_CONFIG=/tmp/empty-docker-config
+uv run pytest -m nats
+```
+
+The CI `integration-nats` job wires NATS via GitHub Actions `services:`
+and sets `NATS_URL` directly — no testcontainers on CI.
 
 ## Project Structure
 

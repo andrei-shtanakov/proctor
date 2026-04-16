@@ -1,15 +1,21 @@
 """Application bootstrap — lifecycle management and component wiring."""
 
 import logging
+import socket
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Literal
 
 from proctor.core.bus import EventBus
-from proctor.core.config import ProctorConfig
+from proctor.core.config import (
+    ProctorConfig,
+    _resolve_transport_mode_static,
+)
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.router import Router
 from proctor.core.state import StateManager
+from proctor.core.transport import EventTransport, LocalEventTransport
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.triggers.webhook import WebhookTrigger
@@ -21,6 +27,32 @@ logger = logging.getLogger(__name__)
 LLMCall = Callable[[str], Awaitable[str]]
 
 
+def _resolve_transport_mode(
+    config: ProctorConfig,
+) -> Literal["local", "nats"]:
+    """Resolve config.transport to an effective mode."""
+    return _resolve_transport_mode_static(config.transport, config.node_role)
+
+
+def _build_event_transport(config: ProctorConfig) -> EventTransport:
+    """Construct the EventTransport implementation selected by config."""
+    mode = _resolve_transport_mode(config)
+    if mode == "local":
+        return LocalEventTransport(
+            max_payload=config.events.max_payload,
+        )
+
+    from proctor.core.transport.nats import NATSEventTransport
+
+    nats_cfg = config.nats
+    hostname = socket.gethostname()
+    if nats_cfg.name == f"proctor-{hostname}":
+        nats_cfg = nats_cfg.model_copy(
+            update={"name": f"proctor-{config.node_role}-{hostname}"}
+        )
+    return NATSEventTransport(nats_cfg, events_config=config.events)
+
+
 class Application:
     """Main application container.
 
@@ -28,9 +60,15 @@ class Application:
     event handlers. Entry point for ``python -m proctor``.
     """
 
-    def __init__(self, config: ProctorConfig) -> None:
+    def __init__(
+        self,
+        config: ProctorConfig,
+        *,
+        event_transport: EventTransport | None = None,
+    ) -> None:
         self.config = config
-        self.bus = EventBus()
+        transport = event_transport or _build_event_transport(config)
+        self.bus = EventBus(transport)
         self.state = StateManager(config.data_dir / "state.db")
         self.memory = EpisodicMemory(config.data_dir / "episodes.db")
         self.is_running = False
@@ -40,6 +78,10 @@ class Application:
         self._telegram_trigger: TelegramTrigger | None = None
         self._scheduler: SchedulerTrigger | None = None
         self._webhook_trigger: WebhookTrigger | None = None
+        # Subscribe in __init__ (ADR #19 — buffered until bus.start()).
+        # Router and engine are nil until start(); _handle_trigger_event
+        # checks before dispatching.
+        self.bus.subscribe("trigger.>", self._handle_trigger_event)
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -47,8 +89,9 @@ class Application:
         self._engine = WorkflowEngine(llm_call)
 
     async def start(self) -> None:
-        """Initialize state and memory, subscribe handlers, set running."""
+        """Initialize state and memory, start bus and triggers, set running."""
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
+        await self.bus.start()
         await self.state.initialize()
         await self.memory.initialize()
         self._router = Router(
@@ -56,7 +99,6 @@ class Application:
             routes=self.config.routes,
             workflows=self.config.workflows,
         )
-        self.bus.subscribe("trigger.*", self._handle_trigger_event)
 
         if self.config.telegram is not None:
             self._telegram_trigger = TelegramTrigger(self.config.telegram)
@@ -89,8 +131,11 @@ class Application:
         if self._scheduler is not None:
             await self._scheduler.stop()
             self._scheduler = None
+        # Drain in-flight handlers before transport shutdown.
+        await self.bus.drain(timeout=self.config.events.drain_timeout)
         await self.memory.close()
         await self.state.close()
+        await self.bus.stop()
         logger.info("Application stopped")
 
     async def _handle_trigger_event(self, event: Event) -> None:

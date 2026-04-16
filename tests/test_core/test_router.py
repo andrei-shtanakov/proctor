@@ -9,6 +9,7 @@ from proctor.core.bus import EventBus
 from proctor.core.config import RouteRule
 from proctor.core.models import Event
 from proctor.core.router import Router, _resolve_path
+from proctor.core.transport import LocalEventTransport
 from proctor.workflow.spec import WorkflowMode, WorkflowSpec
 
 
@@ -65,8 +66,12 @@ def anyio_backend() -> str:
 
 @pytest.fixture
 async def bus() -> AsyncGenerator[EventBus]:
-    b = EventBus()
-    yield b
+    b = EventBus(LocalEventTransport())
+    await b.start()
+    try:
+        yield b
+    finally:
+        await b.stop()
 
 
 class TestRouterHappyPath:
@@ -245,6 +250,7 @@ class TestRouterUnmatched:
 
         with caplog.at_level(logging.WARNING, logger="proctor.core.router"):
             spec = await router.route(original)
+        await bus.flush()
 
         assert spec is None
         assert len(captured) == 1
@@ -296,6 +302,7 @@ class TestRouterBindingFailed:
         event = Event(type="trigger.telegram", source="telegram", payload={})
         with caplog.at_level(logging.WARNING, logger="proctor.core.router"):
             spec = await router.route(event)
+        await bus.flush()
 
         assert spec is None
         assert len(captured) == 1
@@ -338,6 +345,7 @@ class TestRouterBindingFailed:
             payload={"chat_id": 42},
         )
         spec = await router.route(event)
+        await bus.flush()
 
         assert spec is None
         assert len(captured) == 1
@@ -373,6 +381,7 @@ class TestRouterBindingFailed:
             payload={"message": "hi"},
         )
         spec = await router.route(event)
+        await bus.flush()
 
         assert spec is None
         assert "not a dict" in captured[0].payload["reason"]

@@ -11,11 +11,18 @@ import pytest
 from proctor.core.bus import EventBus
 from proctor.core.config import TelegramConfig
 from proctor.core.models import Event
+from proctor.core.transport import LocalEventTransport
 from proctor.triggers.telegram import (
     INITIAL_RETRY_DELAY,
     RETRY_BACKOFF_FACTOR,
     TelegramTrigger,
 )
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    """LocalEventTransport uses asyncio primitives."""
+    return "asyncio"
 
 
 def _make_config(
@@ -91,7 +98,8 @@ class TestHandleUpdate:
     async def test_publishes_text_message(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -101,6 +109,7 @@ class TestHandleUpdate:
 
         update = _make_update(update_id=1, chat_id=100, message_id=5, text="hi")
         await trigger._handle_update(update, bus)
+        await bus.flush()
 
         assert len(received) == 1
         assert received[0].type == "trigger.telegram"
@@ -115,10 +124,12 @@ class TestHandleUpdate:
     async def test_updates_offset(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
 
         update = _make_update(update_id=42)
         await trigger._handle_update(update, bus)
+        await bus.flush()
 
         assert trigger._offset == 43
 
@@ -126,7 +137,8 @@ class TestHandleUpdate:
     async def test_skips_non_message_update(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -136,6 +148,7 @@ class TestHandleUpdate:
 
         update = _make_update_no_message(update_id=1)
         await trigger._handle_update(update, bus)
+        await bus.flush()
 
         assert len(received) == 0
         assert trigger._offset == 2
@@ -144,7 +157,8 @@ class TestHandleUpdate:
     async def test_skips_non_text_message(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -154,6 +168,7 @@ class TestHandleUpdate:
 
         update = _make_update_no_text(update_id=1)
         await trigger._handle_update(update, bus)
+        await bus.flush()
 
         assert len(received) == 0
 
@@ -161,7 +176,8 @@ class TestHandleUpdate:
     async def test_filters_by_allowed_chat_ids(self) -> None:
         config = _make_config(allowed_chat_ids=[200, 300])
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -172,6 +188,7 @@ class TestHandleUpdate:
         # chat_id=100 not in allowed list
         update = _make_update(update_id=1, chat_id=100)
         await trigger._handle_update(update, bus)
+        await bus.flush()
 
         assert len(received) == 0
 
@@ -179,7 +196,8 @@ class TestHandleUpdate:
     async def test_allows_matching_chat_id(self) -> None:
         config = _make_config(allowed_chat_ids=[100, 200])
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -189,6 +207,7 @@ class TestHandleUpdate:
 
         update = _make_update(update_id=1, chat_id=100)
         await trigger._handle_update(update, bus)
+        await bus.flush()
 
         assert len(received) == 1
 
@@ -196,7 +215,8 @@ class TestHandleUpdate:
     async def test_empty_allowed_list_accepts_all(self) -> None:
         config = _make_config(allowed_chat_ids=[])
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -206,6 +226,7 @@ class TestHandleUpdate:
 
         update = _make_update(update_id=1, chat_id=999)
         await trigger._handle_update(update, bus)
+        await bus.flush()
 
         assert len(received) == 1
 
@@ -213,7 +234,8 @@ class TestHandleUpdate:
     async def test_multiple_updates_advance_offset(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
 
         for uid in [10, 11, 12]:
             await trigger._handle_update(_make_update(update_id=uid), bus)
@@ -363,7 +385,8 @@ class TestPollLoop:
     async def test_processes_updates_from_get_updates(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
         received: list[Event] = []
 
         async def handler(e: Event) -> None:
@@ -384,6 +407,7 @@ class TestPollLoop:
         trigger._running = True
         with patch.object(trigger, "_get_updates", side_effect=mock_get_updates):
             await trigger._poll_loop(bus)
+        await bus.flush()
 
         assert len(received) == 1
         assert received[0].payload["text"] == "first"
@@ -394,7 +418,8 @@ class TestPollLoop:
 
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
 
         call_count = 0
 
@@ -422,7 +447,8 @@ class TestPollLoop:
 
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
 
         call_count = 0
 
@@ -452,7 +478,8 @@ class TestPollLoop:
 
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
 
         call_count = 0
 
@@ -488,7 +515,8 @@ class TestStartStop:
     async def test_start_creates_session_and_task(self) -> None:
         config = _make_config()
         trigger = TelegramTrigger(config)
-        bus = EventBus()
+        bus = EventBus(LocalEventTransport())
+        await bus.start()
 
         async def fake_poll(bus: EventBus) -> None:
             await anyio.sleep(10)

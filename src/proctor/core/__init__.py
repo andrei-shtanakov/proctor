@@ -3,6 +3,7 @@
 from proctor.core.bootstrap import Application, LLMCall
 from proctor.core.bus import EventBus, Handler
 from proctor.core.config import (
+    EventsConfig,
     LLMConfig,
     NATSConfig,
     ProctorConfig,
@@ -24,6 +25,7 @@ __all__ = [
     "Episode",
     "Event",
     "EventBus",
+    "EventsConfig",
     "Handler",
     "LLMCall",
     "LLMConfig",
