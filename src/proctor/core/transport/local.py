@@ -267,6 +267,7 @@ class LocalEventTransport(EventTransport):
     async def stop(self) -> None:
         self._state = ConnectionState.DISCONNECTED
         self._started = False
+        self._draining = False
         logger.info("LocalEventTransport stopped")
 
     async def drain(self, timeout: float = 60.0) -> None:
