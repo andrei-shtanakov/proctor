@@ -1,7 +1,5 @@
 """Tests for EventBus thin wrapper."""
 
-import asyncio
-
 import pytest
 
 from proctor.core.bus import EventBus
