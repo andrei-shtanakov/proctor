@@ -38,6 +38,6 @@ class TestEventBus:
         bus.subscribe("test.ok", h)
         await bus.start()
         await bus.publish(Event(type="test.ok", source="x", payload={}))
-        await asyncio.sleep(0.05)
+        await bus.flush()
         assert len(received) == 1
         await bus.stop()
