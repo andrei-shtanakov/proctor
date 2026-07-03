@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Active Work & Roadmap
+
+- **Current task list:** `./TODO.md` — read it at the start of every session
+- **Project-specific tasks:** `spec/tasks.md` (Phase 2)
+- **Ecosystem roadmap (strategic):** `../_cowork_output/roadmap/ecosystem-roadmap.md` — R-01…R-16 across Maestro / arbiter / ATP / spec-runner
+- **Latest weekly status:** `../_cowork_output/status/2026-04-10-status.md`
+- **Sibling projects** (reference only): `../Maestro/`, `../arbiter/`, `../atp-platform/`, `../spec-runner/`
+
+proctor-a's role in the ecosystem: **first real Mode-2 consumer of Maestro**. Not named in ecosystem roadmap. Responsibility is dogfooding — when Maestro breaks a proctor-a task, file an issue with reproducible yaml + logs.
+
 ## `../_cowork_output/` is dev-only — never a code/runtime resource
 
 `../_cowork_output/` (the polyrepo **sibling** workspace) is the development-time coordination area (cross-team ADRs, status notes, contract drafts, PM/dev tooling). Users and teams installing or cloning this project do NOT have it. Rules:
