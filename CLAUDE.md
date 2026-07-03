@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## `_cowork_output/` is dev-only — never a code/runtime resource
+
+`../_cowork_output/` is the polyrepo's development-time coordination workspace (cross-team ADRs, status notes, contract drafts, PM/dev tooling). Users and teams installing or cloning this project do NOT have it. Rules:
+
+- Shipped/runtime code must never read, import, or resolve paths under `_cowork_output/`.
+- Canonical shippable facts live inside the owning repo (e.g. the ecosystem agents-catalog SSOT is `atp-platform/method/agents-catalog.toml`). Cross-repo contracts this repo depends on must be **vendored in** as pinned copies — never referenced from `_cowork_output/` at runtime.
+- Only workspace-local dev tooling (e.g. `_cowork_output/devtools/`) and documentation may reference it.
+
 ## Project Overview
 
 Proctor is a distributed autonomous agent system for a single operator. It executes tasks on schedule, reacts to external events, runs workloads across containers/SSH/VMs, builds pipelines (DAG/FSM/Decision Tree), and can modify its own skills and code. Microkernel architecture with NATS messaging, SQLite state, and LLM-driven agent runtimes with MCP tool access.
