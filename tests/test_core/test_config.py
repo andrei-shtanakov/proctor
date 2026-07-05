@@ -590,13 +590,13 @@ class TestShadowDetection:
 
 
 def test_is_strictly_broader_direct() -> None:
-    from proctor.core.config import _is_strictly_broader
+    from proctor.core.globs import is_strictly_broader
 
-    assert _is_strictly_broader("trigger.*", "trigger.telegram") is True
-    assert _is_strictly_broader("trigger.telegram", "trigger.*") is False
-    assert _is_strictly_broader("trigger.telegram", "trigger.telegram") is False
-    assert _is_strictly_broader("trigger.a.*", "trigger.*.b") is False
-    assert _is_strictly_broader("trigger.*.b", "trigger.a.*") is False
+    assert is_strictly_broader("trigger.*", "trigger.telegram") is True
+    assert is_strictly_broader("trigger.telegram", "trigger.*") is False
+    assert is_strictly_broader("trigger.telegram", "trigger.telegram") is False
+    assert is_strictly_broader("trigger.a.*", "trigger.*.b") is False
+    assert is_strictly_broader("trigger.*.b", "trigger.a.*") is False
 
 
 class TestPublicExports:

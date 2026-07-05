@@ -2,7 +2,6 @@
 
 import logging
 import re
-from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
@@ -10,6 +9,7 @@ import yaml
 from croniter import croniter
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from proctor.core.globs import is_strictly_broader
 from proctor.workflow.spec import WorkflowSpec
 
 logger = logging.getLogger(__name__)
@@ -287,7 +287,7 @@ class ProctorConfig(BaseModel):
         for i, earlier in enumerate(self.routes):
             for j_offset, later in enumerate(self.routes[i + 1 :]):
                 j = i + 1 + j_offset
-                if _is_strictly_broader(earlier.event_pattern, later.event_pattern):
+                if is_strictly_broader(earlier.event_pattern, later.event_pattern):
                     raise ValueError(
                         f"route #{i} pattern={earlier.event_pattern!r} "
                         f"shadows route #{j} pattern={later.event_pattern!r}. "
@@ -304,16 +304,6 @@ def _resolve_transport_mode_static(
     if transport != "auto":
         return transport
     return "local" if node_role == "standalone" else "nats"
-
-
-def _is_strictly_broader(a: str, b: str) -> bool:
-    """True if fnmatch pattern `a` strictly subsumes pattern `b`.
-
-    Heuristic: treat `b` as a literal string. If ``fnmatch(b, a)`` matches
-    and ``fnmatch(a, b)`` does not, then `a` covers every concrete event
-    that `b` covers, plus more.
-    """
-    return fnmatchcase(b, a) and not fnmatchcase(a, b)
 
 
 def load_config(path: Path | str | None = None) -> ProctorConfig:
