@@ -2,7 +2,6 @@
 
 import logging
 import re
-from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
@@ -10,6 +9,7 @@ import yaml
 from croniter import croniter
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from proctor.core.globs import is_strictly_broader
 from proctor.workflow.spec import WorkflowSpec
 
 logger = logging.getLogger(__name__)
@@ -225,6 +225,23 @@ class WebhookConfig(BaseModel):
         return self
 
 
+class RouterAgentConfig(BaseModel):
+    """Slot budget of the single local agent (Phase 2)."""
+
+    max_slots: int = Field(default=4, ge=1)
+
+
+class RouterConfig(BaseModel):
+    """TaskRouter admission settings."""
+
+    max_concurrency: int = Field(default=4, ge=1)
+    # 0 = reject immediately, never queue
+    queue_ttl_seconds: float = Field(default=600.0, ge=0.0)
+    # must stay > 0: asyncio.sleep(0) would spin the tick loop hot
+    queue_tick_seconds: float = Field(default=30.0, gt=0.0)
+    agent: RouterAgentConfig = RouterAgentConfig()
+
+
 class ProctorConfig(BaseModel):
     """Root configuration model with nested configs."""
 
@@ -237,6 +254,7 @@ class ProctorConfig(BaseModel):
     llm: LLMConfig = LLMConfig()
     nats: NATSConfig = NATSConfig()
     events: EventsConfig = EventsConfig()
+    router: RouterConfig = RouterConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     webhook: WebhookConfig | None = None
@@ -287,7 +305,7 @@ class ProctorConfig(BaseModel):
         for i, earlier in enumerate(self.routes):
             for j_offset, later in enumerate(self.routes[i + 1 :]):
                 j = i + 1 + j_offset
-                if _is_strictly_broader(earlier.event_pattern, later.event_pattern):
+                if is_strictly_broader(earlier.event_pattern, later.event_pattern):
                     raise ValueError(
                         f"route #{i} pattern={earlier.event_pattern!r} "
                         f"shadows route #{j} pattern={later.event_pattern!r}. "
@@ -304,16 +322,6 @@ def _resolve_transport_mode_static(
     if transport != "auto":
         return transport
     return "local" if node_role == "standalone" else "nats"
-
-
-def _is_strictly_broader(a: str, b: str) -> bool:
-    """True if fnmatch pattern `a` strictly subsumes pattern `b`.
-
-    Heuristic: treat `b` as a literal string. If ``fnmatch(b, a)`` matches
-    and ``fnmatch(a, b)`` does not, then `a` covers every concrete event
-    that `b` covers, plus more.
-    """
-    return fnmatchcase(b, a) and not fnmatchcase(a, b)
 
 
 def load_config(path: Path | str | None = None) -> ProctorConfig:

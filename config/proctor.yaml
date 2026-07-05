@@ -84,3 +84,12 @@ schedules:
     cron: "0 9 * * *"
     payload:
       prompt: "Produce the daily operations report"
+
+# TaskRouter admission (M4). Defaults shown; scope/branch are declared
+# per workflow in the workflows: catalog.
+# router:
+#   max_concurrency: 4
+#   queue_ttl_seconds: 600    # 0 = reject immediately, never queue
+#   queue_tick_seconds: 30
+#   agent:
+#     max_slots: 4
