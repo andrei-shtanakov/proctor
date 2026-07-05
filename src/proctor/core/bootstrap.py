@@ -1,5 +1,7 @@
 """Application bootstrap — lifecycle management and component wiring."""
 
+import asyncio
+import contextlib
 import logging
 import socket
 from collections.abc import Awaitable, Callable
@@ -16,11 +18,14 @@ from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.router import Router
 from proctor.core.state import StateManager
 from proctor.core.transport import EventTransport, LocalEventTransport
+from proctor.router.models import AgentProfile, QueueEntry
+from proctor.router.router import TaskRouter
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.triggers.webhook import WebhookTrigger
 from proctor.workers.llm import episode_id_ctx, task_id_ctx
 from proctor.workflow.engine import WorkflowEngine
+from proctor.workflow.spec import WorkflowSpec
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +80,9 @@ class Application:
         self._llm_call: LLMCall | None = None
         self._engine: WorkflowEngine | None = None
         self._router: Router | None = None
+        self._task_router: TaskRouter | None = None
+        self._tick_task: asyncio.Task[None] | None = None
+        self._exec_tasks: set[asyncio.Task[None]] = set()
         self._telegram_trigger: TelegramTrigger | None = None
         self._scheduler: SchedulerTrigger | None = None
         self._webhook_trigger: WebhookTrigger | None = None
@@ -99,6 +107,17 @@ class Application:
             routes=self.config.routes,
             workflows=self.config.workflows,
         )
+        self._task_router = TaskRouter(
+            bus=self.bus,
+            config=self.config.router,
+            agents=[
+                AgentProfile(
+                    id="local",
+                    max_slots=self.config.router.agent.max_slots,
+                )
+            ],
+        )
+        self._tick_task = asyncio.create_task(self._queue_tick_loop())
 
         if self.config.telegram is not None:
             self._telegram_trigger = TelegramTrigger(self.config.telegram)
@@ -120,6 +139,11 @@ class Application:
     async def stop(self) -> None:
         """Close state and memory, stop triggers, unset running."""
         self.is_running = False
+        if self._tick_task is not None:
+            self._tick_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._tick_task
+            self._tick_task = None
         # Close inputs first — WebhookTrigger first so the HTTP endpoint
         # stops accepting new POSTs before other components tear down.
         if self._webhook_trigger is not None:
@@ -133,6 +157,11 @@ class Application:
             self._scheduler = None
         # Drain in-flight handlers before transport shutdown.
         await self.bus.drain(timeout=self.config.events.drain_timeout)
+        if self._exec_tasks:
+            await asyncio.wait(
+                self._exec_tasks,
+                timeout=self.config.events.drain_timeout,
+            )
         await self.memory.close()
         await self.state.close()
         await self.bus.stop()
@@ -146,7 +175,7 @@ class Application:
         published routing.* observability events and logged a WARNING;
         we simply skip task creation.
         """
-        if self._router is None or self._engine is None:
+        if self._router is None or self._engine is None or self._task_router is None:
             await self.bus.publish(
                 Event(
                     type="task.failed",
@@ -163,68 +192,127 @@ class Application:
         if spec is None:
             return  # router already emitted routing.*
 
-        resolved_prompt = spec.prompt or ""
         task = Task(trigger_event=event.id, spec=spec.model_dump())
-        await self.state.save_task(task)
-        task.status = TaskStatus.RUNNING
-        task.updated_at = datetime.now(UTC)
-        await self.state.save_task(task)
+        await self.state.save_task(task)  # persisted as PENDING
 
-        episode = Episode(
-            trigger_type=event.source,
-            user_input=resolved_prompt,
-            agent_response="",
-        )
-        await self.memory.save_episode(episode)
-
-        task_token = task_id_ctx.set(task.id)
-        episode_token = episode_id_ctx.set(episode.id)
-        try:
-            result = await self._engine.execute(spec)
-        except Exception as exc:
-            logger.exception("Workflow execution failed")
+        assert self._task_router is not None  # created in start()
+        decision = await self._task_router.admit(task, spec, event.source)
+        if decision.verdict == "queued":
+            return  # TaskRouter emitted routing.queued; tick/release will run it
+        if decision.verdict == "rejected":
             task.status = TaskStatus.FAILED
-            task.result = {"error": str(exc)}
+            task.result = {"error": f"admission rejected: {decision.reason}"}
+            task.updated_at = datetime.now(UTC)
+            await self.state.save_task(task)
+            await self.bus.publish(
+                Event(
+                    type="task.failed",
+                    source="application",
+                    payload=task.result,
+                )
+            )
+            return
+
+        await self._run_admitted(task, spec, event.source)
+
+    async def _run_admitted(
+        self, task: Task, spec: WorkflowSpec, trigger_source: str
+    ) -> None:
+        """Execute an admitted task; always release its slot at the end."""
+        assert self._engine is not None and self._task_router is not None
+        try:
+            resolved_prompt = spec.prompt or ""
+            task.status = TaskStatus.RUNNING
             task.updated_at = datetime.now(UTC)
             await self.state.save_task(task)
 
+            episode = Episode(
+                trigger_type=trigger_source,
+                user_input=resolved_prompt,
+                agent_response="",
+            )
+            await self.memory.save_episode(episode)
+
+            task_token = task_id_ctx.set(task.id)
+            episode_token = episode_id_ctx.set(episode.id)
+            try:
+                result = await self._engine.execute(spec)
+            except Exception as exc:
+                logger.exception("Workflow execution failed")
+                task.status = TaskStatus.FAILED
+                task.result = {"error": str(exc)}
+                task.updated_at = datetime.now(UTC)
+                await self.state.save_task(task)
+
+                episode.workflow_result = task.result
+                await self.memory.save_episode(episode)
+
+                await self.bus.publish(
+                    Event(
+                        type="task.failed",
+                        source="application",
+                        payload={"error": str(exc)},
+                    )
+                )
+                return
+            finally:
+                task_id_ctx.reset(task_token)
+                episode_id_ctx.reset(episode_token)
+
+            if result.error:
+                task.status = TaskStatus.FAILED
+                task.result = {"error": result.error}
+            else:
+                task.status = TaskStatus.COMPLETED
+                task.result = {"output": result.output}
+
+            task.updated_at = datetime.now(UTC)
+            await self.state.save_task(task)
+
+            episode.agent_response = result.output or ""
             episode.workflow_result = task.result
             await self.memory.save_episode(episode)
 
             await self.bus.publish(
                 Event(
-                    type="task.failed",
+                    type=(
+                        "task.completed"
+                        if task.status == TaskStatus.COMPLETED
+                        else "task.failed"
+                    ),
                     source="application",
-                    payload={"error": str(exc)},
+                    payload=task.result,
                 )
             )
-            return
         finally:
-            task_id_ctx.reset(task_token)
-            episode_id_ctx.reset(episode_token)
+            ready = await self._task_router.release(task.id)
+            self._spawn_ready(ready)
 
-        if result.error:
-            task.status = TaskStatus.FAILED
-            task.result = {"error": result.error}
-        else:
-            task.status = TaskStatus.COMPLETED
-            task.result = {"output": result.output}
-
-        task.updated_at = datetime.now(UTC)
-        await self.state.save_task(task)
-
-        episode.agent_response = result.output or ""
-        episode.workflow_result = task.result
-        await self.memory.save_episode(episode)
-
-        await self.bus.publish(
-            Event(
-                type=(
-                    "task.completed"
-                    if task.status == TaskStatus.COMPLETED
-                    else "task.failed"
-                ),
-                source="application",
-                payload=task.result,
+    def _spawn_ready(self, entries: list[QueueEntry]) -> None:
+        """Launch execution of dequeued entries as tracked asyncio tasks."""
+        for entry in entries:
+            exec_task = asyncio.create_task(
+                self._run_admitted(entry.task, entry.spec, entry.trigger_source)
             )
-        )
+            self._exec_tasks.add(exec_task)
+            exec_task.add_done_callback(self._exec_tasks.discard)
+
+    async def _queue_tick_loop(self) -> None:
+        """Expire overdue queue entries and re-check the queue."""
+        assert self._task_router is not None
+        while True:
+            await asyncio.sleep(self.config.router.queue_tick_seconds)
+            expired = await self._task_router.expire_overdue()
+            for entry in expired:
+                entry.task.status = TaskStatus.FAILED
+                entry.task.result = {"error": f"queue TTL expired: {entry.reason}"}
+                entry.task.updated_at = datetime.now(UTC)
+                await self.state.save_task(entry.task)
+                await self.bus.publish(
+                    Event(
+                        type="task.failed",
+                        source="application",
+                        payload=entry.task.result,
+                    )
+                )
+            self._spawn_ready(await self._task_router.dequeue_ready())
