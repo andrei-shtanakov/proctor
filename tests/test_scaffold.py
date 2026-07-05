@@ -40,9 +40,9 @@ def test_main_is_coroutine() -> None:
 
 
 def test_entry_point_runs() -> None:
-    """python -m proctor starts and responds to SIGTERM."""
+    """python -m proctor starts, reports readiness, and exits on SIGTERM."""
     import signal
-    import time
+    import threading
 
     proc = subprocess.Popen(
         [sys.executable, "-m", "proctor"],
@@ -50,12 +50,26 @@ def test_entry_point_runs() -> None:
         stderr=subprocess.PIPE,
         text=True,
     )
-    # Wait for startup
-    time.sleep(2)
-    assert proc.poll() is None, "Process exited prematurely"
-    proc.send_signal(signal.SIGTERM)
-    stdout, stderr = proc.communicate(timeout=5)
-    assert f"Proctor v{proctor.__version__}" in stdout
+    # If startup hangs, kill the process so readline() below cannot
+    # block forever; readline() then returns "" and the asserts fail.
+    watchdog = threading.Timer(30.0, proc.kill)
+    watchdog.start()
+    try:
+        assert proc.stdout is not None
+        banner = proc.stdout.readline()
+        assert f"Proctor v{proctor.__version__}" in banner, banner
+        # "Proctor ready" is printed only after the SIGTERM handler is
+        # installed — signaling before it would hit the default handler.
+        ready = proc.stdout.readline()
+        assert "Proctor ready" in ready, ready
+        proc.send_signal(signal.SIGTERM)
+        _, stderr = proc.communicate(timeout=10)
+        assert proc.returncode == 0, stderr
+    finally:
+        watchdog.cancel()
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
 
 
 @pytest.mark.asyncio

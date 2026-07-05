@@ -39,6 +39,9 @@ async def main() -> None:
 
     try:
         with anyio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signals:
+            # Printed only after the signal handler is installed: external
+            # supervisors (and tests) may treat this line as "safe to signal".
+            print("Proctor ready", flush=True)
             async for sig in signals:
                 logger.info("Received signal %s, shutting down", sig)
                 break
