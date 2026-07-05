@@ -83,7 +83,7 @@ completed/failed`) reuse the existing `Task` model and are persisted via
 ### Tick-loop lifecycle
 
 `Application` currently has no background loops of its own (triggers own
-theirs), so this surface is built, not reused. The tick-loop is an anyio
+theirs), so this surface is built, not reused. The tick-loop is an asyncio
 task started in `Application.start()` after the transport is up; every
 `queue_tick_seconds` it calls `expire_overdue()` and re-checks the
 queue. `Application.stop()` cancels it (and suppresses the
@@ -114,7 +114,7 @@ lives in `TaskRouter` — so cancellation at any point is safe.
 router:
   max_concurrency: 4        # default 4
   queue_ttl_seconds: 600    # default 600; 0 = reject immediately, never queue
-  queue_tick_seconds: 30    # default 30; TaskRouter's own anyio loop calls
+  queue_tick_seconds: 30    # default 30; the Application's asyncio tick loop calls
                             # expire_overdue() — needed because a TTL can
                             # lapse with no release() ever firing
   agent:

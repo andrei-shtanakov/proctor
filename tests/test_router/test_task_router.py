@@ -183,3 +183,12 @@ class TestRouterConfigBounds:
     def test_zero_agent_slots_rejected(self) -> None:
         with pytest.raises(ValidationError):
             RouterAgentConfig(max_slots=0)  # type: ignore[bad-argument-type]
+
+
+async def test_no_agents_reason_is_prefixed(bus: EventBus) -> None:
+    """Even the no-candidates reason follows the `name: detail` convention."""
+    router = TaskRouter(bus=bus, config=RouterConfig(), agents=[])
+    decision = await router.admit(Task(), _spec(), "test", now=T0)
+    assert decision.verdict == "queued"
+    assert decision.reason is not None
+    assert decision.reason.startswith("no_candidates:")

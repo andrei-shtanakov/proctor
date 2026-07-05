@@ -270,6 +270,25 @@ class TestLoadConfig:
         cfg = load_config(tmp_path / "nonexistent.yaml")
         assert cfg == ProctorConfig()
 
+    def test_workflow_scope_and_branch_from_yaml(self, tmp_path: Path) -> None:
+        config_file = tmp_path / "test.yaml"
+        data = {
+            "workflows": {
+                "deploy": {
+                    "workflow_id": "deploy",
+                    "mode": "simple",
+                    "prompt": "deploy it",
+                    "scope": ["src/**", "config/*.yaml"],
+                    "branch": "release",
+                }
+            },
+        }
+        config_file.write_text(yaml.dump(data))
+        cfg = load_config(config_file)
+        spec = cfg.workflows["deploy"]
+        assert spec.scope == ["src/**", "config/*.yaml"]
+        assert spec.branch == "release"
+
     def test_load_from_yaml(self, tmp_path: Path) -> None:
         config_file = tmp_path / "test.yaml"
         data = {

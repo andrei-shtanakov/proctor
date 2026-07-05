@@ -56,3 +56,18 @@ def test_boundary_exactly_at_expiry_is_expired() -> None:
     q.push(_entry("edge", ttl_seconds=60))
     expired = q.pop_expired(T0 + timedelta(seconds=60))
     assert len(expired) == 1
+
+
+def test_empty_queue_pops_nothing() -> None:
+    q = PendingQueue()
+    assert q.pop_expired(T0) == []
+    assert q.pop_admissible(lambda e: True) == []
+    assert len(q) == 0
+
+
+def test_all_entries_blocked_nothing_popped() -> None:
+    q = PendingQueue()
+    q.push(_entry("a"))
+    q.push(_entry("b"))
+    assert q.pop_admissible(lambda e: False) == []
+    assert len(q) == 2
