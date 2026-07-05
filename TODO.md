@@ -5,10 +5,12 @@
 > Актуальный статус: `../_cowork_output/status/2026-04-10-status.md`
 
 ## Текущее состояние
-- 🔥 Phase 2 активна: EpisodicMemory, SchedulerTrigger (croniter), TelegramTrigger
+- 🔥 Phase 2 почти завершена: EpisodicMemory, SchedulerTrigger (croniter),
+  TelegramTrigger, WebhookTrigger, NATS-транспорт (Local/NATS EventTransport +
+  resolver `transport: auto|local|nats`) — всё реализовано; остался **router**
 - ✅ Миграция asyncio → anyio завершена
 - ✅ Задачи TASK-00N идут через Maestro-спеки (`maestro: add spec for ...`) — первый реальный Mode-2 run
-- ⚠️ Нет CI (нужен для собственной стабильности, не часть ecosystem roadmap)
+- ✅ CI есть (GitHub Actions: unit + integration-nats с Toxiproxy reconnect-тестами)
 
 ## Правила ведения
 - После каждой выполненной задачи проставь `[x]` и добавь хеш коммита
