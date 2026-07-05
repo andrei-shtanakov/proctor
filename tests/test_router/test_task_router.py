@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import anyio
 import pytest
+from pydantic import ValidationError
 
 from proctor.core.bus import EventBus
 from proctor.core.config import RouterAgentConfig, RouterConfig
@@ -157,3 +158,28 @@ async def test_concurrent_admit_race(bus: EventBus) -> None:
 
     assert sorted(decisions) == ["admitted", "queued"]
     assert router.running_count == 1
+
+
+class TestRouterConfigBounds:
+    """RouterConfig rejects nonsensical values at the model level."""
+
+    def test_zero_max_concurrency_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RouterConfig(max_concurrency=0)  # type: ignore[bad-argument-type]
+
+    def test_negative_ttl_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RouterConfig(queue_ttl_seconds=-1.0)
+
+    def test_zero_ttl_allowed(self) -> None:
+        # 0 is meaningful: reject immediately, never queue.
+        assert RouterConfig(queue_ttl_seconds=0.0).queue_ttl_seconds == 0.0
+
+    def test_zero_tick_rejected(self) -> None:
+        # sleep(0) would spin the tick loop hot.
+        with pytest.raises(ValidationError):
+            RouterConfig(queue_tick_seconds=0.0)
+
+    def test_zero_agent_slots_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RouterAgentConfig(max_slots=0)  # type: ignore[bad-argument-type]

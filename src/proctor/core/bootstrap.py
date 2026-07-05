@@ -165,10 +165,16 @@ class Application:
         # Drain in-flight handlers before transport shutdown.
         await self.bus.drain(timeout=self.config.events.drain_timeout)
         if self._exec_tasks:
-            await asyncio.wait(
+            _, pending = await asyncio.wait(
                 self._exec_tasks,
                 timeout=self.config.events.drain_timeout,
             )
+            # Executions that outlive the drain window must not keep
+            # running into memory/state teardown below.
+            for exec_task in pending:
+                exec_task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
         await self.memory.close()
         await self.state.close()
         await self.bus.stop()
@@ -189,7 +195,7 @@ class Application:
                     source="application",
                     payload={
                         "error": "Application not fully started "
-                        "(router or engine missing)",
+                        "(router, engine, or task router missing)",
                     },
                 )
             )

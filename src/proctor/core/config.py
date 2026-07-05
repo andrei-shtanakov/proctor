@@ -228,15 +228,17 @@ class WebhookConfig(BaseModel):
 class RouterAgentConfig(BaseModel):
     """Slot budget of the single local agent (Phase 2)."""
 
-    max_slots: int = 4
+    max_slots: int = Field(default=4, ge=1)
 
 
 class RouterConfig(BaseModel):
     """TaskRouter admission settings."""
 
-    max_concurrency: int = 4
-    queue_ttl_seconds: float = 600.0  # 0 = reject immediately, never queue
-    queue_tick_seconds: float = 30.0
+    max_concurrency: int = Field(default=4, ge=1)
+    # 0 = reject immediately, never queue
+    queue_ttl_seconds: float = Field(default=600.0, ge=0.0)
+    # must stay > 0: asyncio.sleep(0) would spin the tick loop hot
+    queue_tick_seconds: float = Field(default=30.0, gt=0.0)
     agent: RouterAgentConfig = RouterAgentConfig()
 
 

@@ -20,6 +20,7 @@ import pytest
 
 from proctor.core.bootstrap import Application
 from proctor.core.config import (
+    EventsConfig,
     ProctorConfig,
     RouterAgentConfig,
     RouterConfig,
@@ -265,4 +266,49 @@ async def test_stop_with_running_and_queued_task_completes_cleanly(
 
     # The queued task must never have been spawned during teardown.
     assert calls == ["one"]
+    assert app._exec_tasks == set()
+
+
+async def test_stop_cancels_executions_that_outlive_drain_window(
+    tmp_path: Path,
+) -> None:
+    """A dequeued execution blocking past drain_timeout is cancelled by
+    stop(), not left running into memory/state teardown."""
+    gate_one = anyio.Event()
+    hang = anyio.Event()  # never set — "two" blocks forever
+
+    async def llm(prompt: str) -> str:
+        if prompt == "one":
+            await gate_one.wait()
+        if prompt == "two":
+            await hang.wait()
+        return "ok"
+
+    config = _config(tmp_path, queue_ttl_seconds=30.0).model_copy(
+        update={"events": EventsConfig(drain_timeout=0.2)}
+    )
+    app = Application(config, event_transport=LocalEventTransport())
+    app.set_llm_call(llm)
+    collected: list[Event] = []
+
+    async def collect(event: Event) -> None:
+        collected.append(event)
+
+    app.bus.subscribe("routing.>", collect)
+
+    await app.start()
+    await app.bus.publish(
+        Event(type="trigger.terminal", source="terminal", payload={"text": "one"})
+    )
+    await app.bus.publish(
+        Event(type="trigger.terminal", source="terminal", payload={"text": "two"})
+    )
+    await _wait_for(collected, "routing.queued")
+    gate_one.set()
+    # "two" is dequeued and now runs as a spawned task, stuck on `hang`.
+    await _wait_for(collected, "routing.dequeued")
+
+    with anyio.fail_after(3):
+        await app.stop()  # must neither hang on the stuck task nor raise
+
     assert app._exec_tasks == set()
