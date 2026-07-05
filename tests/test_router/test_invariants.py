@@ -63,6 +63,21 @@ class TestScopeIsolation:
         running = [RunningTask(task_id="t", agent_id="a", scope=["docs/**"])]
         assert check_scope_isolation(["src/**"], running) is None
 
+    def test_conflict_beyond_first_entries(self) -> None:
+        """The scan must reach later running tasks and later globs."""
+        running = [
+            RunningTask(task_id="t1", agent_id="a", scope=["docs/**"]),
+            RunningTask(
+                task_id="t2",
+                agent_id="a",
+                scope=["assets/*", "src/core/**"],
+            ),
+        ]
+        reason = check_scope_isolation(["README.md", "src/core/bus.py"], running)
+        assert reason is not None
+        assert "t2" in reason
+        assert "src/core/**" in reason
+
 
 class TestBranchNotLocked:
     def test_none_branch_passes(self) -> None:

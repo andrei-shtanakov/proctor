@@ -72,7 +72,7 @@ class TaskRouter:
 
         MUST stay free of awaits — this is the atomic section.
         """
-        reason = "no agent candidates"
+        reason = "no_candidates: scoring returned no agents"
         for candidate in score_candidates(spec, self._agents):
             reason = self._check(spec, candidate.profile)
             if reason is None:

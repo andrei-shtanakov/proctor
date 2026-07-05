@@ -208,7 +208,6 @@ class Application:
         task = Task(trigger_event=event.id, spec=spec.model_dump())
         await self.state.save_task(task)  # persisted as PENDING
 
-        assert self._task_router is not None  # created in start()
         decision = await self._task_router.admit(task, spec, event.source)
         if decision.verdict == "queued":
             return  # TaskRouter emitted routing.queued; tick/release will run it
