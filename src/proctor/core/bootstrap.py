@@ -18,6 +18,7 @@ from proctor.core.models import Episode, Event, Task, TaskStatus
 from proctor.core.router import Router
 from proctor.core.state import StateManager
 from proctor.core.transport import EventTransport, LocalEventTransport
+from proctor.core.transport.errors import TransportDrainingError
 from proctor.router.models import AgentProfile, QueueEntry
 from proctor.router.router import TaskRouter
 from proctor.triggers.scheduler import SchedulerTrigger
@@ -142,7 +143,13 @@ class Application:
         if self._tick_task is not None:
             self._tick_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await self._tick_task
+                try:
+                    await self._tick_task
+                except Exception:
+                    # The tick task may have already died from an
+                    # exception before cancel() reached it; teardown
+                    # must proceed regardless.
+                    logger.exception("Queue tick task exited with an error")
             self._tick_task = None
         # Close inputs first — WebhookTrigger first so the HTTP endpoint
         # stops accepting new POSTs before other components tear down.
@@ -285,15 +292,40 @@ class Application:
                 )
             )
         finally:
-            ready = await self._task_router.release(task.id)
-            self._spawn_ready(ready)
+            try:
+                ready = await self._task_router.release(task.id)
+                self._spawn_ready(ready)
+            except TransportDrainingError:
+                # release() frees the in-memory slot synchronously before
+                # its first await; the raise below only means the follow-up
+                # dequeue publish lost the race with shutdown. The slot is
+                # freed either way — any entries it reserved stay PENDING
+                # in SQLite and are covered by the restart-recovery gap.
+                logger.debug(
+                    "Skipping post-release dequeue for task %s: transport draining",
+                    task.id,
+                )
+
+    async def _run_spawned(self, entry: QueueEntry) -> None:
+        """Run a dequeued entry, logging (not raising) on crash.
+
+        Guards against "Task exception was never retrieved" and a task
+        left RUNNING in SQLite with no accompanying task.failed event;
+        matches the logging-only contract used by ``_safe_invoke``.
+        """
+        try:
+            await self._run_admitted(entry.task, entry.spec, entry.trigger_source)
+        except Exception:
+            logger.exception("Dequeued task %s crashed", entry.task.id)
 
     def _spawn_ready(self, entries: list[QueueEntry]) -> None:
         """Launch execution of dequeued entries as tracked asyncio tasks."""
+        if not self.is_running:
+            # Teardown in progress — don't start new executions; the
+            # entries' tasks remain PENDING in SQLite (restart limitation).
+            return
         for entry in entries:
-            exec_task = asyncio.create_task(
-                self._run_admitted(entry.task, entry.spec, entry.trigger_source)
-            )
+            exec_task = asyncio.create_task(self._run_spawned(entry))
             self._exec_tasks.add(exec_task)
             exec_task.add_done_callback(self._exec_tasks.discard)
 
@@ -302,17 +334,20 @@ class Application:
         assert self._task_router is not None
         while True:
             await asyncio.sleep(self.config.router.queue_tick_seconds)
-            expired = await self._task_router.expire_overdue()
-            for entry in expired:
-                entry.task.status = TaskStatus.FAILED
-                entry.task.result = {"error": f"queue TTL expired: {entry.reason}"}
-                entry.task.updated_at = datetime.now(UTC)
-                await self.state.save_task(entry.task)
-                await self.bus.publish(
-                    Event(
-                        type="task.failed",
-                        source="application",
-                        payload=entry.task.result,
+            try:
+                expired = await self._task_router.expire_overdue()
+                for entry in expired:
+                    entry.task.status = TaskStatus.FAILED
+                    entry.task.result = {"error": f"queue TTL expired: {entry.reason}"}
+                    entry.task.updated_at = datetime.now(UTC)
+                    await self.state.save_task(entry.task)
+                    await self.bus.publish(
+                        Event(
+                            type="task.failed",
+                            source="application",
+                            payload=entry.task.result,
+                        )
                     )
-                )
-            self._spawn_ready(await self._task_router.dequeue_ready())
+                self._spawn_ready(await self._task_router.dequeue_ready())
+            except Exception:
+                logger.exception("Queue tick failed")
