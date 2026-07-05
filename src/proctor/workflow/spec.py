@@ -77,3 +77,5 @@ class WorkflowSpec(BaseModel):
     policies: WorkflowPolicies = Field(default_factory=WorkflowPolicies)
     security: dict[str, Any] = Field(default_factory=dict)
     channels: dict[str, Any] = Field(default_factory=dict)
+    scope: list[str] = Field(default_factory=list)
+    branch: str | None = None

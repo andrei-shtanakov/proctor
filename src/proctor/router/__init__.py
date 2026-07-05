@@ -7,6 +7,7 @@ from proctor.router.models import (
     QueueEntry,
     RunningTask,
 )
+from proctor.router.router import TaskRouter
 
 __all__ = [
     "AdmitDecision",
@@ -14,4 +15,5 @@ __all__ = [
     "Candidate",
     "QueueEntry",
     "RunningTask",
+    "TaskRouter",
 ]

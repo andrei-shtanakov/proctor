@@ -225,6 +225,21 @@ class WebhookConfig(BaseModel):
         return self
 
 
+class RouterAgentConfig(BaseModel):
+    """Slot budget of the single local agent (Phase 2)."""
+
+    max_slots: int = 4
+
+
+class RouterConfig(BaseModel):
+    """TaskRouter admission settings."""
+
+    max_concurrency: int = 4
+    queue_ttl_seconds: float = 600.0  # 0 = reject immediately, never queue
+    queue_tick_seconds: float = 30.0
+    agent: RouterAgentConfig = RouterAgentConfig()
+
+
 class ProctorConfig(BaseModel):
     """Root configuration model with nested configs."""
 
@@ -237,6 +252,7 @@ class ProctorConfig(BaseModel):
     llm: LLMConfig = LLMConfig()
     nats: NATSConfig = NATSConfig()
     events: EventsConfig = EventsConfig()
+    router: RouterConfig = RouterConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     webhook: WebhookConfig | None = None
