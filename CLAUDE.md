@@ -62,8 +62,8 @@ pyrefly check                        # Type check (run after every change)
 
 | Module | Purpose |
 |--------|---------|
-| `core/` | Kernel — internal asyncio EventBus, SQLite state manager, config (YAML→pydantic), bootstrap, EpisodicMemory, core models (Event, Task, Episode, Envelope) |
-| `triggers/` | Input adapters — Trigger ABC, TerminalTrigger (stdin→events), TelegramTrigger (Bot API polling), SchedulerTrigger (cron/interval). Future: webhook, filesystem, email, heartbeat |
+| `core/` | Kernel — EventBus on top of the `transport/` abstraction (LocalEventTransport in-process, NATSEventTransport cross-node, `transport: auto\|local\|nats` in config), SQLite state manager, config (YAML→pydantic), bootstrap, EpisodicMemory, core models (Event, Task, Episode, Envelope) |
+| `triggers/` | Input adapters — Trigger ABC, TerminalTrigger (stdin→events), TelegramTrigger (Bot API polling), SchedulerTrigger (cron/interval), WebhookTrigger (HTTP, HMAC/Bearer auth). Future: filesystem, email, heartbeat |
 | `workflow/` | Pipeline engine — WorkflowSpec model, DAG executor (topo-sort + parallel), WorkflowEngine dispatcher. Supports simple and DAG modes |
 | `workers/` | Agent Runtime (LLM loop: prompt→tool calls→result). Future: worker registry, local/Docker/SSH workers |
 
@@ -93,17 +93,17 @@ pyrefly check                        # Type check (run after every change)
 
 Phase 0 (Foundation) and Phase 1 (MVP) are complete. Phase 2 is partially complete.
 
-**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration, SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), EpisodicMemory (SQLite-backed interaction history).
+**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration, SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), WebhookTrigger (HTTP with HMAC/Bearer auth), EpisodicMemory (SQLite-backed interaction history), transport layer (EventTransport ABC, LocalEventTransport, NATSEventTransport + resolver, contract and Toxiproxy reconnect tests), CI (GitHub Actions: unit + integration-nats jobs).
 
-**Current phase:** Phase 2 (partially complete). The system accepts terminal input, Telegram messages, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite.
+**Current phase:** Phase 2 (nearly complete). The system accepts terminal input, Telegram messages, webhooks, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite. Events flow over local or NATS transport.
 
-**Next:** Remaining Phase 2 work — NATS real messaging, router, additional triggers (webhook). Then Phase 3+.
+**Next:** Remaining Phase 2 work — router (capability scoring + safety invariants). Then Phase 3+.
 
 ## Key Conventions
 
 - All models use pydantic `BaseModel`
 - Async everywhere (anyio for triggers/tests, aiosqlite, nats-py async client)
-- EventBus handles all intra-process communication (NATS stubbed for Phase 2)
+- EventBus rides on the EventTransport abstraction: LocalEventTransport (in-process) or NATSEventTransport (cross-node), selected via `transport: auto|local|nats` in config
 - LLM calls abstracted behind `Callable[[str], Awaitable[str]]` interface (mock in tests, real LiteLLM in future)
 - Agent Runtime uses tool definitions (`ToolDef`) — tools are dynamic, not hardcoded
 - Task state persists to SQLite at every transition (survives process restart)
