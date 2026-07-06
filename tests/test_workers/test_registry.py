@@ -193,3 +193,13 @@ async def test_malformed_heartbeat_does_not_evict_owner(bus: EventBus) -> None:
     bad.payload["capabilities"] = 42
     await reg._handle_alive(bad)
     assert reg.instance_of("worker_a") == "i1"
+
+
+async def test_id_claimable_after_liveness_timeout(bus: EventBus) -> None:
+    """Spec: after a timeout the id is released and a new instance claims."""
+    reg = _registry(bus)
+    await reg._handle_alive(_alive_event(iid="i1"))
+    await reg.sweep(now=T0 + timedelta(seconds=90))
+    assert reg.alive_profiles() == []
+    await reg._handle_alive(_alive_event(iid="i2"))
+    assert reg.instance_of("worker_a") == "i2"

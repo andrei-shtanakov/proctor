@@ -477,3 +477,98 @@ async def test_loss_policy_failure_still_releases_slot(tmp_path: Path) -> None:
                 await anyio.sleep(0.01)
     finally:
         await app.stop()
+
+
+async def test_ghost_late_result_after_redispatch_ignored(
+    tmp_path: Path,
+) -> None:
+    """Fencing end-to-end (spec rationale scenario): attempt A's late
+    result must not complete attempt B."""
+    app, collected = await _mk_app(tmp_path, retry=True)
+    try:
+        await app.bus.publish(
+            Event(
+                type="worker.registered",
+                source="worker:ghost",
+                payload={
+                    "worker_id": "ghost",
+                    "instance_id": "g1",
+                    "capabilities": ["python"],
+                    "max_slots": 9,
+                },
+            )
+        )
+        await app.bus.flush()
+        assigns_a: list[Event] = []
+        assigns_b: list[Event] = []
+
+        async def on_a(event: Event) -> None:
+            assigns_a.append(event)
+
+        async def on_b(event: Event) -> None:
+            assigns_b.append(event)
+
+        app.bus.subscribe("task.assign.ghost", on_a)
+        app.bus.subscribe("task.assign.pyw", on_b)
+        await app.bus.publish(
+            Event(type="trigger.terminal", source="terminal", payload={"text": "go"})
+        )
+        with anyio.fail_after(3):
+            while not assigns_a:
+                await anyio.sleep(0.01)
+        pa = assigns_a[0].payload
+
+        # ghost never heartbeats -> sweep -> retry queued -> new worker
+        await _wait_for(collected, "routing.queued")
+        await _register_fake_worker(app)  # pyw / i1 takes the retry
+        with anyio.fail_after(3):
+            while not assigns_b:
+                await anyio.sleep(0.01)
+        pb = assigns_b[0].payload
+        assert pb["task"]["id"] == pa["task"]["id"]
+        assert pb["dispatch_id"] != pa["dispatch_id"]
+
+        # LATE result from attempt A — must be ignored
+        await app.bus.publish(
+            Event(
+                type="task.result",
+                source="worker:ghost",
+                payload={
+                    "task_id": pa["task"]["id"],
+                    "dispatch_id": pa["dispatch_id"],
+                    "worker_id": "ghost",
+                    "instance_id": "g1",
+                    "ok": True,
+                    "output": "ghost output",
+                    "error": None,
+                },
+            )
+        )
+        await app.bus.flush()
+        await anyio.sleep(0.05)
+        assert not any(e.type == "task.completed" for e in collected)
+        task = await app.state.get_task(pa["task"]["id"])
+        assert task is not None
+        assert task.status == TaskStatus.ASSIGNED
+        assert task.worker_id == "pyw"
+
+        # attempt B's genuine result completes the task
+        await app.bus.publish(
+            Event(
+                type="task.result",
+                source="worker:pyw",
+                payload={
+                    "task_id": pb["task"]["id"],
+                    "dispatch_id": pb["dispatch_id"],
+                    "worker_id": "pyw",
+                    "instance_id": "i1",
+                    "ok": True,
+                    "output": "b output",
+                    "error": None,
+                },
+            )
+        )
+        done = await _wait_for(collected, "task.completed")
+        assert done.payload == {"output": "b output"}
+    finally:
+        await app.stop()

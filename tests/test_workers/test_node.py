@@ -191,7 +191,5 @@ async def test_stop_order_offline_is_last_worker_event(bus: EventBus) -> None:
     assert worker_events[-1].payload["reason"] == "shutdown"
     assert worker_events[-1].payload["instance_id"] == node.instance_id
     # nothing after offline
-    types_after = [
-        e.type for e in worker_events[worker_events.index(worker_events[-1]) + 1 :]
-    ]
-    assert types_after == []
+    offline_count = sum(1 for e in worker_events if e.type == "worker.offline")
+    assert offline_count == 1  # exactly one offline, nothing after it
