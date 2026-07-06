@@ -83,6 +83,10 @@ class WorkerRegistry:
         if self._sweep_task is not None:
             self._sweep_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
+                # CancelledError is a BaseException: the inner `except
+                # Exception` does NOT catch it, so cancellation still
+                # reaches the outer suppress; only genuine errors from a
+                # task that died before cancel() are logged here.
                 try:
                     await self._sweep_task
                 except Exception:
@@ -171,7 +175,11 @@ class WorkerRegistry:
         if not isinstance(wid, str) or not isinstance(iid, str):
             return
         if event.source == _SOURCE:
-            return  # our own timeout publication — already handled
+            # Our own timeout publication looping back via the bus.
+            # Keying off the source string assumes a single active
+            # registry (a recorded v1 limitation: exactly one core);
+            # a second publisher using this source would break it.
+            return
         entry = self._entries.get(wid)
         if entry is None or entry.instance_id != iid:
             logger.info("Ignoring stale worker.offline for %s/%s", wid, iid)

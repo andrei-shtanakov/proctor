@@ -89,6 +89,11 @@ async def _wait_for(collected: list[Event], event_type: str) -> Event:
             await anyio.sleep(0.02)
 
 
+# NOTE for anyone copying this test: the worker registers without an
+# explicit barrier before the trigger fires. That is safe here only
+# because queue_ttl_seconds keeps its generous default — an unmatched
+# admit parks the task and the tick loop retries until the worker's
+# registration lands. With a tight TTL this becomes a race.
 async def test_distribution_over_nats(tmp_path: Path, nats_url: str) -> None:
     """Core dispatches a `requires: [python]` task to a remote NATS worker."""
     prefix = f"proctor_test_{uuid4().hex[:8]}"

@@ -282,6 +282,13 @@ with a message pointing to `worker.max_slots`. WorkflowSpec gains
 
 ## Limitations (v1, recorded deliberately)
 
+- The core cannot be dispatch-only: `WorkerConfig.max_slots` is `ge=1`
+  and the local profile is always seeded, so the core always competes
+  for work (and wins free-slot ties via registry order).
+- A `worker_busy` result consumes the shared `max_retries` budget via
+  the worker-loss policy — there is no separate transient-busy budget.
+  With retry disabled (default) a single busy bounce is terminal.
+
 - At-most-once delivery **per dispatch**; with
   `retry_on_worker_loss: true` one logical task may execute more than
   once (a lost result triggers a re-dispatch of already-done work).
