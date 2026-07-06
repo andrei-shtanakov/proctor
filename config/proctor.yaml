@@ -92,7 +92,17 @@ schedules:
 #   queue_ttl_seconds: 600    # 0 = reject immediately, never queue
 #   queue_tick_seconds: 30
 #
-# Local worker slot budget (replaces the old router.agent.max_slots):
+# Local worker identity/capacity (replaces the old router.agent.max_slots).
+# On a core/standalone node this describes the inline executor; a
+# remote worker node sets node_role: worker and gives itself a
+# non-"local" id + the capabilities it can satisfy:
 # worker:
 #   id: local
+#   capabilities: []          # e.g. [shell, python]
 #   max_slots: 4
+#
+# Worker discovery/liveness (core/standalone only — ignored on worker
+# nodes). liveness_timeout must exceed heartbeat_interval:
+# registry:
+#   heartbeat_interval: 30.0
+#   liveness_timeout: 90.0

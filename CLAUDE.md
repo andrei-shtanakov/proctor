@@ -65,7 +65,7 @@ pyrefly check                        # Type check (run after every change)
 | `core/` | Kernel — EventBus on top of the `transport/` abstraction (LocalEventTransport in-process, NATSEventTransport cross-node, `transport: auto\|local\|nats` in config), SQLite state manager, config (YAML→pydantic), bootstrap, EpisodicMemory, core models (Event, Task, Episode, Envelope) |
 | `triggers/` | Input adapters — Trigger ABC, TerminalTrigger (stdin→events), TelegramTrigger (Bot API polling), SchedulerTrigger (cron/interval), WebhookTrigger (HTTP, HMAC/Bearer auth). Future: filesystem, email, heartbeat |
 | `workflow/` | Pipeline engine — WorkflowSpec model, DAG executor (topo-sort + parallel), WorkflowEngine dispatcher. Supports simple and DAG modes |
-| `workers/` | Agent Runtime (LLM loop: prompt→tool calls→result). Future: worker registry, local/Docker/SSH workers |
+| `workers/` | Agent Runtime + WorkerRegistry (discovery/liveness) + WorkerNode (worker-role runtime). Future: docker.py, remote.py |
 | `router/` | Admission layer (M4) — TaskRouter: 4 safety invariants, TTL pending queue, capability-scoring seam for Phase 3 |
 
 **Planned modules** (not yet implemented):
@@ -93,11 +93,11 @@ pyrefly check                        # Type check (run after every change)
 
 Phase 0 (Foundation) and Phase 1 (MVP) are complete. Phase 2 is complete.
 
-**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration, SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), WebhookTrigger (HTTP with HMAC/Bearer auth), EpisodicMemory (SQLite-backed interaction history), transport layer (EventTransport ABC, LocalEventTransport, NATSEventTransport + resolver, contract and Toxiproxy reconnect tests), CI (GitHub Actions: unit + integration-nats jobs), TaskRouter (admission invariants + TTL queue).
+**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration, SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), WebhookTrigger (HTTP with HMAC/Bearer auth), EpisodicMemory (SQLite-backed interaction history), transport layer (EventTransport ABC, LocalEventTransport, NATSEventTransport + resolver, contract and Toxiproxy reconnect tests), CI (GitHub Actions: unit + integration-nats jobs), TaskRouter (admission invariants + TTL queue), worker registry + remote dispatch (WorkerRegistry liveness/fencing, capability scoring, WorkerNode worker-role runtime, remote dispatch with rollback/loss-policy/reaper, local-transport and NATS multi-node integration tests).
 
-**Current phase:** Phase 2 complete. The system accepts terminal input, Telegram messages, webhooks, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite. Events flow over local or NATS transport. Admission layer enforces 4 safety invariants with TTL-pending queue semantics.
+**Current phase:** Phase 2 complete. The system accepts terminal input, Telegram messages, webhooks, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite. Events flow over local or NATS transport. Admission layer enforces 4 safety invariants with TTL-pending queue semantics. Tasks requiring specific capabilities are dispatched to remote workers over local or NATS transport, with liveness-based loss handling.
 
-**Next:** Phase 3 — workers/registry, Docker/SSH workers, MCP.
+**Next:** Phase 3 continues — workers/docker.py, workers/remote.py, mcp/.
 
 ## Key Conventions
 
