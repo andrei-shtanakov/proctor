@@ -238,6 +238,9 @@ subjects — boundaries stay as in Phase 2.
   exactly one outcome per dispatch; everything else is logged and
   ignored — no double episode, double release, or terminal-status
   overwrite.
+- A `worker_busy` result is transient over-capacity, not a terminal
+  outcome: the core routes it through the worker-loss policy (retry if
+  opted in, else fail).
 - Core restart: the registry refills within one `heartbeat_interval`
   (profile-carrying heartbeats). The in-flight map is lost; ASSIGNED
   rows survive in SQLite but v1 does not reconcile them on boot (same
@@ -258,9 +261,16 @@ worker:                       # who am I as an executor
 # must not be "local" — that value is reserved for the core's inline
 # executor; a silently-defaulted worker.id would collide with it.
 
-registry:                     # core/standalone only
-  heartbeat_interval: 30.0    # seconds, gt=0
-  liveness_timeout: 90.0      # seconds; must be > heartbeat_interval
+registry:
+  heartbeat_interval: 30.0    # seconds, gt=0; also read by worker nodes
+                               # for their own heartbeat cadence — keep
+                               # it comfortably under the core's
+                               # liveness_timeout (cross-node coupling
+                               # per-node validation can't check; a
+                               # mismatch causes liveness flapping with
+                               # task casualties)
+  liveness_timeout: 90.0      # seconds; must be > heartbeat_interval;
+                               # core/standalone only (sweep threshold)
 ```
 
 Migration: `router.agent` (RouterAgentConfig) is **removed**; the

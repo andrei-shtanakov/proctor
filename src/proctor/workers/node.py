@@ -144,7 +144,14 @@ class WorkerNode:
                 task_id, dispatch_id, ok=False, error="worker_busy"
             )
             return
-        spec = WorkflowSpec.model_validate(payload.get("spec"))
+        try:
+            spec = WorkflowSpec.model_validate(payload.get("spec"))
+        except Exception as exc:
+            logger.exception("Invalid spec in assignment for task %s", task_id)
+            await self._publish_result(
+                task_id, dispatch_id, ok=False, error=f"invalid spec: {exc}"
+            )
+            return
         exec_task = asyncio.create_task(self._execute(task_id, dispatch_id, spec))
         self._exec_tasks.add(exec_task)
         exec_task.add_done_callback(self._exec_tasks.discard)

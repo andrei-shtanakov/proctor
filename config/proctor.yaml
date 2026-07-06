@@ -101,8 +101,14 @@ schedules:
 #   capabilities: []          # e.g. [shell, python]
 #   max_slots: 4
 #
-# Worker discovery/liveness (core/standalone only — ignored on worker
-# nodes). liveness_timeout must exceed heartbeat_interval:
+# Worker discovery/liveness. liveness_timeout must exceed
+# heartbeat_interval and is core/standalone-only (drives the sweep for
+# silent workers). heartbeat_interval is also read by worker nodes for
+# their own heartbeat cadence — keep a worker's value comfortably under
+# the core's liveness_timeout. This is a cross-node coupling that
+# per-node config validation cannot check; a mismatch causes liveness
+# flapping (workers appearing to go offline and back) with task
+# casualties on the affected dispatches:
 # registry:
 #   heartbeat_interval: 30.0
 #   liveness_timeout: 90.0

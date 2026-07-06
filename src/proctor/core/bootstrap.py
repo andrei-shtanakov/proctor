@@ -380,16 +380,18 @@ class Application:
         """Send an admitted task to a remote worker (slot already held)."""
         assert self._registry is not None and self._task_router is not None
         instance_id = self._registry.instance_of(agent_id)
-        entry = InflightDispatch(
-            task=task,
-            spec=spec,
-            agent_id=agent_id,
-            instance_id=instance_id or "",
-            dispatch_id=str(uuid4()),
-            trigger_source=trigger_source,
-        )
         if instance_id is None:
-            # Raced an offline between admit and dispatch.
+            # Raced an offline between admit and dispatch — this
+            # dispatch never happened, so the task's fields stay as
+            # admit left them (no ASSIGNED transition).
+            entry = InflightDispatch(
+                task=task,
+                spec=spec,
+                agent_id=agent_id,
+                instance_id="",
+                dispatch_id=str(uuid4()),
+                trigger_source=trigger_source,
+            )
             await self._apply_loss_policy(entry, f"worker_lost: {agent_id}")
             return
         now = datetime.now(UTC)
@@ -397,6 +399,17 @@ class Application:
         task.worker_id = agent_id
         task.deadline = now + timedelta(seconds=spec.policies.max_runtime_seconds)
         task.updated_at = now
+        # Task fields set before InflightDispatch is constructed — the
+        # reaper's deadline check must read the mutated task off the
+        # entry without depending on pydantic instance aliasing.
+        entry = InflightDispatch(
+            task=task,
+            spec=spec,
+            agent_id=agent_id,
+            instance_id=instance_id,
+            dispatch_id=str(uuid4()),
+            trigger_source=trigger_source,
+        )
         self._inflight[task.id] = entry
         try:
             try:
@@ -454,6 +467,14 @@ class Application:
             logger.warning("Ignoring stale/unknown task.result for %s", task_id)
             return
         del self._inflight[task_id]
+
+        if not p.get("ok") and p.get("error") == "worker_busy":
+            # Transient over-capacity, not a terminal outcome — route
+            # through the worker-loss policy (retry if opted in, else
+            # fail). _apply_loss_policy already releases the slot; do
+            # not finalize/release separately here.
+            await self._apply_loss_policy(entry, "worker_busy: transient over-capacity")
+            return
 
         task, spec = entry.task, entry.spec
         if p.get("ok"):

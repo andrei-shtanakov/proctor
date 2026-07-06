@@ -156,6 +156,30 @@ async def test_over_capacity_reports_busy(bus: EventBus) -> None:
         await node.stop()
 
 
+async def test_invalid_spec_reports_error_result(bus: EventBus) -> None:
+    """F4 regression: a malformed spec in an assignment must produce an
+    immediate error task.result, never reach the engine."""
+    results = await _collect(bus, "task.result")
+    engine = _StubEngine()
+    node = _node(bus, engine)
+    await node.start()
+    try:
+        event = _assign(node, task_id="t1", dispatch_id="d1")
+        event.payload["spec"] = {"not": "a valid workflow spec"}
+        await bus.publish(event)
+        with anyio.fail_after(2):
+            while not results:
+                await anyio.sleep(0.01)
+        p = results[0].payload
+        assert p["task_id"] == "t1"
+        assert p["dispatch_id"] == "d1"
+        assert p["ok"] is False
+        assert p["error"] is not None and "invalid spec" in p["error"]
+        assert engine.calls == []
+    finally:
+        await node.stop()
+
+
 async def test_stop_order_offline_is_last_worker_event(bus: EventBus) -> None:
     worker_events = await _collect(bus, "worker.>")
     node = _node(bus)

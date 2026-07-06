@@ -254,7 +254,19 @@ class WorkerConfig(BaseModel):
 
 
 class RegistryConfig(BaseModel):
-    """Worker discovery/liveness settings (core/standalone only)."""
+    """Worker discovery/liveness settings.
+
+    ``liveness_timeout`` is core/standalone-only — it drives the
+    registry's sweep for silent workers. ``heartbeat_interval`` is
+    read by *both* roles: the core uses it for the registry sweep
+    cadence, and worker nodes read it (bootstrap's worker branch) to
+    set their own heartbeat loop's interval. A worker's
+    ``heartbeat_interval`` must stay comfortably under the core's
+    ``liveness_timeout`` — this is a cross-node coupling that per-node
+    config validation cannot check; a mismatch causes liveness
+    flapping (workers appearing to go offline and back) with task
+    casualties on the affected dispatches.
+    """
 
     heartbeat_interval: float = Field(default=30.0, gt=0.0)
     liveness_timeout: float = Field(default=90.0, gt=0.0)
