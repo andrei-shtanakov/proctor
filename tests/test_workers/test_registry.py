@@ -165,3 +165,31 @@ async def test_local_id_conflict_rejected(bus: EventBus) -> None:
     await reg._handle_alive(_alive_event(wid="local", iid="i9"))
     assert reg.instance_of("local") is None  # remote claim on local id ignored
     assert [p.id for p in reg.alive_profiles()] == ["local"]
+
+
+async def test_malformed_capabilities_rejected(bus: EventBus) -> None:
+    reg = _registry(bus)
+    event = _alive_event()
+    event.payload["capabilities"] = "python"  # str, not list[str]
+    await reg._handle_alive(event)
+    assert reg.alive_profiles() == []
+
+
+async def test_malformed_max_slots_rejected(bus: EventBus) -> None:
+    reg = _registry(bus)
+    for bad in (0, -1, True, "4"):
+        event = _alive_event()
+        event.payload["max_slots"] = bad
+        await reg._handle_alive(event)
+    assert reg.alive_profiles() == []
+
+
+async def test_malformed_heartbeat_does_not_evict_owner(bus: EventBus) -> None:
+    """A live owner sending one bad payload stays registered (stale
+    last_seen — documented trade-off), and keeps ownership."""
+    reg = _registry(bus)
+    await reg._handle_alive(_alive_event(iid="i1"))
+    bad = _alive_event(iid="i1")
+    bad.payload["capabilities"] = 42
+    await reg._handle_alive(bad)
+    assert reg.instance_of("worker_a") == "i1"

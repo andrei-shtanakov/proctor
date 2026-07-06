@@ -389,3 +389,91 @@ async def test_deadline_reaper_fails_and_ignores_late_result(tmp_path: Path) -> 
         assert task is not None and task.status == TaskStatus.FAILED
     finally:
         await app.stop()
+
+
+async def test_result_finalization_failure_still_releases_slot(
+    tmp_path: Path,
+) -> None:
+    """Copilot review: a failed save during result finalization must not
+    leak the reservation (the inflight entry is already popped)."""
+    app, collected = await _mk_app(tmp_path)
+    try:
+        await _register_fake_worker(app)
+        assigns: list[Event] = []
+
+        async def on_assign(event: Event) -> None:
+            assigns.append(event)
+
+        app.bus.subscribe("task.assign.pyw", on_assign)
+        await app.bus.publish(
+            Event(type="trigger.terminal", source="terminal", payload={"text": "go"})
+        )
+        with anyio.fail_after(3):
+            while not assigns:
+                await anyio.sleep(0.01)
+        p = assigns[0].payload
+
+        orig_save = app.state.save_task
+        blew = {"n": 0}
+
+        async def flaky_save(task: object) -> None:  # type: ignore[no-untyped-def]
+            if task.status == TaskStatus.COMPLETED and blew["n"] == 0:  # type: ignore[attr-defined]
+                blew["n"] = 1
+                raise RuntimeError("boom: finalization save failure")
+            await orig_save(task)  # type: ignore[arg-type]
+
+        app.state.save_task = flaky_save  # type: ignore[method-assign]
+        await app.bus.publish(
+            Event(
+                type="task.result",
+                source="worker:pyw",
+                payload={
+                    "task_id": p["task"]["id"],
+                    "dispatch_id": p["dispatch_id"],
+                    "worker_id": "pyw",
+                    "instance_id": "i1",
+                    "ok": True,
+                    "output": "done",
+                    "error": None,
+                },
+            )
+        )
+        assert app._task_router is not None
+        with anyio.fail_after(3):
+            while app._task_router.running_count != 0:
+                await anyio.sleep(0.01)
+        assert blew["n"] == 1  # the injected failure actually fired
+    finally:
+        await app.stop()
+
+
+async def test_loss_policy_failure_still_releases_slot(tmp_path: Path) -> None:
+    """Copilot review: a failed save inside the loss policy must not
+    leak the reservation (registry callback swallows our exceptions)."""
+    app, collected = await _mk_app(tmp_path)
+    try:
+        await _register_fake_worker(app)
+        orig_save = app.state.save_task
+        blew = {"n": 0}
+
+        async def flaky_save(task: object) -> None:  # type: ignore[no-untyped-def]
+            failed = task.status == TaskStatus.FAILED  # type: ignore[attr-defined]
+            if failed and "worker_lost" in str(task.result) and blew["n"] == 0:  # type: ignore[attr-defined]
+                blew["n"] = 1
+                raise RuntimeError("boom: loss persistence failure")
+            await orig_save(task)  # type: ignore[arg-type]
+
+        app.state.save_task = flaky_save  # type: ignore[method-assign]
+        await app.bus.publish(
+            Event(type="trigger.terminal", source="terminal", payload={"text": "go"})
+        )
+        # ghost worker never heartbeats -> sweep -> loss policy -> save blows
+        assert app._task_router is not None
+        with anyio.fail_after(3):
+            while blew["n"] == 0:
+                await anyio.sleep(0.01)
+        with anyio.fail_after(3):
+            while app._task_router.running_count != 0:
+                await anyio.sleep(0.01)
+    finally:
+        await app.stop()

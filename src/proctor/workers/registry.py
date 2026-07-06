@@ -141,8 +141,22 @@ class WorkerRegistry:
                 iid,
             )
             return
-        capabilities = event.payload.get("capabilities") or []
-        max_slots = event.payload.get("max_slots") or 1
+        capabilities = event.payload.get("capabilities", [])
+        max_slots = event.payload.get("max_slots", 1)
+        if (
+            not isinstance(capabilities, list)
+            or not all(isinstance(c, str) for c in capabilities)
+            or isinstance(max_slots, bool)
+            or not isinstance(max_slots, int)
+            or max_slots < 1
+        ):
+            logger.warning(
+                "Rejecting malformed %s profile from %s: %s",
+                event.type,
+                wid,
+                event.payload,
+            )
+            return
         self._entries[wid] = WorkerEntry(
             profile=AgentProfile(
                 id=wid, capabilities=capabilities, max_slots=max_slots

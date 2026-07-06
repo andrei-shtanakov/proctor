@@ -477,35 +477,40 @@ class Application:
             return
 
         task, spec = entry.task, entry.spec
-        if p.get("ok"):
-            task.status = TaskStatus.COMPLETED
-            task.result = {"output": p.get("output")}
-        else:
-            task.status = TaskStatus.FAILED
-            task.result = {"error": p.get("error")}
-        task.updated_at = datetime.now(UTC)
-        await self.state.save_task(task)
+        try:
+            if p.get("ok"):
+                task.status = TaskStatus.COMPLETED
+                task.result = {"output": p.get("output")}
+            else:
+                task.status = TaskStatus.FAILED
+                task.result = {"error": p.get("error")}
+            task.updated_at = datetime.now(UTC)
+            await self.state.save_task(task)
 
-        episode = Episode(
-            trigger_type=entry.trigger_source,
-            user_input=spec.prompt or "",
-            agent_response=p.get("output") or "",
-            workflow_result=task.result,
-        )
-        await self.memory.save_episode(episode)
-
-        await self.bus.publish(
-            Event(
-                type=(
-                    "task.completed"
-                    if task.status == TaskStatus.COMPLETED
-                    else "task.failed"
-                ),
-                source="application",
-                payload=task.result,
+            episode = Episode(
+                trigger_type=entry.trigger_source,
+                user_input=spec.prompt or "",
+                agent_response=p.get("output") or "",
+                workflow_result=task.result,
             )
-        )
-        await self._release_and_spawn(task.id)
+            await self.memory.save_episode(episode)
+
+            await self.bus.publish(
+                Event(
+                    type=(
+                        "task.completed"
+                        if task.status == TaskStatus.COMPLETED
+                        else "task.failed"
+                    ),
+                    source="application",
+                    payload=task.result,
+                )
+            )
+        finally:
+            # The inflight entry is already popped: no loss/reap path can
+            # free this slot anymore. A failed save/publish must not leak
+            # the reservation — release unconditionally.
+            await self._release_and_spawn(task.id)
 
     async def _handle_worker_lost(self, worker_id: str, instance_id: str) -> None:
         """Registry loss callback — exactly once per lost incarnation."""
@@ -524,25 +529,31 @@ class Application:
         assert self._task_router is not None
         task, spec = entry.task, entry.spec
         now = datetime.now(UTC)
-        if (
-            spec.policies.retry_on_worker_loss
-            and task.retries < spec.policies.max_retries
-        ):
-            task.retries += 1
-            task.status = TaskStatus.PENDING
-            task.worker_id = None
-            task.deadline = None
-            task.updated_at = now
-            await self.state.save_task(task)
-            await self._task_router.retry(
-                task,
-                spec,
-                entry.trigger_source,
-                not_before=now + timedelta(seconds=spec.policies.retry_delay_seconds),
-            )
-        else:
-            await self._finish_failed(task, reason)
-        await self._release_and_spawn(task.id)
+        try:
+            if (
+                spec.policies.retry_on_worker_loss
+                and task.retries < spec.policies.max_retries
+            ):
+                task.retries += 1
+                task.status = TaskStatus.PENDING
+                task.worker_id = None
+                task.deadline = None
+                task.updated_at = now
+                await self.state.save_task(task)
+                await self._task_router.retry(
+                    task,
+                    spec,
+                    entry.trigger_source,
+                    not_before=now
+                    + timedelta(seconds=spec.policies.retry_delay_seconds),
+                )
+            else:
+                await self._finish_failed(task, reason)
+        finally:
+            # Callers (registry loss callback, reaper, result handler)
+            # swallow or log our exceptions — the reservation must be
+            # freed even when persistence or enqueueing fails.
+            await self._release_and_spawn(task.id)
 
     async def _finish_failed(self, task: Task, reason: str) -> None:
         task.status = TaskStatus.FAILED
