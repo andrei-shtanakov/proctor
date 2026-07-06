@@ -34,19 +34,17 @@ def _spec(name: str = "w", **kwargs: object) -> WorkflowSpec:
     )
 
 
-def _router(bus: EventBus, **overrides: object) -> TaskRouter:
+def _router(
+    bus: EventBus, agents: list[AgentProfile] | None = None, **overrides: object
+) -> TaskRouter:
     defaults: dict[str, object] = {
         "max_concurrency": 2,
         "queue_ttl_seconds": 60.0,
-        "agent": RouterAgentConfig(max_slots=2),
     }
     defaults.update(overrides)
     config = RouterConfig(**defaults)  # type: ignore[arg-type]
-    return TaskRouter(
-        bus=bus,
-        config=config,
-        agents=[AgentProfile(id="local", max_slots=config.agent.max_slots)],
-    )
+    resolved = agents if agents is not None else [AgentProfile(id="local", max_slots=2)]
+    return TaskRouter(bus=bus, config=config, agent_provider=lambda: resolved)
 
 
 @pytest.fixture
@@ -187,8 +185,74 @@ class TestRouterConfigBounds:
 
 async def test_no_agents_reason_is_prefixed(bus: EventBus) -> None:
     """Even the no-candidates reason follows the `name: detail` convention."""
-    router = TaskRouter(bus=bus, config=RouterConfig(), agents=[])
+    router = TaskRouter(bus=bus, config=RouterConfig(), agent_provider=lambda: [])
     decision = await router.admit(Task(), _spec(), "test", now=T0)
     assert decision.verdict == "queued"
     assert decision.reason is not None
     assert decision.reason.startswith("no_candidates:")
+
+
+async def test_admit_reports_winning_agent(bus: EventBus) -> None:
+    router = _router(bus)
+    decision = await router.admit(Task(), _spec(), "test", now=T0)
+    assert decision.verdict == "admitted"
+    assert decision.agent_id == "local"
+
+
+async def test_requires_filters_to_capable_agent(bus: EventBus) -> None:
+    agents = [
+        AgentProfile(id="local", max_slots=2),
+        AgentProfile(id="py_worker", capabilities=["python"], max_slots=2),
+    ]
+    router = _router(bus, agents=agents)
+    spec = WorkflowSpec(workflow_id="w", mode=WorkflowMode.SIMPLE, requires=["python"])
+    decision = await router.admit(Task(), spec, "test", now=T0)
+    assert decision.agent_id == "py_worker"
+
+
+async def test_agent_provider_sees_live_list(bus: EventBus) -> None:
+    agents: list[AgentProfile] = []
+    router = TaskRouter(bus=bus, config=RouterConfig(), agent_provider=lambda: agents)
+    d1 = await router.admit(Task(), _spec(), "test", now=T0)
+    assert d1.verdict == "queued"  # no candidates yet
+    agents.append(AgentProfile(id="local", max_slots=2))
+    d2 = await router.admit(Task(), _spec(), "test", now=T0)
+    assert d2.verdict == "admitted"
+
+
+async def test_retry_enqueues_never_runs_inline(bus: EventBus) -> None:
+    router = _router(bus, max_concurrency=8)
+    task, spec = Task(), _spec()
+    await router.retry(task, spec, "test", now=T0)
+    assert router.running_count == 0  # queued, not reserved
+
+
+async def test_retry_not_before_delays_dequeue(bus: EventBus) -> None:
+    router = _router(bus)
+    task, spec = Task(), _spec()
+    await router.retry(
+        task,
+        spec,
+        "test",
+        not_before=T0 + timedelta(seconds=30),
+        now=T0,
+    )
+    assert await router.dequeue_ready(now=T0 + timedelta(seconds=29)) == []
+    ready = await router.dequeue_ready(now=T0 + timedelta(seconds=30))
+    assert [e.task.id for e in ready] == [task.id]
+    assert ready[0].agent_id == "local"
+
+
+async def test_retry_ttl_anchored_at_not_before(bus: EventBus) -> None:
+    router = _router(bus, queue_ttl_seconds=10.0)
+    await router.retry(
+        Task(),
+        _spec(),
+        "test",
+        not_before=T0 + timedelta(seconds=60),
+        now=T0,
+    )
+    # delay (60s) > ttl (10s): still alive right after becoming runnable
+    assert await router.expire_overdue(now=T0 + timedelta(seconds=69)) == []
+    expired = await router.expire_overdue(now=T0 + timedelta(seconds=70))
+    assert len(expired) == 1

@@ -13,6 +13,7 @@ events are published only after the reservation is committed.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from proctor.core.bus import EventBus
@@ -46,11 +47,11 @@ class TaskRouter:
         self,
         bus: EventBus,
         config: RouterConfig,
-        agents: list[AgentProfile],
+        agent_provider: Callable[[], list[AgentProfile]],
     ) -> None:
         self._bus = bus
         self._config = config
-        self._agents = agents
+        self._agent_provider = agent_provider
         self._running: list[RunningTask] = []
         self._queue = PendingQueue()
 
@@ -67,13 +68,25 @@ class TaskRouter:
             or check_branch_not_locked(spec.branch, self._running)
         )
 
-    def _try_reserve(self, task: Task, spec: WorkflowSpec) -> str | None:
-        """Reserve a slot synchronously. None = committed, str = reason.
-
-        MUST stay free of awaits — this is the atomic section.
-        """
-        reason = "no_candidates: scoring returned no agents"
-        for candidate in score_candidates(spec, self._agents):
+    def _try_reserve(
+        self, task: Task, spec: WorkflowSpec
+    ) -> tuple[str | None, str | None]:
+        """Reserve a slot synchronously: (None, agent_id) on success,
+        (reason, None) otherwise. MUST stay free of awaits."""
+        agents = self._agent_provider()
+        used: dict[str, int] = {}
+        for r in self._running:
+            used[r.agent_id] = used.get(r.agent_id, 0) + 1
+        candidates = score_candidates(spec, agents, used)
+        if not candidates:
+            if spec.requires:
+                return (
+                    f"no_candidates: no live worker offers {sorted(spec.requires)}",
+                    None,
+                )
+            return "no_candidates: no live workers", None
+        reason = "no_candidates: no live workers"
+        for candidate in candidates:
             reason = self._check(spec, candidate.profile)
             if reason is None:
                 self._running.append(
@@ -84,8 +97,8 @@ class TaskRouter:
                         branch=spec.branch,
                     )
                 )
-                return None
-        return reason
+                return None, candidate.profile.id
+        return reason, None
 
     async def admit(
         self,
@@ -96,9 +109,9 @@ class TaskRouter:
     ) -> AdmitDecision:
         """Admit, queue, or reject a routed task."""
         now = now or datetime.now(UTC)
-        reason = self._try_reserve(task, spec)  # atomic: no await above
+        reason, agent_id = self._try_reserve(task, spec)  # atomic: no await above
         if reason is None:
-            return AdmitDecision(verdict="admitted")
+            return AdmitDecision(verdict="admitted", agent_id=agent_id)
 
         if self._config.queue_ttl_seconds <= 0:
             logger.warning("Task %s rejected: %s", task.id, reason)
@@ -148,9 +161,17 @@ class TaskRouter:
         run them and eventually call release().
         """
         now = now or datetime.now(UTC)
-        ready = self._queue.pop_admissible(
-            lambda entry: self._try_reserve(entry.task, entry.spec) is None
-        )
+
+        def _try_admit(entry: QueueEntry) -> bool:
+            if entry.not_before is not None and entry.not_before > now:
+                return False
+            reason, agent_id = self._try_reserve(entry.task, entry.spec)
+            if reason is None:
+                entry.agent_id = agent_id
+                return True
+            return False
+
+        ready = self._queue.pop_admissible(_try_admit)
         for entry in ready:
             waited = (now - entry.enqueued_at).total_seconds()
             await self._bus.publish(
@@ -164,6 +185,44 @@ class TaskRouter:
                 )
             )
         return ready
+
+    async def retry(
+        self,
+        task: Task,
+        spec: WorkflowSpec,
+        trigger_source: str,
+        not_before: datetime | None = None,
+        now: datetime | None = None,
+    ) -> None:
+        """Park a task for re-dispatch. Never re-admits inline.
+
+        TTL is anchored at the moment the entry becomes runnable, so a
+        retry delay longer than the TTL still gets a full TTL window.
+        """
+        now = now or datetime.now(UTC)
+        runnable_at = max(now, not_before) if not_before is not None else now
+        entry = QueueEntry(
+            task=task,
+            spec=spec,
+            trigger_source=trigger_source,
+            enqueued_at=now,
+            not_before=not_before,
+            expires_at=runnable_at + timedelta(seconds=self._config.queue_ttl_seconds),
+            reason="retry: worker lost",
+        )
+        self._queue.push(entry)
+        await self._bus.publish(
+            Event(
+                type="routing.queued",
+                source=_SOURCE,
+                payload={
+                    "task_id": task.id,
+                    "reason": entry.reason,
+                    "retry": True,
+                    "expires_at": entry.expires_at.isoformat(),
+                },
+            )
+        )
 
     async def expire_overdue(self, now: datetime | None = None) -> list[QueueEntry]:
         """Drop queue entries past their expires_at; caller fails them."""

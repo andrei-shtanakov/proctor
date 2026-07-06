@@ -108,15 +108,15 @@ class Application:
             routes=self.config.routes,
             workflows=self.config.workflows,
         )
+        local_profile = AgentProfile(
+            id=self.config.worker.id,
+            capabilities=self.config.worker.capabilities,
+            max_slots=self.config.worker.max_slots,
+        )
         self._task_router = TaskRouter(
             bus=self.bus,
             config=self.config.router,
-            agents=[
-                AgentProfile(
-                    id="local",
-                    max_slots=self.config.router.agent.max_slots,
-                )
-            ],
+            agent_provider=lambda: [local_profile],
         )
         self._tick_task = asyncio.create_task(self._queue_tick_loop())
 
