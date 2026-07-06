@@ -16,7 +16,7 @@ from proctor.core.config import (
 )
 from proctor.core.models import Event, TaskStatus
 from proctor.core.transport import LocalEventTransport
-from proctor.workflow.spec import WorkflowMode, WorkflowSpec
+from proctor.workflow.spec import WorkflowMode, WorkflowPolicies, WorkflowSpec
 
 pytestmark = pytest.mark.anyio
 
@@ -27,6 +27,15 @@ def anyio_backend() -> str:
 
 
 def _config(tmp_path: Path, *, retry: bool = False) -> ProctorConfig:
+    policies = (
+        WorkflowPolicies(
+            retry_on_worker_loss=True,
+            retry_delay_seconds=0,
+            max_runtime_seconds=900,
+        )
+        if retry
+        else WorkflowPolicies()
+    )
     return ProctorConfig(
         data_dir=tmp_path / "data",
         router=RouterConfig(max_concurrency=4, queue_tick_seconds=0.05),
@@ -37,6 +46,7 @@ def _config(tmp_path: Path, *, retry: bool = False) -> ProctorConfig:
                 workflow_id="remote_job",
                 mode=WorkflowMode.SIMPLE,
                 requires=["python"],  # local has no capabilities
+                policies=policies,
             ),
         },
         routes=[
@@ -47,7 +57,6 @@ def _config(tmp_path: Path, *, retry: bool = False) -> ProctorConfig:
             ),
         ],
     )
-    # retry variant is built by the test via model mutation below
 
 
 async def _register_fake_worker(app: Application, iid: str = "i1") -> None:
@@ -75,8 +84,12 @@ async def _wait_for(collected: list[Event], event_type: str) -> Event:
             await anyio.sleep(0.01)
 
 
-async def _mk_app(tmp_path: Path) -> tuple[Application, list[Event]]:
-    app = Application(_config(tmp_path), event_transport=LocalEventTransport())
+async def _mk_app(
+    tmp_path: Path, *, retry: bool = False
+) -> tuple[Application, list[Event]]:
+    app = Application(
+        _config(tmp_path, retry=retry), event_transport=LocalEventTransport()
+    )
     app.set_llm_call(lambda prompt: _never(prompt))  # type: ignore[arg-type]
     collected: list[Event] = []
 
@@ -187,5 +200,70 @@ async def test_worker_timeout_fails_task_by_default(tmp_path: Path) -> None:
         # fake worker never heartbeats again → sweep (0.15s) → loss → fail
         failed = await _wait_for(collected, "task.failed")
         assert "worker_lost" in str(failed.payload)
+    finally:
+        await app.stop()
+
+
+async def test_dispatch_save_failure_releases_slot(tmp_path: Path) -> None:
+    """F1 regression: a save_task failure during dispatch must free the
+    admit-time slot, not just drop the inflight bookkeeping entry."""
+    app, collected = await _mk_app(tmp_path)
+    try:
+        await _register_fake_worker(app)
+        orig_save_task = app.state.save_task
+        armed = {"value": True}
+
+        async def flaky_save_task(task: object) -> None:  # type: ignore[no-untyped-def]
+            if armed["value"] and task.status == TaskStatus.ASSIGNED:  # type: ignore[attr-defined]
+                armed["value"] = False
+                raise RuntimeError("boom: surgical save failure on dispatch")
+            await orig_save_task(task)  # type: ignore[arg-type]
+
+        app.state.save_task = flaky_save_task  # type: ignore[method-assign]
+
+        await app.bus.publish(
+            Event(type="trigger.terminal", source="terminal", payload={"text": "go"})
+        )
+        failed = await _wait_for(collected, "task.failed")
+        assert "dispatch persist failed" in str(failed.payload)
+
+        assert app._task_router is not None
+        with anyio.fail_after(3):
+            while app._task_router.running_count != 0:
+                await anyio.sleep(0.01)
+    finally:
+        await app.stop()
+
+
+async def test_retry_on_worker_loss_requeues_task(tmp_path: Path) -> None:
+    """F2 regression: retry_on_worker_loss must requeue (routing.queued
+    with retry=True), not fail the task, and clear worker assignment."""
+    app, collected = await _mk_app(tmp_path, retry=True)
+    try:
+        await _register_fake_worker(app)
+        assigns: list[Event] = []
+
+        async def on_assign(event: Event) -> None:
+            assigns.append(event)
+
+        app.bus.subscribe("task.assign.pyw", on_assign)
+        await app.bus.publish(
+            Event(type="trigger.terminal", source="terminal", payload={"text": "go"})
+        )
+        with anyio.fail_after(3):
+            while not assigns:
+                await anyio.sleep(0.01)
+        task_id = assigns[0].payload["task"]["id"]
+
+        # fake worker never heartbeats again → sweep (0.15s) → loss →
+        # retry_on_worker_loss requeues instead of failing.
+        queued = await _wait_for(collected, "routing.queued")
+        assert queued.payload["retry"] is True
+        assert not any(e.type == "task.failed" for e in collected)
+
+        task = await app.state.get_task(task_id)
+        assert task is not None
+        assert task.status == TaskStatus.PENDING
+        assert task.worker_id is None
     finally:
         await app.stop()

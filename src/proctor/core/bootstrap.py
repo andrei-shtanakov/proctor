@@ -359,33 +359,44 @@ class Application:
         task.updated_at = now
         self._inflight[task.id] = entry
         try:
-            await self.state.save_task(task)
-        except Exception as exc:
-            # The task never left the core — plain failure, slot freed.
-            self._inflight.pop(task.id, None)
-            logger.exception("Persisting dispatch of task %s failed", task.id)
-            await self._finish_failed(task, f"dispatch persist failed: {exc}")
-            return
-        try:
-            await self.bus.publish(
-                Event(
-                    type=f"task.assign.{agent_id}",
-                    source="application",
-                    payload={
-                        "dispatch_id": entry.dispatch_id,
-                        "target_instance_id": instance_id,
-                        "task": task.model_dump(mode="json"),
-                        "spec": spec.model_dump(mode="json"),
-                    },
+            try:
+                await self.state.save_task(task)
+            except Exception as exc:
+                # The task never left the core — plain failure, slot freed.
+                self._inflight.pop(task.id, None)
+                logger.exception("Persisting dispatch of task %s failed", task.id)
+                await self._finish_failed(task, f"dispatch persist failed: {exc}")
+                await self._release_and_spawn(task.id)
+                return
+            try:
+                await self.bus.publish(
+                    Event(
+                        type=f"task.assign.{agent_id}",
+                        source="application",
+                        payload={
+                            "dispatch_id": entry.dispatch_id,
+                            "target_instance_id": instance_id,
+                            "task": task.model_dump(mode="json"),
+                            "spec": spec.model_dump(mode="json"),
+                        },
+                    )
                 )
-            )
+            except Exception:
+                logger.exception("Publishing assignment of task %s failed", task.id)
+                popped = self._inflight.pop(task.id, None)
+                if popped is not None:
+                    # Provably never departed — loss policy now, not after
+                    # max_runtime_seconds.
+                    await self._apply_loss_policy(popped, "dispatch publish failed")
         except Exception:
-            logger.exception("Publishing assignment of task %s failed", task.id)
-            popped = self._inflight.pop(task.id, None)
-            if popped is not None:
-                # Provably never departed — loss policy now, not after
-                # max_runtime_seconds.
-                await self._apply_loss_policy(popped, "dispatch publish failed")
+            # Defense-in-depth: anything unexpected in the save/publish
+            # section above (including a failure inside the specific
+            # handlers) must not leak the admit-time slot. Pop/release
+            # are idempotent, so a stray double call here is benign.
+            logger.exception("Unexpected error dispatching task %s", task.id)
+            self._inflight.pop(task.id, None)
+            await self._finish_failed(task, "dispatch unexpected error")
+            await self._release_and_spawn(task.id)
 
     async def _handle_task_result(self, event: Event) -> None:
         """Accept a worker result — pop-if-current, then finalize."""
