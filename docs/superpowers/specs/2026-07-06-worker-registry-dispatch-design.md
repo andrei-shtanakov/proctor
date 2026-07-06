@@ -24,8 +24,10 @@ In scope:
 - `workers/node.py` — `WorkerNode`: the worker-role runtime (register,
   heartbeat, execute assigned specs, publish results).
 - Role-dependent bootstrap: `node_role: worker` starts a WorkerNode (no
-  triggers, no Router/TaskRouter, no SQLite); `standalone`/`core` starts
-  everything plus the registry.
+  triggers, no Router/TaskRouter, no state.db; a worker-local
+  `episodes.db` exists solely for LLM-call telemetry recorded inside
+  `build_llm_call` — interaction episodes stay core-owned);
+  `standalone`/`core` starts everything plus the registry.
 - The core's in-process runtime appears in the registry under the id
   from its own `worker:` config (`worker.id`, default `local`), bound
   once at startup as the inline-executor id — dispatch compares the

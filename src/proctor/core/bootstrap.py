@@ -28,6 +28,7 @@ from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.triggers.webhook import WebhookTrigger
 from proctor.workers.llm import episode_id_ctx, task_id_ctx
+from proctor.workers.node import WorkerNode
 from proctor.workers.registry import WorkerRegistry
 from proctor.workflow.engine import WorkflowEngine
 from proctor.workflow.spec import WorkflowSpec
@@ -105,11 +106,14 @@ class Application:
         self._telegram_trigger: TelegramTrigger | None = None
         self._scheduler: SchedulerTrigger | None = None
         self._webhook_trigger: WebhookTrigger | None = None
+        self._worker_node: WorkerNode | None = None
         # Subscribe in __init__ (ADR #19 — buffered until bus.start()).
         # Router and engine are nil until start(); _handle_trigger_event
-        # checks before dispatching.
-        self.bus.subscribe("trigger.>", self._handle_trigger_event)
-        self.bus.subscribe("task.result", self._handle_task_result)
+        # checks before dispatching. A worker node must never react to
+        # the core's traffic on a shared NATS bus.
+        if config.node_role != "worker":
+            self.bus.subscribe("trigger.>", self._handle_trigger_event)
+            self.bus.subscribe("task.result", self._handle_task_result)
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -119,6 +123,9 @@ class Application:
     async def start(self) -> None:
         """Initialize state and memory, start bus and triggers, set running."""
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
+        if self.config.node_role == "worker":
+            await self._start_worker_role()
+            return
         await self.bus.start()
         await self.state.initialize()
         await self.memory.initialize()
@@ -161,8 +168,41 @@ class Application:
         self.is_running = True
         logger.info("Application started (node=%s)", self.config.node_id)
 
+    async def _start_worker_role(self) -> None:
+        """Worker node: bus + LLM telemetry memory + WorkerNode only.
+
+        state.db and interaction episodes stay core-owned; the local
+        episodes.db here records LLM-call telemetry from build_llm_call.
+        """
+        assert self._engine is not None, "set_llm_call() before start()"
+        await self.bus.start()
+        await self.memory.initialize()
+        self._worker_node = WorkerNode(
+            self.bus,
+            self.config.worker,
+            self._engine,
+            heartbeat_interval=self.config.registry.heartbeat_interval,
+            drain_timeout=self.config.events.drain_timeout,
+        )
+        await self._worker_node.start()
+        self.is_running = True
+        logger.info("Application started in worker role (id=%s)", self.config.worker.id)
+
+    async def _stop_worker_role(self) -> None:
+        self.is_running = False
+        if self._worker_node is not None:
+            await self._worker_node.stop()
+            self._worker_node = None
+        await self.bus.drain(timeout=self.config.events.drain_timeout)
+        await self.memory.close()
+        await self.bus.stop()
+        logger.info("Application stopped (worker role)")
+
     async def stop(self) -> None:
         """Close state and memory, stop triggers, unset running."""
+        if self.config.node_role == "worker":
+            await self._stop_worker_role()
+            return
         self.is_running = False
         if self._tick_task is not None:
             self._tick_task.cancel()
