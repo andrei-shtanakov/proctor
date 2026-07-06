@@ -85,13 +85,19 @@ Constraints:
   hyphens). Enforced by a pydantic validator on `WorkerConfig.id`.
 - **Incarnation fencing (`instance_id`)**: each WorkerNode process
   generates a UUID at start and stamps it on every message it sends.
-  The registry tracks the current instance per worker_id; a
-  `worker.registered`/`worker.heartbeat` with a NEW instance_id
-  replaces the old incarnation (logged at WARNING — duplicate-id or
-  restart), and any event carrying a stale instance_id (late
-  `worker.offline` from a dead process, late heartbeat) is logged and
-  ignored. Policy for two live processes sharing a worker_id: newest
-  registration wins; the loser's results are rejected by fencing.
+  UUIDs carry no ordering, so "newest wins" is undecidable — the
+  policy is **first-alive-owns**: the registry binds a worker_id to
+  the first instance it sees and rejects (logs at WARNING) messages
+  from any other instance while the owner is alive. The binding is
+  released only when the owner goes offline (graceful `worker.offline`
+  or liveness timeout); the next registration/heartbeat may then claim
+  the id. Consequences, recorded deliberately: a worker that crashed
+  without `worker.offline` cannot re-claim its id until
+  `liveness_timeout` elapses (~90 s of downtime by default; a graceful
+  restart takes over immediately), and two concurrently-live processes
+  sharing an id never ping-pong — exactly one owns it at any moment.
+  Events carrying a non-owner instance_id (late offline from a dead
+  process, late heartbeat, foreign results) are logged and ignored.
 - **Self-healing discovery**: heartbeats carry the full profile, so a
   restarted core rebuilds its registry within one
   `heartbeat_interval` with no extra protocol. `worker.registered` is
@@ -117,12 +123,12 @@ Constraints:
 
 | File | Contents |
 |------|----------|
-| `workers/registry.py` | `WorkerRegistry(bus, config)` — subscribes `worker.registered`/`worker.heartbeat`/`worker.offline`; dict `worker_id → WorkerEntry(profile, instance_id, last_seen)` with incarnation fencing; `alive_profiles() -> list[AgentProfile]`; `sweep(now)` marks silent workers offline and publishes `worker.offline`; own asyncio sweep loop with the same lifecycle guarantees as the router tick loop (started in `Application.start()`, body exception-guarded, cancelled in `stop()` before drain) |
-| `workers/node.py` | `WorkerNode(bus, config, engine)` — `start()`: subscribe `task.assign.{id}` → `await bus.flush()` (readiness barrier) → publish `worker.registered`, start heartbeat loop; `stop()`: publish `worker.offline(shutdown)`, cancel loops; `_handle_assign(event)`: drop if `target_instance_id` mismatch, deserialize spec, enforce own `max_slots` (over-assignment → immediate `task.result` with `ok=False, error="worker_busy"`), execute via WorkflowEngine, publish `task.result` with `dispatch_id` echoed |
+| `workers/registry.py` | `WorkerRegistry(bus, config)` — subscribes `worker.registered`/`worker.heartbeat`/`worker.offline`; dict `worker_id → WorkerEntry(profile, instance_id, last_seen)` with first-alive-owns fencing; `alive_profiles() -> list[AgentProfile]`; `sweep(now)` removes silent workers; **loss delivery is a callback, not the bus**: `add_loss_listener(cb: Callable[[str, str], Awaitable[None]])` — the registry awaits `cb(worker_id, instance_id)` exactly once per lost incarnation, atomically at the point it removes the entry (inside its own offline-handler/sweep), BEFORE publishing the observability `worker.offline`. Bootstrap's worker-loss logic hangs off this callback; it never inspects the registry to judge staleness (bus handlers run concurrently — by the time a `worker.offline` event handler ran, the registry may already have mutated). Own asyncio sweep loop with the same lifecycle guarantees as the router tick loop |
+| `workers/node.py` | `WorkerNode(bus, config, engine)` — `start()`: subscribe `task.assign.{id}` → `await bus.flush()` (readiness barrier) → publish `worker.registered`, start heartbeat loop. `stop()` in strict order: (1) unsubscribe/stop accepting assignments, (2) cancel heartbeat loop and **await its completion** (a heartbeat escaping after offline would re-register the worker), (3) wait for running executions up to a drain window, cancel the rest (core reaps them via the loss path), (4) publish `worker.offline(shutdown)`, (5) `bus.flush()`. `_handle_assign(event)`: drop if `target_instance_id` mismatch, deserialize spec, enforce own `max_slots` (over-assignment → immediate `task.result` with `ok=False, error="worker_busy"`), execute via WorkflowEngine, publish `task.result` with `dispatch_id` echoed |
 | `router/scoring.py` | Real implementation: candidates = agents where `set(spec.requires) <= set(profile.capabilities)`; score = free slots (caller passes per-agent used-slot counts); sorted descending, stable |
 | `router/models.py` | `AdmitDecision` gains `agent_id: str \| None` (set when admitted); `QueueEntry` gains `not_before: datetime \| None` (delayed retry; `dequeue_ready` skips entries whose `not_before` is in the future) |
-| `router/router.py` | API changes: `TaskRouter(bus, config, agent_provider)` where `agent_provider: Callable[[], list[AgentProfile]]` (bootstrap passes `registry.alive_profiles` — every admit/dequeue sees the live list); new public `retry(task, spec, trigger_source, not_before=None) -> None` that enqueues directly with a fresh TTL (never re-admits inline), used by the worker-loss path with `not_before = now + policies.retry_delay_seconds` |
-| `core/bootstrap.py` | Role branch in `Application`; registry wiring; dispatch layer: in-flight map `task_id → InflightDispatch(task, spec, agent_id, instance_id, dispatch_id)`, `_dispatch_remote`, `task.result` handler, worker-loss handler on `worker.offline`, deadline reaper folded into the existing tick loop; the inline executor's id comes from `worker.id` in the core's own config (bound once as `self._local_worker_id` — no literal `"local"` comparisons) |
+| `router/router.py` | API changes: `TaskRouter(bus, config, agent_provider)` where `agent_provider: Callable[[], list[AgentProfile]]` (bootstrap passes `registry.alive_profiles` — every admit/dequeue sees the live list); new public `retry(task, spec, trigger_source, not_before=None) -> None` that enqueues directly (never re-admits inline), used by the worker-loss path with `not_before = now + policies.retry_delay_seconds`. The retry TTL starts at the effective runnable moment: `expires_at = max(now, not_before or now) + queue_ttl_seconds` — otherwise `retry_delay_seconds > queue_ttl_seconds` would expire the entry before it ever became runnable |
+| `core/bootstrap.py` | Role branch in `Application`; registry wiring; dispatch layer: in-flight map `task_id → InflightDispatch(task, spec, agent_id, instance_id, dispatch_id, trigger_source)` (`trigger_source` is required downstream: Episode creation on remote result and `task_router.retry(..., trigger_source, ...)` — `Task.trigger_event` stores an event ID, not a source), `_dispatch_remote`, `task.result` handler, worker-loss handling via the registry's loss callback (`worker.offline` bus events are observability only), deadline reaper folded into the existing tick loop; the inline executor's id comes from `worker.id` in the core's own config (bound once as `self._local_worker_id` — no literal `"local"` comparisons) |
 
 ## Scoring
 
@@ -170,13 +176,20 @@ core on task.result:
   then (async): task → COMPLETED/FAILED, episode recorded,
   release(task_id) → dequeue_ready → spawn (existing path)
 
-core on worker.offline(W, instance):
-  ignore if instance is stale (fencing)
-  registry drops W
-  for each inflight entry with agent_id == W (popped synchronously):
+core on registry loss callback (W, instance):
+  # invoked by WorkerRegistry exactly once per lost incarnation, at the
+  # moment it removes the entry — the worker.offline bus event is
+  # observability only and is never used for staleness decisions
+  for each inflight entry with agent_id == W and instance_id == instance
+      (popped synchronously):
       if spec.policies.retry_on_worker_loss and task.retries < max_retries:
           task.retries += 1
-          task_router.retry(task, spec, source,
+          # explicit state reset — SQLite must not keep showing the
+          # task ASSIGNED to a dead worker:
+          task.status = PENDING; task.worker_id = None
+          task.deadline = None; task.updated_at = now
+          save_task
+          task_router.retry(task, spec, entry.trigger_source,
                             not_before=now + policies.retry_delay_seconds)
       else:
           task → FAILED {"error": "worker_lost: ..."} + task.failed event
@@ -256,26 +269,38 @@ with a message pointing to `worker.max_slots`. WorkflowSpec gains
 ## Testing
 
 - **Unit, registry** — register/heartbeat/refresh with injected `now`;
-  sweep marks offline exactly once at `last_seen + liveness_timeout`;
-  re-registration after offline revives; `alive_profiles` excludes
-  offline; **fencing**: heartbeat with a new instance_id replaces the
-  old incarnation, stale-instance offline/heartbeat ignored; a
-  heartbeat alone (no prior registered) creates the entry — core
-  restart recovery.
+  sweep removes silent workers exactly once at
+  `last_seen + liveness_timeout`; re-registration after offline
+  revives; `alive_profiles` excludes offline; a heartbeat alone (no
+  prior registered) creates the entry — core restart recovery.
+  **First-alive-owns fencing**: while an owner is alive, a second
+  instance's registered/heartbeat/offline are rejected (no ping-pong —
+  alternating heartbeats from two instances leave ownership stable);
+  after graceful offline the next heartbeat claims immediately; after
+  a liveness timeout the id is claimable. **Loss callback**: invoked
+  exactly once per lost incarnation with (worker_id, instance_id),
+  before the observability `worker.offline` is published; a stale
+  offline event triggers no callback.
 - **Unit, scoring** — capability filter (subset, missing, empty
   requires), free-slot ranking, stable order, zero-free-slots kept.
 - **Unit, node** — assign→result round-trip with stub engine
   (dispatch_id echoed); assign with foreign `target_instance_id`
   dropped without execution; over-assignment beyond max_slots →
-  `worker_busy` result; graceful stop publishes offline(shutdown);
-  start order is subscribe → flush → registered.
+  `worker_busy` result; start order is subscribe → flush → registered;
+  **stop order**: no heartbeat is published after
+  `worker.offline(shutdown)` (heartbeat loop cancelled and awaited
+  first), offline is the last worker.* message on the bus.
 - **Unit, dispatch fencing** — late result with the old dispatch_id
   after a retry re-dispatch is ignored (task stays with attempt B);
   result after deadline reap is ignored; exactly one of
   {result, loss, reap} wins per dispatch.
-- **Unit, retry** — `TaskRouter.retry` enqueues (never runs inline)
-  with fresh TTL; entry with future `not_before` is skipped by
-  `dequeue_ready` until due.
+- **Unit, retry** — `TaskRouter.retry` enqueues (never runs inline);
+  entry with future `not_before` is skipped by `dequeue_ready` until
+  due; `expires_at = max(now, not_before) + queue_ttl` (a delay longer
+  than the TTL still leaves a full TTL window after becoming
+  runnable); the worker-loss path resets task state
+  (PENDING, worker_id=None, deadline=None) and persists it before
+  enqueueing.
 - **Integration, LocalEventTransport** (no NATS needed): core
   Application + WorkerNode on one bus — full loop trigger → admit →
   assign → execute (mock LLM) → result → COMPLETED with episode;
