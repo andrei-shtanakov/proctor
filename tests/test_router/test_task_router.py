@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from proctor.core.bus import EventBus
-from proctor.core.config import RouterAgentConfig, RouterConfig
+from proctor.core.config import RouterConfig
 from proctor.core.models import Event, Task
 from proctor.core.transport import LocalEventTransport
 from proctor.router.models import AgentProfile
@@ -178,9 +178,9 @@ class TestRouterConfigBounds:
         with pytest.raises(ValidationError):
             RouterConfig(queue_tick_seconds=0.0)
 
-    def test_zero_agent_slots_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            RouterAgentConfig(max_slots=0)  # type: ignore[bad-argument-type]
+    def test_legacy_router_agent_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="worker.max_slots"):
+            RouterConfig.model_validate({"agent": {"max_slots": 2}})
 
 
 async def test_no_agents_reason_is_prefixed(bus: EventBus) -> None:

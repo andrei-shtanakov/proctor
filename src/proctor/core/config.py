@@ -225,12 +225,6 @@ class WebhookConfig(BaseModel):
         return self
 
 
-class RouterAgentConfig(BaseModel):
-    """Slot budget of the single local agent (Phase 2)."""
-
-    max_slots: int = Field(default=4, ge=1)
-
-
 class RouterConfig(BaseModel):
     """TaskRouter admission settings."""
 
@@ -239,7 +233,16 @@ class RouterConfig(BaseModel):
     queue_ttl_seconds: float = Field(default=600.0, ge=0.0)
     # must stay > 0: asyncio.sleep(0) would spin the tick loop hot
     queue_tick_seconds: float = Field(default=30.0, gt=0.0)
-    agent: RouterAgentConfig = RouterAgentConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_legacy_agent(cls, data: object) -> object:
+        if isinstance(data, dict) and "agent" in data:
+            raise ValueError(
+                "router.agent has been removed; configure worker.max_slots "
+                "(top-level worker: section) instead"
+            )
+        return data
 
 
 class WorkerConfig(BaseModel):

@@ -91,5 +91,8 @@ schedules:
 #   max_concurrency: 4
 #   queue_ttl_seconds: 600    # 0 = reject immediately, never queue
 #   queue_tick_seconds: 30
-#   agent:
-#     max_slots: 4
+#
+# Local worker slot budget (replaces the old router.agent.max_slots):
+# worker:
+#   id: local
+#   max_slots: 4
