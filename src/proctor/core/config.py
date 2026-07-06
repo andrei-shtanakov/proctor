@@ -242,6 +242,27 @@ class RouterConfig(BaseModel):
     agent: RouterAgentConfig = RouterAgentConfig()
 
 
+class WorkerConfig(BaseModel):
+    """Identity and capacity of this node's executor."""
+
+    id: str = Field(default="local", pattern=r"^[a-z][a-z0-9_]*$")
+    capabilities: list[str] = Field(default_factory=list)
+    max_slots: int = Field(default=4, ge=1)
+
+
+class RegistryConfig(BaseModel):
+    """Worker discovery/liveness settings (core/standalone only)."""
+
+    heartbeat_interval: float = Field(default=30.0, gt=0.0)
+    liveness_timeout: float = Field(default=90.0, gt=0.0)
+
+    @model_validator(mode="after")
+    def _liveness_exceeds_heartbeat(self) -> Self:
+        if self.liveness_timeout <= self.heartbeat_interval:
+            raise ValueError("registry.liveness_timeout must exceed heartbeat_interval")
+        return self
+
+
 class ProctorConfig(BaseModel):
     """Root configuration model with nested configs."""
 
@@ -255,6 +276,8 @@ class ProctorConfig(BaseModel):
     nats: NATSConfig = NATSConfig()
     events: EventsConfig = EventsConfig()
     router: RouterConfig = RouterConfig()
+    worker: WorkerConfig = WorkerConfig()
+    registry: RegistryConfig = RegistryConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     webhook: WebhookConfig | None = None
@@ -275,6 +298,15 @@ class ProctorConfig(BaseModel):
             logger.warning(
                 "transport resolved to 'local'; nats config is set "
                 "but will be ignored. Use transport='nats' to enforce."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _worker_role_requires_explicit_id(self) -> Self:
+        if self.node_role == "worker" and self.worker.id == "local":
+            raise ValueError(
+                "node_role 'worker' requires an explicit worker.id; "
+                "'local' is reserved for the core's inline executor"
             )
         return self
 
