@@ -57,6 +57,7 @@ class WorkflowPolicies(BaseModel):
     max_retries: int = 2
     retry_delay_seconds: int = 60
     require_security_review: bool = False
+    retry_on_worker_loss: bool = False
 
 
 class WorkflowSpec(BaseModel):
@@ -78,4 +79,5 @@ class WorkflowSpec(BaseModel):
     security: dict[str, Any] = Field(default_factory=dict)
     channels: dict[str, Any] = Field(default_factory=dict)
     scope: list[str] = Field(default_factory=list)
+    requires: list[str] = Field(default_factory=list)
     branch: str | None = None

@@ -5,8 +5,11 @@ import contextlib
 import logging
 import socket
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
+from uuid import uuid4
+
+from pydantic import BaseModel
 
 from proctor.core.bus import EventBus
 from proctor.core.config import (
@@ -25,12 +28,25 @@ from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.triggers.webhook import WebhookTrigger
 from proctor.workers.llm import episode_id_ctx, task_id_ctx
+from proctor.workers.node import WorkerNode
+from proctor.workers.registry import WorkerRegistry
 from proctor.workflow.engine import WorkflowEngine
 from proctor.workflow.spec import WorkflowSpec
 
 logger = logging.getLogger(__name__)
 
 LLMCall = Callable[[str], Awaitable[str]]
+
+
+class InflightDispatch(BaseModel):
+    """One remote dispatch attempt awaiting its result."""
+
+    task: Task
+    spec: WorkflowSpec
+    agent_id: str
+    instance_id: str
+    dispatch_id: str
+    trigger_source: str
 
 
 def _resolve_transport_mode(
@@ -82,15 +98,22 @@ class Application:
         self._engine: WorkflowEngine | None = None
         self._router: Router | None = None
         self._task_router: TaskRouter | None = None
+        self._registry: WorkerRegistry | None = None
+        self._inflight: dict[str, InflightDispatch] = {}
+        self._local_worker_id: str = config.worker.id
         self._tick_task: asyncio.Task[None] | None = None
         self._exec_tasks: set[asyncio.Task[None]] = set()
         self._telegram_trigger: TelegramTrigger | None = None
         self._scheduler: SchedulerTrigger | None = None
         self._webhook_trigger: WebhookTrigger | None = None
+        self._worker_node: WorkerNode | None = None
         # Subscribe in __init__ (ADR #19 — buffered until bus.start()).
         # Router and engine are nil until start(); _handle_trigger_event
-        # checks before dispatching.
-        self.bus.subscribe("trigger.>", self._handle_trigger_event)
+        # checks before dispatching. A worker node must never react to
+        # the core's traffic on a shared NATS bus.
+        if config.node_role != "worker":
+            self.bus.subscribe("trigger.>", self._handle_trigger_event)
+            self.bus.subscribe("task.result", self._handle_task_result)
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -100,6 +123,9 @@ class Application:
     async def start(self) -> None:
         """Initialize state and memory, start bus and triggers, set running."""
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
+        if self.config.node_role == "worker":
+            await self._start_worker_role()
+            return
         await self.bus.start()
         await self.state.initialize()
         await self.memory.initialize()
@@ -108,15 +134,20 @@ class Application:
             routes=self.config.routes,
             workflows=self.config.workflows,
         )
+        local_profile = AgentProfile(
+            id=self.config.worker.id,
+            capabilities=self.config.worker.capabilities,
+            max_slots=self.config.worker.max_slots,
+        )
+        self._registry = WorkerRegistry(
+            self.bus, self.config.registry, local_profile=local_profile
+        )
+        self._registry.add_loss_listener(self._handle_worker_lost)
+        await self._registry.start()
         self._task_router = TaskRouter(
             bus=self.bus,
             config=self.config.router,
-            agents=[
-                AgentProfile(
-                    id="local",
-                    max_slots=self.config.router.agent.max_slots,
-                )
-            ],
+            agent_provider=self._registry.alive_profiles,
         )
         self._tick_task = asyncio.create_task(self._queue_tick_loop())
 
@@ -137,8 +168,41 @@ class Application:
         self.is_running = True
         logger.info("Application started (node=%s)", self.config.node_id)
 
+    async def _start_worker_role(self) -> None:
+        """Worker node: bus + LLM telemetry memory + WorkerNode only.
+
+        state.db and interaction episodes stay core-owned; the local
+        episodes.db here records LLM-call telemetry from build_llm_call.
+        """
+        assert self._engine is not None, "set_llm_call() before start()"
+        await self.bus.start()
+        await self.memory.initialize()
+        self._worker_node = WorkerNode(
+            self.bus,
+            self.config.worker,
+            self._engine,
+            heartbeat_interval=self.config.registry.heartbeat_interval,
+            drain_timeout=self.config.events.drain_timeout,
+        )
+        await self._worker_node.start()
+        self.is_running = True
+        logger.info("Application started in worker role (id=%s)", self.config.worker.id)
+
+    async def _stop_worker_role(self) -> None:
+        self.is_running = False
+        if self._worker_node is not None:
+            await self._worker_node.stop()
+            self._worker_node = None
+        await self.bus.drain(timeout=self.config.events.drain_timeout)
+        await self.memory.close()
+        await self.bus.stop()
+        logger.info("Application stopped (worker role)")
+
     async def stop(self) -> None:
         """Close state and memory, stop triggers, unset running."""
+        if self.config.node_role == "worker":
+            await self._stop_worker_role()
+            return
         self.is_running = False
         if self._tick_task is not None:
             self._tick_task.cancel()
@@ -151,6 +215,9 @@ class Application:
                     # must proceed regardless.
                     logger.exception("Queue tick task exited with an error")
             self._tick_task = None
+        if self._registry is not None:
+            await self._registry.stop()
+            self._registry = None
         # Close inputs first — WebhookTrigger first so the HTTP endpoint
         # stops accepting new POSTs before other components tear down.
         if self._webhook_trigger is not None:
@@ -225,7 +292,11 @@ class Application:
             )
             return
 
-        await self._run_admitted(task, spec, event.source)
+        assert decision.agent_id is not None
+        if decision.agent_id == self._local_worker_id:
+            await self._run_admitted(task, spec, event.source)
+        else:
+            await self._dispatch_remote(task, spec, decision.agent_id, event.source)
 
     async def _run_admitted(
         self, task: Task, spec: WorkflowSpec, trigger_source: str
@@ -297,19 +368,214 @@ class Application:
                 )
             )
         finally:
+            await self._release_and_spawn(task.id)
+
+    async def _dispatch_remote(
+        self,
+        task: Task,
+        spec: WorkflowSpec,
+        agent_id: str,
+        trigger_source: str,
+    ) -> None:
+        """Send an admitted task to a remote worker (slot already held)."""
+        assert self._registry is not None and self._task_router is not None
+        instance_id = self._registry.instance_of(agent_id)
+        if instance_id is None:
+            # Raced an offline between admit and dispatch — this
+            # dispatch never happened, so the task's fields stay as
+            # admit left them (no ASSIGNED transition).
+            entry = InflightDispatch(
+                task=task,
+                spec=spec,
+                agent_id=agent_id,
+                instance_id="",
+                dispatch_id=str(uuid4()),
+                trigger_source=trigger_source,
+            )
+            await self._apply_loss_policy(entry, f"worker_lost: {agent_id}")
+            return
+        now = datetime.now(UTC)
+        task.status = TaskStatus.ASSIGNED
+        task.worker_id = agent_id
+        task.deadline = now + timedelta(seconds=spec.policies.max_runtime_seconds)
+        task.updated_at = now
+        # Task fields set before InflightDispatch is constructed — the
+        # reaper's deadline check must read the mutated task off the
+        # entry without depending on pydantic instance aliasing.
+        entry = InflightDispatch(
+            task=task,
+            spec=spec,
+            agent_id=agent_id,
+            instance_id=instance_id,
+            dispatch_id=str(uuid4()),
+            trigger_source=trigger_source,
+        )
+        self._inflight[task.id] = entry
+        try:
             try:
-                ready = await self._task_router.release(task.id)
-                self._spawn_ready(ready)
-            except TransportDrainingError:
-                # release() frees the in-memory slot synchronously before
-                # its first await; the raise below only means the follow-up
-                # dequeue publish lost the race with shutdown. The slot is
-                # freed either way — any entries it reserved stay PENDING
-                # in SQLite and are covered by the restart-recovery gap.
-                logger.debug(
-                    "Skipping post-release dequeue for task %s: transport draining",
-                    task.id,
+                await self.state.save_task(task)
+            except Exception as exc:
+                # The task never left the core — plain failure, slot freed.
+                self._inflight.pop(task.id, None)
+                logger.exception("Persisting dispatch of task %s failed", task.id)
+                await self._finish_failed(task, f"dispatch persist failed: {exc}")
+                await self._release_and_spawn(task.id)
+                return
+            try:
+                await self.bus.publish(
+                    Event(
+                        type=f"task.assign.{agent_id}",
+                        source="application",
+                        payload={
+                            "dispatch_id": entry.dispatch_id,
+                            "target_instance_id": instance_id,
+                            "task": task.model_dump(mode="json"),
+                            "spec": spec.model_dump(mode="json"),
+                        },
+                    )
                 )
+            except Exception:
+                logger.exception("Publishing assignment of task %s failed", task.id)
+                popped = self._inflight.pop(task.id, None)
+                if popped is not None:
+                    # Provably never departed — loss policy now, not after
+                    # max_runtime_seconds.
+                    await self._apply_loss_policy(popped, "dispatch publish failed")
+        except Exception:
+            # Defense-in-depth: anything unexpected in the save/publish
+            # section above (including a failure inside the specific
+            # handlers) must not leak the admit-time slot. Pop/release
+            # are idempotent, so a stray double call here is benign.
+            logger.exception("Unexpected error dispatching task %s", task.id)
+            self._inflight.pop(task.id, None)
+            await self._finish_failed(task, "dispatch unexpected error")
+            await self._release_and_spawn(task.id)
+
+    async def _handle_task_result(self, event: Event) -> None:
+        """Accept a worker result — pop-if-current, then finalize."""
+        p = event.payload
+        task_id = p.get("task_id")
+        if not isinstance(task_id, str):
+            return
+        # Synchronous critical section: match and remove before any await.
+        entry = self._inflight.get(task_id)
+        if (
+            entry is None
+            or entry.dispatch_id != p.get("dispatch_id")
+            or entry.instance_id != p.get("instance_id")
+        ):
+            logger.warning("Ignoring stale/unknown task.result for %s", task_id)
+            return
+        del self._inflight[task_id]
+
+        if not p.get("ok") and p.get("error") == "worker_busy":
+            # Transient over-capacity, not a terminal outcome — route
+            # through the worker-loss policy (retry if opted in, else
+            # fail). _apply_loss_policy already releases the slot; do
+            # not finalize/release separately here.
+            await self._apply_loss_policy(entry, "worker_busy: transient over-capacity")
+            return
+
+        task, spec = entry.task, entry.spec
+        try:
+            if p.get("ok"):
+                task.status = TaskStatus.COMPLETED
+                task.result = {"output": p.get("output")}
+            else:
+                task.status = TaskStatus.FAILED
+                task.result = {"error": p.get("error")}
+            task.updated_at = datetime.now(UTC)
+            await self.state.save_task(task)
+
+            episode = Episode(
+                trigger_type=entry.trigger_source,
+                user_input=spec.prompt or "",
+                agent_response=p.get("output") or "",
+                workflow_result=task.result,
+            )
+            await self.memory.save_episode(episode)
+
+            await self.bus.publish(
+                Event(
+                    type=(
+                        "task.completed"
+                        if task.status == TaskStatus.COMPLETED
+                        else "task.failed"
+                    ),
+                    source="application",
+                    payload=task.result,
+                )
+            )
+        finally:
+            # The inflight entry is already popped: no loss/reap path can
+            # free this slot anymore. A failed save/publish must not leak
+            # the reservation — release unconditionally.
+            await self._release_and_spawn(task.id)
+
+    async def _handle_worker_lost(self, worker_id: str, instance_id: str) -> None:
+        """Registry loss callback — exactly once per lost incarnation."""
+        lost = [
+            e
+            for e in self._inflight.values()
+            if e.agent_id == worker_id and e.instance_id == instance_id
+        ]
+        for entry in lost:
+            self._inflight.pop(entry.task.id, None)  # sync, before awaits
+        for entry in lost:
+            await self._apply_loss_policy(entry, f"worker_lost: {worker_id}")
+
+    async def _apply_loss_policy(self, entry: InflightDispatch, reason: str) -> None:
+        """Retry (opt-in) or fail a dispatch whose worker is gone."""
+        assert self._task_router is not None
+        task, spec = entry.task, entry.spec
+        now = datetime.now(UTC)
+        try:
+            if (
+                spec.policies.retry_on_worker_loss
+                and task.retries < spec.policies.max_retries
+            ):
+                task.retries += 1
+                task.status = TaskStatus.PENDING
+                task.worker_id = None
+                task.deadline = None
+                task.updated_at = now
+                await self.state.save_task(task)
+                await self._task_router.retry(
+                    task,
+                    spec,
+                    entry.trigger_source,
+                    not_before=now
+                    + timedelta(seconds=spec.policies.retry_delay_seconds),
+                )
+            else:
+                await self._finish_failed(task, reason)
+        finally:
+            # Callers (registry loss callback, reaper, result handler)
+            # swallow or log our exceptions — the reservation must be
+            # freed even when persistence or enqueueing fails.
+            await self._release_and_spawn(task.id)
+
+    async def _finish_failed(self, task: Task, reason: str) -> None:
+        task.status = TaskStatus.FAILED
+        task.result = {"error": reason}
+        task.updated_at = datetime.now(UTC)
+        await self.state.save_task(task)
+        await self.bus.publish(
+            Event(
+                type="task.failed",
+                source="application",
+                payload=task.result,
+            )
+        )
+
+    async def _release_and_spawn(self, task_id: str) -> None:
+        """Release a slot and spawn whatever became runnable."""
+        assert self._task_router is not None
+        try:
+            ready = await self._task_router.release(task_id)
+            self._spawn_ready(ready)
+        except TransportDrainingError:
+            logger.debug("Skipping post-release dequeue for task %s: draining", task_id)
 
     async def _run_spawned(self, entry: QueueEntry) -> None:
         """Run a dequeued entry, logging (not raising) on crash.
@@ -319,7 +585,15 @@ class Application:
         matches the logging-only contract used by ``_safe_invoke``.
         """
         try:
-            await self._run_admitted(entry.task, entry.spec, entry.trigger_source)
+            if entry.agent_id is None or entry.agent_id == self._local_worker_id:
+                await self._run_admitted(entry.task, entry.spec, entry.trigger_source)
+            else:
+                await self._dispatch_remote(
+                    entry.task,
+                    entry.spec,
+                    entry.agent_id,
+                    entry.trigger_source,
+                )
         except Exception:
             logger.exception("Dequeued task %s crashed", entry.task.id)
 
@@ -354,5 +628,16 @@ class Application:
                         )
                     )
                 self._spawn_ready(await self._task_router.dequeue_ready())
+
+                now = datetime.now(UTC)
+                overdue = [
+                    e
+                    for e in self._inflight.values()
+                    if e.task.deadline is not None and e.task.deadline <= now
+                ]
+                for entry in overdue:
+                    self._inflight.pop(entry.task.id, None)
+                for entry in overdue:
+                    await self._apply_loss_policy(entry, "dispatch deadline exceeded")
             except Exception:
                 logger.exception("Queue tick failed")

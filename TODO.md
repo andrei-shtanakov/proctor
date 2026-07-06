@@ -6,6 +6,7 @@
 
 ## Текущее состояние
 - ✅ Phase 2 завершена: triggers (terminal/telegram/scheduler/webhook), NATS-транспорт, EpisodicMemory, TaskRouter (admission: 4 инварианта + TTL-очередь)
+- ✅ Phase 3 (часть 1) — worker registry + remote dispatch: WorkerRegistry (liveness/fencing), capability scoring, WorkerNode (worker-role runtime), remote dispatch (rollback, loss policy, reaper); distribution loop покрыт как local-transport, так и multi-node NATS интеграционными тестами
 - ✅ Миграция asyncio → anyio завершена
 - ✅ Задачи TASK-00N идут через Maestro-спеки (`maestro: add spec for ...`) — первый реальный Mode-2 run
 - ✅ CI есть (GitHub Actions: unit + integration-nats с Toxiproxy reconnect-тестами)

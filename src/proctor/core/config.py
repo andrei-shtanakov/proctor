@@ -225,12 +225,6 @@ class WebhookConfig(BaseModel):
         return self
 
 
-class RouterAgentConfig(BaseModel):
-    """Slot budget of the single local agent (Phase 2)."""
-
-    max_slots: int = Field(default=4, ge=1)
-
-
 class RouterConfig(BaseModel):
     """TaskRouter admission settings."""
 
@@ -239,7 +233,49 @@ class RouterConfig(BaseModel):
     queue_ttl_seconds: float = Field(default=600.0, ge=0.0)
     # must stay > 0: asyncio.sleep(0) would spin the tick loop hot
     queue_tick_seconds: float = Field(default=30.0, gt=0.0)
-    agent: RouterAgentConfig = RouterAgentConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_legacy_agent(cls, data: object) -> object:
+        if isinstance(data, dict) and "agent" in data:
+            raise ValueError(
+                "router.agent has been removed; configure worker.max_slots "
+                "(top-level worker: section) instead"
+            )
+        return data
+
+
+class WorkerConfig(BaseModel):
+    """Identity and capacity of this node's executor."""
+
+    id: str = Field(default="local", pattern=r"^[a-z][a-z0-9_]*$")
+    capabilities: list[str] = Field(default_factory=list)
+    max_slots: int = Field(default=4, ge=1)
+
+
+class RegistryConfig(BaseModel):
+    """Worker discovery/liveness settings.
+
+    ``liveness_timeout`` is core/standalone-only — it drives the
+    registry's sweep for silent workers. ``heartbeat_interval`` is
+    read by *both* roles: the core uses it for the registry sweep
+    cadence, and worker nodes read it (bootstrap's worker branch) to
+    set their own heartbeat loop's interval. A worker's
+    ``heartbeat_interval`` must stay comfortably under the core's
+    ``liveness_timeout`` — this is a cross-node coupling that per-node
+    config validation cannot check; a mismatch causes liveness
+    flapping (workers appearing to go offline and back) with task
+    casualties on the affected dispatches.
+    """
+
+    heartbeat_interval: float = Field(default=30.0, gt=0.0)
+    liveness_timeout: float = Field(default=90.0, gt=0.0)
+
+    @model_validator(mode="after")
+    def _liveness_exceeds_heartbeat(self) -> Self:
+        if self.liveness_timeout <= self.heartbeat_interval:
+            raise ValueError("registry.liveness_timeout must exceed heartbeat_interval")
+        return self
 
 
 class ProctorConfig(BaseModel):
@@ -255,6 +291,8 @@ class ProctorConfig(BaseModel):
     nats: NATSConfig = NATSConfig()
     events: EventsConfig = EventsConfig()
     router: RouterConfig = RouterConfig()
+    worker: WorkerConfig = WorkerConfig()
+    registry: RegistryConfig = RegistryConfig()
     scheduler: SchedulerConfig = SchedulerConfig()
     telegram: TelegramConfig | None = None
     webhook: WebhookConfig | None = None
@@ -275,6 +313,15 @@ class ProctorConfig(BaseModel):
             logger.warning(
                 "transport resolved to 'local'; nats config is set "
                 "but will be ignored. Use transport='nats' to enforce."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _worker_role_requires_explicit_id(self) -> Self:
+        if self.node_role == "worker" and self.worker.id == "local":
+            raise ValueError(
+                "node_role 'worker' requires an explicit worker.id; "
+                "'local' is reserved for the core's inline executor"
             )
         return self
 

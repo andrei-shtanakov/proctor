@@ -9,10 +9,12 @@ from proctor.core.config import (
     LLMConfig,
     NATSConfig,
     ProctorConfig,
+    RegistryConfig,
     RouteRule,
     ScheduleItemConfig,
     SchedulerConfig,
     TelegramConfig,
+    WorkerConfig,
     load_config,
 )
 from proctor.workflow.spec import WorkflowMode, WorkflowSpec
@@ -341,6 +343,9 @@ class TestLoadConfig:
             "nats_url": "nats://remote:4222",
             "data_dir": "/var/proctor",
             "log_level": "WARNING",
+            "worker": {
+                "id": "worker_1",
+            },
             "llm": {
                 "default_model": "custom-model",
                 "fallback_model": "local/tiny",
@@ -915,12 +920,14 @@ class TestTransportResolution:
         expected: str,
     ) -> None:
         from proctor.core.bootstrap import _resolve_transport_mode
-        from proctor.core.config import NATSConfig, ProctorConfig
+        from proctor.core.config import NATSConfig, ProctorConfig, WorkerConfig
 
         kwargs: dict[str, object] = {
             "transport": transport,
             "node_role": node_role,
         }
+        if node_role == "worker":
+            kwargs["worker"] = WorkerConfig(id="worker_1")
         if nats_servers is not None:
             kwargs["nats"] = NATSConfig(servers=nats_servers)
         if expected == "ValueError":
@@ -930,3 +937,32 @@ class TestTransportResolution:
         cfg = ProctorConfig(**kwargs)  # type: ignore[arg-type]
         mode = _resolve_transport_mode(cfg)
         assert mode == expected
+
+
+class TestWorkerAndRegistryConfig:
+    def test_defaults(self) -> None:
+        cfg = ProctorConfig()
+        assert cfg.worker.id == "local"
+        assert cfg.worker.max_slots == 4
+        assert cfg.registry.heartbeat_interval == 30.0
+        assert cfg.registry.liveness_timeout == 90.0
+
+    def test_worker_id_charset(self) -> None:
+        with pytest.raises(ValueError):
+            WorkerConfig(id="worker-1")  # hyphen not subject-safe
+
+    def test_worker_role_requires_explicit_id(self) -> None:
+        with pytest.raises(ValueError, match="worker.id"):
+            ProctorConfig(node_role="worker", worker=WorkerConfig(id="local"))
+
+    def test_worker_role_with_explicit_id_ok(self) -> None:
+        cfg = ProctorConfig(
+            node_role="worker",
+            worker=WorkerConfig(id="worker_a"),
+            transport="local",
+        )
+        assert cfg.worker.id == "worker_a"
+
+    def test_liveness_must_exceed_heartbeat(self) -> None:
+        with pytest.raises(ValueError):
+            RegistryConfig(heartbeat_interval=30.0, liveness_timeout=30.0)

@@ -91,5 +91,24 @@ schedules:
 #   max_concurrency: 4
 #   queue_ttl_seconds: 600    # 0 = reject immediately, never queue
 #   queue_tick_seconds: 30
-#   agent:
-#     max_slots: 4
+#
+# Local worker identity/capacity (replaces the old router.agent.max_slots).
+# On a core/standalone node this describes the inline executor; a
+# remote worker node sets node_role: worker and gives itself a
+# non-"local" id + the capabilities it can satisfy:
+# worker:
+#   id: local
+#   capabilities: []          # e.g. [shell, python]
+#   max_slots: 4
+#
+# Worker discovery/liveness. liveness_timeout must exceed
+# heartbeat_interval and is core/standalone-only (drives the sweep for
+# silent workers). heartbeat_interval is also read by worker nodes for
+# their own heartbeat cadence — keep a worker's value comfortably under
+# the core's liveness_timeout. This is a cross-node coupling that
+# per-node config validation cannot check; a mismatch causes liveness
+# flapping (workers appearing to go offline and back) with task
+# casualties on the affected dispatches:
+# registry:
+#   heartbeat_interval: 30.0
+#   liveness_timeout: 90.0

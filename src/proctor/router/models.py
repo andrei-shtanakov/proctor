@@ -38,6 +38,7 @@ class AdmitDecision(BaseModel):
 
     verdict: Literal["admitted", "queued", "rejected"]
     reason: str | None = None
+    agent_id: str | None = None
 
 
 class QueueEntry(BaseModel):
@@ -54,3 +55,5 @@ class QueueEntry(BaseModel):
     enqueued_at: datetime
     expires_at: datetime
     reason: str
+    not_before: datetime | None = None
+    agent_id: str | None = None  # set when a dequeue reserves a slot

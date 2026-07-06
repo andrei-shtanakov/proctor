@@ -1,13 +1,27 @@
-"""Capability scoring — the seam Phase 3 fills with real candidates."""
+"""Capability scoring: filter by requires, rank by free slots."""
+
+from collections.abc import Mapping
 
 from proctor.router.models import AgentProfile, Candidate
 from proctor.workflow.spec import WorkflowSpec
 
 
-def score_candidates(spec: WorkflowSpec, agents: list[AgentProfile]) -> list[Candidate]:
-    """Score agents for a spec. v1: every agent scores 1.0, order kept.
+def score_candidates(
+    spec: WorkflowSpec,
+    agents: list[AgentProfile],
+    used_slots: Mapping[str, int] | None = None,
+) -> list[Candidate]:
+    """Candidates able to run ``spec``, best (most free slots) first.
 
-    Phase 3 replaces the body with capability matching against the
-    worker registry; the signature is the contract.
+    Zero-free-slot agents stay in the list: the agent_available
+    invariant is the single place that rejects them. Sort is stable —
+    ties keep registry order.
     """
-    return [Candidate(profile=agent, score=1.0) for agent in agents]
+    used = used_slots or {}
+    required = set(spec.requires)
+    eligible = [a for a in agents if required <= set(a.capabilities)]
+    scored = [
+        Candidate(profile=a, score=float(a.max_slots - used.get(a.id, 0)))
+        for a in eligible
+    ]
+    return sorted(scored, key=lambda c: -c.score)

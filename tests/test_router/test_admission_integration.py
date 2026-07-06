@@ -9,9 +9,9 @@ import pytest
 from proctor.core.bootstrap import Application
 from proctor.core.config import (
     ProctorConfig,
-    RouterAgentConfig,
     RouterConfig,
     RouteRule,
+    WorkerConfig,
 )
 from proctor.core.models import Event
 from proctor.core.transport import LocalEventTransport
@@ -31,11 +31,11 @@ def _config(tmp_path: Path, **router_overrides: object) -> ProctorConfig:
         max_concurrency=1,
         queue_ttl_seconds=5.0,
         queue_tick_seconds=0.05,
-        agent=RouterAgentConfig(max_slots=1),
     ).model_copy(update=router_overrides)
     return ProctorConfig(
         data_dir=tmp_path / "proctor_data",
         router=router_config,
+        worker=WorkerConfig(id="local", max_slots=1),
         workflows={
             "chat": WorkflowSpec(workflow_id="chat", mode=WorkflowMode.SIMPLE),
         },
