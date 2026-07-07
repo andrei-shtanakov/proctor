@@ -241,13 +241,19 @@ class DockerWorkerManager:
                     logger.exception("Docker poll loop exited with error")
             self._poll_task = None
         for state in self.slots.values():
+            # stop and remove independently: if the container is already
+            # gone (e.g. it exited between poll and teardown), stop() may
+            # raise, but remove() must still run so nothing is leaked.
             try:
                 await self._rt.stop(
                     state.container_id, timeout=self._fleet.stop_timeout
                 )
-                await self._rt.remove(state.container_id)
             except Exception:
                 logger.exception("Error stopping docker worker %s", state.worker_id)
+            try:
+                await self._rt.remove(state.container_id)
+            except Exception:
+                logger.exception("Error removing docker worker %s", state.worker_id)
         self.slots.clear()
         if self._env_dir is not None:
             shutil.rmtree(self._env_dir, ignore_errors=True)

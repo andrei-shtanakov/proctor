@@ -8,6 +8,7 @@ docker-vs-podman JSON shape into one model.
 
 import asyncio
 import json
+import math
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -102,7 +103,11 @@ class ContainerRuntime:
         return ContainerStatus.parse(json.loads(out))
 
     async def stop(self, container_id: str, timeout: float) -> None:
-        await self._exec(["stop", "-t", str(int(timeout)), container_id])
+        # `-t` takes whole seconds; round UP so a fractional grace period
+        # never floors to 0 (which would SIGKILL immediately, defeating
+        # the drain window).
+        secs = max(1, math.ceil(timeout)) if timeout > 0 else 0
+        await self._exec(["stop", "-t", str(secs), container_id])
 
     async def remove(self, container_id: str) -> None:
         await self._exec(["rm", "-f", container_id])

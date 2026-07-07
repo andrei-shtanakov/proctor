@@ -106,3 +106,15 @@ async def test_stop_remove_logs_argv() -> None:
     assert out == "line1\nline2\n"
     assert calls[-1][:2] == ["docker", "logs"]
     assert "--tail" in calls[-1] and calls[-1][calls[-1].index("--tail") + 1] == "50"
+
+
+async def test_stop_rounds_fractional_timeout_up() -> None:
+    """A sub-second grace must not floor to 0 (immediate SIGKILL)."""
+    run_cmd, calls = _fake()
+    rt = ContainerRuntime("docker", run_cmd=run_cmd)
+    await rt.stop("cid", timeout=0.9)
+    assert calls[-1][calls[-1].index("-t") + 1] == "1"
+    await rt.stop("cid", timeout=0.1)
+    assert calls[-1][calls[-1].index("-t") + 1] == "1"
+    await rt.stop("cid", timeout=30.0)
+    assert calls[-1][calls[-1].index("-t") + 1] == "30"

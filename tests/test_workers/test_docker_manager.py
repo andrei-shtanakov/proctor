@@ -266,3 +266,19 @@ async def test_ceiling_trips_failed_with_log_tail(
         assert "crash tail" in str(getattr(failed[0], "payload", {}))
     finally:
         await mgr.stop()
+
+
+async def test_stop_removes_even_if_stop_raises(bus: EventBus, tmp_path: Path) -> None:
+    """If stop() fails (container already gone), remove() still runs."""
+    rt = FakeRuntime()
+
+    async def boom(container_id: str, timeout: float) -> None:
+        raise RuntimeError("no such container")
+
+    rt.stop = boom  # type: ignore[method-assign]
+    mgr = _mgr(rt, bus, tmp_path, replicas=2)
+    await mgr.start()
+    cids = [s.container_id for s in mgr.slots.values()]
+    await mgr.stop()
+    # stop raised for each, but remove ran for all — nothing leaked
+    assert sorted(rt.removed) == sorted(cids)
