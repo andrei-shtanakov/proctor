@@ -1,6 +1,8 @@
 """ContainerRuntime: argv construction and inspect parsing, no daemon."""
 
+import asyncio
 import json
+import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
@@ -149,6 +151,47 @@ async def test_default_run_cmd_kills_and_reaps_on_timeout() -> None:
     with pytest.raises(RuntimeError, match="timed out"):
         # `sleep 30` under a 0.3s deadline
         await run_cmd(["sleep", "30"], 0.3)
+
+
+async def test_default_run_cmd_actually_reaps_child_on_timeout(
+    tmp_path: Path,
+) -> None:
+    """Regression guard for the kill+reap path itself.
+
+    A bare `pytest.raises(RuntimeError)` around the timeout also passes if
+    someone deletes `proc.kill(); await proc.wait()` from the except
+    branch (TimeoutError still gets re-raised as RuntimeError) while
+    leaking the child as an orphaned process. Prove the child is actually
+    gone, not just that the exception fired.
+
+    The child writes its own pid to a file, then `exec`s into `sleep` so
+    the pid we capture *is* the process `run_cmd` kills (no subshell).
+    """
+    from proctor.infra.docker import _make_default_run_cmd
+
+    pidfile = tmp_path / "child.pid"
+    run_cmd = _make_default_run_cmd(env=None)
+    with pytest.raises(RuntimeError, match="timed out"):
+        await run_cmd(
+            ["sh", "-c", f"echo $$ > {pidfile}; exec sleep 30"],
+            0.3,
+        )
+    pid = int(pidfile.read_text().strip())
+
+    # The kill+wait already happened synchronously inside run_cmd, so the
+    # pid should be gone immediately; poll briefly to absorb scheduling
+    # jitter without masking a real leak (a leaked child stays alive for
+    # the remaining ~30s of its sleep, far past this window).
+    deadline = asyncio.get_event_loop().time() + 2.0
+    gone = False
+    while asyncio.get_event_loop().time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            gone = True
+            break
+        await asyncio.sleep(0.05)
+    assert gone, f"child pid {pid} was not reaped after timeout kill"
 
 
 async def test_env_merged_into_subprocess() -> None:

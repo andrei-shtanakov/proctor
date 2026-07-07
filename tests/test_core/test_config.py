@@ -1089,3 +1089,26 @@ class TestRemoteDockerConfig:
         # no ssh_host → the host.docker.internal default is fine
         fleet = DockerWorkerConfig(image="i", base_worker_id="d")
         assert "host.docker.internal" in fleet.nats_servers[0]
+
+    @pytest.mark.parametrize(
+        "server",
+        [
+            "nats://172.17.0.10:4222",  # substring "172.17.0.1" of blocked host
+            "nats://[2001:db8::1]:4222",  # substring "::1" of blocked host
+        ],
+    )
+    def test_remote_fleet_accepts_lookalike_routable_nats(self, server: str) -> None:
+        """A host-equality check must not false-reject look-alike hosts.
+
+        These merely contain an unroutable address as a substring
+        (172.17.0.1 / ::1) but are themselves distinct, routable hosts.
+        """
+        from proctor.core.config import DockerWorkerConfig
+
+        fleet = DockerWorkerConfig(
+            image="i",
+            base_worker_id="d",
+            ssh_host="box",
+            nats_servers=[server],
+        )
+        assert fleet.nats_servers == [server]

@@ -5,6 +5,7 @@ import os
 import re
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
+from urllib.parse import urlsplit
 
 import yaml
 from croniter import croniter
@@ -14,6 +15,15 @@ from proctor.core.globs import is_strictly_broader
 from proctor.workflow.spec import WorkflowSpec
 
 logger = logging.getLogger(__name__)
+
+# Hosts that never resolve back to the core from a remote docker fleet's
+# host (loopback/docker-bridge addresses meaningful only on that box).
+# Compared by exact hostname (via urlsplit), never by substring — a
+# substring check would false-reject look-alikes like 172.17.0.10 or
+# nats://[2001:db8::1]:4222 (which merely contains "::1").
+_UNROUTABLE_NATS_HOSTS = frozenset(
+    {"host.docker.internal", "localhost", "127.0.0.1", "::1", "172.17.0.1"}
+)
 
 
 class LLMConfig(BaseModel):
@@ -293,15 +303,9 @@ class DockerWorkerConfig(BaseModel):
     def _validate_remote_nats_reachable(self) -> Self:
         if self.ssh_host is None:
             return self
-        unroutable = (
-            "host.docker.internal",
-            "localhost",
-            "127.0.0.1",
-            "::1",
-            "172.17.0.1",
-        )
         for server in self.nats_servers:
-            if any(bad in server for bad in unroutable):
+            hostname = urlsplit(server).hostname
+            if hostname is not None and hostname.lower() in _UNROUTABLE_NATS_HOSTS:
                 raise ValueError(
                     f"remote fleet nats_servers {server!r} is unroutable from "
                     "the remote host; set nats_servers to a core address "

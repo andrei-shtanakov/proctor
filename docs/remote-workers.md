@@ -38,3 +38,8 @@ there.
   restarting immediately.
 - A `run` killed by `op_timeout` that actually started the container on the
   remote host leaves an untracked container there; reap it manually.
+- On shutdown, a fleet slot that failed as unreachable still issues
+  stop+remove against the dead host, bounded by the op budgets
+  (~`stop_timeout` + `op_margin`, then `op_timeout`) per replica,
+  sequentially — teardown of an all-down remote fleet can take up to
+  that much time per replica.

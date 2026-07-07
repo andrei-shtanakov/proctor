@@ -391,3 +391,41 @@ async def test_launch_failure_at_start_backs_off_not_crash(
         assert mgr.slots[0].restarts == 1
     finally:
         await mgr.stop()
+
+
+async def test_relaunch_failure_climbs_to_ceiling_not_forever(
+    bus: EventBus, tmp_path: Path
+) -> None:
+    """A slot whose relaunch always fails must trip the ceiling and stop.
+
+    Every _relaunch attempt goes through _launch_slot → _launch, which
+    calls rt.run(); if rt.run() always raises, _backoff_or_fail keeps
+    incrementing restarts on each retry. With max_restarts small, driving
+    the clock past each restart_at must eventually flip state to "failed"
+    instead of scheduling backoff forever.
+    """
+    rt = FakeRuntime()
+
+    async def boom_run(spec: object) -> str:
+        raise RuntimeError("remote host down")
+
+    rt.run = boom_run  # type: ignore[method-assign]
+    mgr = _mgr(rt, bus, tmp_path, replicas=1, max_restarts=2)
+    await mgr.start()  # first launch fails: restarts=1, state=backoff
+    try:
+        assert mgr.slots[0].state == "backoff"
+        assert mgr.slots[0].restarts == 1
+
+        now = mgr.slots[0].restart_at
+        assert now is not None
+        for _ in range(5):  # far more attempts than max_restarts allows
+            if mgr.slots[0].state == "failed":
+                break
+            await mgr._poll_once(now)
+            restart_at = mgr.slots[0].restart_at
+            now = restart_at if restart_at is not None else now
+
+        assert mgr.slots[0].state == "failed"
+        assert mgr.slots[0].restarts > 2  # exceeded max_restarts=2
+    finally:
+        await mgr.stop()
