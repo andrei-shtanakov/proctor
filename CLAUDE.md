@@ -65,15 +65,15 @@ pyrefly check                        # Type check (run after every change)
 | `core/` | Kernel — EventBus on top of the `transport/` abstraction (LocalEventTransport in-process, NATSEventTransport cross-node, `transport: auto\|local\|nats` in config), SQLite state manager, config (YAML→pydantic), bootstrap, EpisodicMemory, core models (Event, Task, Episode, Envelope) |
 | `triggers/` | Input adapters — Trigger ABC, TerminalTrigger (stdin→events), TelegramTrigger (Bot API polling), SchedulerTrigger (cron/interval), WebhookTrigger (HTTP, HMAC/Bearer auth). Future: filesystem, email, heartbeat |
 | `workflow/` | Pipeline engine — WorkflowSpec model, DAG executor (topo-sort + parallel), WorkflowEngine dispatcher. Supports simple and DAG modes |
-| `workers/` | Agent Runtime + WorkerRegistry (discovery/liveness) + WorkerNode (worker-role runtime). Future: docker.py, remote.py |
+| `workers/` | Agent Runtime + WorkerRegistry (discovery/liveness) + WorkerNode (worker-role runtime) + DockerWorkerManager (container fleet lifecycle). Future: remote.py |
 | `router/` | Admission layer (M4) — TaskRouter: 4 safety invariants, TTL pending queue, capability-scoring seam for Phase 3 |
+| `infra/` | Thin async CLI wrappers — `docker.py` (ContainerRuntime). Future: ssh.py, vagrant.py |
 
 **Planned modules** (not yet implemented):
 
 | Module | Purpose | Phase |
 |--------|---------|-------|
 | `mcp/` | MCP client/server/controller/registry/proxy | Phase 3 |
-| `infra/` | Thin wrappers: Docker SDK, asyncssh, Vagrant CLI, Ansible runner, tmux | Phase 3 |
 | `a2a/` | A2A Gateway for external agent interop | Phase 6 |
 | `control/` | Safety (kill switch, FORBIDDEN list), budget tracking, health monitoring, TUI dashboard | Phase 5 |
 
@@ -93,11 +93,11 @@ pyrefly check                        # Type check (run after every change)
 
 Phase 0 (Foundation) and Phase 1 (MVP) are complete. Phase 2 is complete.
 
-**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration, SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), WebhookTrigger (HTTP with HMAC/Bearer auth), EpisodicMemory (SQLite-backed interaction history), transport layer (EventTransport ABC, LocalEventTransport, NATSEventTransport + resolver, contract and Toxiproxy reconnect tests), CI (GitHub Actions: unit + integration-nats jobs), TaskRouter (admission invariants + TTL queue), worker registry + remote dispatch (WorkerRegistry liveness/fencing, capability scoring, WorkerNode worker-role runtime, remote dispatch with rollback/loss-policy/reaper, local-transport and NATS multi-node integration tests).
+**Completed:** Core models, config loading, EventBus, StateManager, bootstrap, WorkflowSpec, DAG executor, WorkflowEngine, Agent Runtime, Terminal Trigger, end-to-end integration, SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling), WebhookTrigger (HTTP with HMAC/Bearer auth), EpisodicMemory (SQLite-backed interaction history), transport layer (EventTransport ABC, LocalEventTransport, NATSEventTransport + resolver, contract and Toxiproxy reconnect tests), CI (GitHub Actions: unit + integration-nats jobs), TaskRouter (admission invariants + TTL queue), worker registry + remote dispatch (WorkerRegistry liveness/fencing, capability scoring, WorkerNode worker-role runtime, remote dispatch with rollback/loss-policy/reaper, local-transport and NATS multi-node integration tests), docker worker (ContainerRuntime docker/podman CLI wrapper, DockerWorkerManager fleet lifecycle with fresh-id fencing and poll-loop restart — backoff/jitter/stability-reset/ceiling, bootstrap wiring + log sink, Dockerfile + base worker config, docker-marker integration test).
 
-**Current phase:** Phase 2 complete. The system accepts terminal input, Telegram messages, webhooks, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite. Events flow over local or NATS transport. Admission layer enforces 4 safety invariants with TTL-pending queue semantics. Tasks requiring specific capabilities are dispatched to remote workers over local or NATS transport, with liveness-based loss handling.
+**Current phase:** Phase 2 complete. The system accepts terminal input, Telegram messages, webhooks, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite. Events flow over local or NATS transport. Admission layer enforces 4 safety invariants with TTL-pending queue semantics. Tasks requiring specific capabilities are dispatched to remote workers over local or NATS transport, with liveness-based loss handling. The core can also launch and supervise container-based worker fleets directly.
 
-**Next:** Phase 3 continues — workers/docker.py, workers/remote.py, mcp/.
+**Next:** Phase 3 continues — workers/remote.py (SSH), mcp/.
 
 ## Key Conventions
 
