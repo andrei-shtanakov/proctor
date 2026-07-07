@@ -145,3 +145,111 @@ async def test_stop_stops_and_removes_all(bus: EventBus, tmp_path: Path) -> None
     await mgr.stop()
     assert sorted(rt.stopped) == sorted(cids)
     assert sorted(rt.removed) == sorted(cids)
+
+
+async def test_exit_captures_logs_then_removes_then_relaunches(
+    bus: EventBus, tmp_path: Path
+) -> None:
+    rt = FakeRuntime()
+    mgr = _mgr(rt, bus, tmp_path, replicas=1)
+    await mgr.start()
+    try:
+        old = mgr.slots[0]
+        rt.status[old.container_id] = "exited"
+        # backoff = base_backoff (1.0) with no jitter → restart_at = T0+1s
+        await mgr._poll_once(T0)
+        assert mgr.slots[0].state == "backoff"
+        # order: logs captured, old removed, no relaunch yet
+        assert rt.logged == [old.container_id]
+        assert rt.removed == [old.container_id]
+        assert len(rt.runs) == 1
+        # before restart_at: still waiting
+        from datetime import timedelta
+
+        await mgr._poll_once(T0 + timedelta(seconds=0.5))
+        assert len(rt.runs) == 1
+        # at restart_at: fresh container, NEW worker_id
+        await mgr._poll_once(T0 + timedelta(seconds=1.0))
+        assert len(rt.runs) == 2
+        assert mgr.slots[0].worker_id != old.worker_id
+        assert mgr.slots[0].state == "running"
+        assert mgr.slots[0].restarts == 1
+    finally:
+        await mgr.stop()
+
+
+async def test_backoff_grows_and_uses_jitter(bus: EventBus, tmp_path: Path) -> None:
+    seen: list[float] = []
+    rt = FakeRuntime()
+    mgr = DockerWorkerManager(
+        rt,  # type: ignore[arg-type]
+        _fleet(replicas=1, base_backoff=1.0, max_backoff=100.0),
+        bus,
+        environ={"FAKE_KEY": "x"},
+        tmp_dir=tmp_path,
+        now_fn=lambda: T0,
+        jitter_fn=lambda d: (seen.append(d), d)[1],
+    )
+    await mgr.start()
+    try:
+        now = T0
+        for _expected in (1.0, 2.0, 4.0):
+            rt.status[mgr.slots[0].container_id] = "exited"
+            await mgr._poll_once(now)
+            now = mgr.slots[0].restart_at or now
+            await mgr._poll_once(now)  # relaunch
+        assert seen == [1.0, 2.0, 4.0]  # exponential, jitter_fn saw each
+    finally:
+        await mgr.stop()
+
+
+async def test_stability_window_resets_restart_count(
+    bus: EventBus, tmp_path: Path
+) -> None:
+    from datetime import timedelta
+
+    rt = FakeRuntime()
+    mgr = _mgr(rt, bus, tmp_path, replicas=1, stability_window=10.0)
+    await mgr.start()
+    try:
+        rt.status[mgr.slots[0].container_id] = "exited"
+        await mgr._poll_once(T0)
+        await mgr._poll_once(mgr.slots[0].restart_at or T0)  # relaunch, restarts=1
+        assert mgr.slots[0].restarts == 1
+        # container stays up beyond stability_window → counter resets
+        up = mgr.slots[0].started_at + timedelta(seconds=11)
+        await mgr._poll_once(up)
+        assert mgr.slots[0].restarts == 0
+    finally:
+        await mgr.stop()
+
+
+async def test_ceiling_trips_failed_with_log_tail(
+    bus: EventBus, tmp_path: Path
+) -> None:
+
+    events: list[object] = []
+
+    async def collect(event: object) -> None:
+        events.append(event)
+
+    bus.subscribe("docker_worker.>", collect)
+    rt = FakeRuntime()
+    mgr = _mgr(rt, bus, tmp_path, replicas=1, max_restarts=2)
+    await mgr.start()
+    try:
+        now = T0
+        for _ in range(3):  # exceed max_restarts=2
+            rt.status[mgr.slots[0].container_id] = "exited"
+            await mgr._poll_once(now)
+            if mgr.slots[0].state == "failed":
+                break
+            now = mgr.slots[0].restart_at or now
+            await mgr._poll_once(now)
+        assert mgr.slots[0].state == "failed"
+        await bus.flush()
+        failed = [e for e in events if getattr(e, "type", "") == "docker_worker.failed"]
+        assert failed
+        assert "crash tail" in str(getattr(failed[0], "payload", {}))
+    finally:
+        await mgr.stop()

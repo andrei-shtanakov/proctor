@@ -13,7 +13,7 @@ import os
 import shutil
 import tempfile
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from proctor.core.bus import EventBus
 from proctor.core.config import DockerWorkerConfig
+from proctor.core.models import Event
 from proctor.infra.docker import ContainerRuntime, ContainerSpec
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,98 @@ class DockerWorkerManager:
         self._write_env_file()
         for slot in range(self._fleet.replicas):
             await self._launch(slot)
+        self._poll_task = asyncio.create_task(self._poll_loop())
+
+    async def _poll_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self._fleet.poll_interval)
+            try:
+                await self._poll_once(self._now())
+            except Exception:
+                logger.exception("Docker poll loop iteration failed")
+
+    async def _poll_once(self, now: datetime) -> None:
+        """One reconciliation pass over all slots (testable tick body)."""
+        for slot, state in list(self.slots.items()):
+            if state.state == "failed":
+                continue
+            if state.state == "backoff":
+                if state.restart_at is not None and now >= state.restart_at:
+                    await self._relaunch(slot, now)
+                continue
+            status = await self._rt.inspect(state.container_id)
+            if status.state == "exited":
+                await self._handle_exit(slot, now)
+            elif (now - state.started_at).total_seconds() >= (
+                self._fleet.stability_window
+            ):
+                state.restarts = 0
+
+    async def _handle_exit(self, slot: int, now: datetime) -> None:
+        """Capture logs, remove the container, schedule a backoff restart."""
+        state = self.slots[slot]
+        tail = ""
+        try:
+            tail = await self._rt.logs(state.container_id, tail=self._fleet.log_tail)
+        except Exception:
+            logger.exception("Failed to capture logs for %s", state.worker_id)
+        try:
+            await self._rt.remove(state.container_id)
+        except Exception:
+            logger.exception("Failed to remove %s", state.container_id)
+
+        next_restarts = state.restarts + 1
+        if next_restarts > self._fleet.max_restarts:
+            state.state = "failed"
+            state.restarts = next_restarts
+            logger.error(
+                "Docker worker slot %d exceeded max_restarts; last logs:\n%s",
+                slot,
+                tail,
+            )
+            await self._bus.publish(
+                Event(
+                    type="docker_worker.failed",
+                    source=_SOURCE,
+                    payload={
+                        "base_worker_id": self._fleet.base_worker_id,
+                        "slot": slot,
+                        "restarts": next_restarts,
+                        "log_tail": tail,
+                    },
+                )
+            )
+            return
+
+        delay = min(
+            self._fleet.base_backoff * (2 ** (next_restarts - 1)),
+            self._fleet.max_backoff,
+        )
+        state.restarts = next_restarts
+        state.state = "backoff"
+        state.restart_at = now + timedelta(seconds=self._jitter(delay))
+        self._pending_tail[slot] = tail
+
+    async def _relaunch(self, slot: int, now: datetime) -> None:
+        tail = self._pending_tail.pop(slot, "")
+        await self._launch(slot, at=now)  # fresh worker_id; preserves restarts
+        logger.info(
+            "Restarted docker worker slot %d (restart #%d)",
+            slot,
+            self.slots[slot].restarts,
+        )
+        await self._bus.publish(
+            Event(
+                type="docker_worker.restarted",
+                source=_SOURCE,
+                payload={
+                    "base_worker_id": self._fleet.base_worker_id,
+                    "slot": slot,
+                    "restarts": self.slots[slot].restarts,
+                    "log_tail": tail,
+                },
+            )
+        )
 
     async def stop(self) -> None:
         """Stop+remove every container and delete the env-file."""
