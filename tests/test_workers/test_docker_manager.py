@@ -128,8 +128,13 @@ async def test_secret_env_file_written_once_and_removed(
     assert "FAKE_KEY=s3cr3t" in env_file.read_text()
     # one fleet-level file reused by every replica
     assert all(s.env_file == str(env_file) for s in rt.runs)
+    # owner-only file inside an owner-only private directory
+    assert oct(env_file.stat().st_mode)[-3:] == "600"
+    env_dir = env_file.parent
+    assert oct(env_dir.stat().st_mode)[-3:] == "700"
     await mgr.stop()
     assert not env_file.exists()
+    assert not env_dir.exists()
 
 
 async def test_stop_stops_and_removes_all(bus: EventBus, tmp_path: Path) -> None:

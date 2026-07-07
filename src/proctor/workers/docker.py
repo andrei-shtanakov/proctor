@@ -10,6 +10,8 @@ clock are injected for tests.
 import asyncio
 import logging
 import os
+import shutil
+import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -62,6 +64,7 @@ class DockerWorkerManager:
         self._jitter = jitter_fn or _full_jitter
         self.slots: dict[int, SlotState] = {}
         self.env_file_path: Path | None = None
+        self._env_dir: Path | None = None
         self._poll_task: asyncio.Task[None] | None = None
         # crash tail captured at exit, carried to the restart event payload
         self._pending_tail: dict[int, str] = {}
@@ -72,14 +75,25 @@ class DockerWorkerManager:
     def _write_env_file(self) -> None:
         if not self._fleet.secret_env:
             return
-        path = self._tmp_dir / f"proctor_{self._fleet.base_worker_id}.env"
+        env_dir = tempfile.mkdtemp(
+            prefix=f"proctor_{self._fleet.base_worker_id}_",
+            dir=str(self._tmp_dir),
+        )
+        os.chmod(env_dir, 0o700)
+        self._env_dir = Path(env_dir)
+        path = self._env_dir / "fleet.env"
         lines = [
             f"{name}={self._environ[name]}"
             for name in self._fleet.secret_env
             if name in self._environ
         ]
-        path.write_text("\n".join(lines) + "\n")
-        path.chmod(0o600)
+        fd = os.open(
+            str(path),
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+        )
+        with os.fdopen(fd, "w") as f:
+            f.write("\n".join(lines) + "\n")
         self.env_file_path = path
 
     async def _launch(self, slot: int, at: datetime | None = None) -> None:
@@ -142,9 +156,10 @@ class DockerWorkerManager:
             except Exception:
                 logger.exception("Error stopping docker worker %s", state.worker_id)
         self.slots.clear()
-        if self.env_file_path is not None and self.env_file_path.exists():
-            self.env_file_path.unlink()
-            self.env_file_path = None
+        if self._env_dir is not None:
+            shutil.rmtree(self._env_dir, ignore_errors=True)
+            self._env_dir = None
+        self.env_file_path = None
 
 
 def _full_jitter(delay: float) -> float:
