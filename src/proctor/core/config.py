@@ -268,6 +268,10 @@ class DockerWorkerConfig(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     secret_env: list[str] = Field(default_factory=list)
     network: str | None = None
+    ssh_host: str | None = None
+    op_timeout: float = Field(default=30.0, gt=0.0)
+    op_margin: float = Field(default=10.0, gt=0.0)
+    max_unreachable_duration: float = Field(default=120.0, gt=0.0)
     poll_interval: float = Field(default=2.0, gt=0.0)
     stop_timeout: float = Field(default=30.0, gt=0.0)
     base_backoff: float = Field(default=1.0, gt=0.0)
@@ -275,6 +279,48 @@ class DockerWorkerConfig(BaseModel):
     max_restarts: int = Field(default=5, ge=1)
     stability_window: float = Field(default=60.0, gt=0.0)
     log_tail: int = Field(default=50, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_ssh_host(self) -> Self:
+        if self.ssh_host is not None and self.ssh_host.startswith("ssh://"):
+            raise ValueError(
+                "ssh_host must be [user@]host[:port] without a scheme; "
+                "the 'ssh://' prefix is added automatically"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_remote_nats_reachable(self) -> Self:
+        if self.ssh_host is None:
+            return self
+        unroutable = (
+            "host.docker.internal",
+            "localhost",
+            "127.0.0.1",
+            "::1",
+            "172.17.0.1",
+        )
+        for server in self.nats_servers:
+            if any(bad in server for bad in unroutable):
+                raise ValueError(
+                    f"remote fleet nats_servers {server!r} is unroutable from "
+                    "the remote host; set nats_servers to a core address "
+                    "reachable from there"
+                )
+        return self
+
+
+def docker_ssh_env(fleet: DockerWorkerConfig) -> dict[str, str]:
+    """Env that points a fleet's container client at its remote socket.
+
+    docker → DOCKER_HOST, podman → CONTAINER_HOST; local (no ssh_host) → {}.
+    """
+    if fleet.ssh_host is None:
+        return {}
+    url = f"ssh://{fleet.ssh_host}"
+    if fleet.runtime == "podman":
+        return {"CONTAINER_HOST": url}
+    return {"DOCKER_HOST": url}
 
 
 class RegistryConfig(BaseModel):

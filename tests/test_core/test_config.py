@@ -1003,3 +1003,89 @@ class TestDockerWorkerConfig:
 
     def test_empty_docker_workers_default(self) -> None:
         assert ProctorConfig().docker_workers == []
+
+
+class TestRemoteDockerConfig:
+    def test_ssh_host_defaults_none(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        fleet = DockerWorkerConfig(image="i", base_worker_id="d")
+        assert fleet.ssh_host is None
+        assert fleet.op_timeout == 30.0
+        assert fleet.op_margin == 10.0
+        assert fleet.max_unreachable_duration == 120.0
+
+    def test_ssh_host_with_scheme_rejected(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        with pytest.raises(ValidationError, match="ssh://"):
+            DockerWorkerConfig(image="i", base_worker_id="d", ssh_host="ssh://box")
+
+    def test_ssh_env_docker(self) -> None:
+        from proctor.core.config import DockerWorkerConfig, docker_ssh_env
+
+        fleet = DockerWorkerConfig(
+            image="i",
+            base_worker_id="d",
+            runtime="docker",
+            ssh_host="user@box:2222",
+            nats_servers=["nats://10.0.0.1:4222"],
+        )
+        assert docker_ssh_env(fleet) == {"DOCKER_HOST": "ssh://user@box:2222"}
+
+    def test_ssh_env_podman(self) -> None:
+        from proctor.core.config import DockerWorkerConfig, docker_ssh_env
+
+        fleet = DockerWorkerConfig(
+            image="i",
+            base_worker_id="d",
+            runtime="podman",
+            ssh_host="box",
+            nats_servers=["nats://10.0.0.1:4222"],
+        )
+        assert docker_ssh_env(fleet) == {"CONTAINER_HOST": "ssh://box"}
+
+    def test_ssh_env_local_empty(self) -> None:
+        from proctor.core.config import DockerWorkerConfig, docker_ssh_env
+
+        fleet = DockerWorkerConfig(image="i", base_worker_id="d")
+        assert docker_ssh_env(fleet) == {}
+
+    @pytest.mark.parametrize(
+        "server",
+        [
+            "nats://host.docker.internal:4222",
+            "nats://localhost:4222",
+            "nats://127.0.0.1:4222",
+            "nats://[::1]:4222",
+            "nats://172.17.0.1:4222",
+        ],
+    )
+    def test_remote_fleet_rejects_unroutable_nats(self, server: str) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        with pytest.raises(ValidationError, match="nats_servers"):
+            DockerWorkerConfig(
+                image="i",
+                base_worker_id="d",
+                ssh_host="box",
+                nats_servers=[server],
+            )
+
+    def test_remote_fleet_routable_nats_ok(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        fleet = DockerWorkerConfig(
+            image="i",
+            base_worker_id="d",
+            ssh_host="box",
+            nats_servers=["nats://10.0.0.1:4222"],
+        )
+        assert fleet.ssh_host == "box"
+
+    def test_local_fleet_keeps_default_nats(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        # no ssh_host → the host.docker.internal default is fine
+        fleet = DockerWorkerConfig(image="i", base_worker_id="d")
+        assert "host.docker.internal" in fleet.nats_servers[0]
