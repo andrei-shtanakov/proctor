@@ -2,7 +2,7 @@
 
 **Related spec:** `docs/superpowers/specs/2026-04-15-nats-transport-design.md`
 **Related plan:** `docs/superpowers/plans/2026-04-15-nats-transport.md`
-**Context:** Foundational event-transport layer for proctor-a distributed nodes. PR 68a established the `EventTransport` abstraction + `LocalEventTransport` with NATS-wildcard semantics. PR 68b adds `NATSEventTransport`. These 21 decisions were agreed during brainstorming (2026-04-14 — 2026-04-15) and locked before implementation.
+**Context:** Foundational event-transport layer for proctor distributed nodes. PR 68a established the `EventTransport` abstraction + `LocalEventTransport` with NATS-wildcard semantics. PR 68b adds `NATSEventTransport`. These 21 decisions were agreed during brainstorming (2026-04-14 — 2026-04-15) and locked before implementation.
 
 ---
 
@@ -323,7 +323,7 @@
 
 **Alternatives considered:**
 - Sequential dispatch (rejected — head-of-line blocking; one slow handler stalls the bus)
-- Trio/anyio nursery (rejected — proctor-a is asyncio-only)
+- Trio/anyio nursery (rejected — proctor is asyncio-only)
 
 **Consequences:** Handler execution order within one event is not guaranteed. Tests use `await asyncio.sleep(...)` or `bus.flush()` to serialize when needed. Fast-path performance is improved but tracing becomes harder.
 

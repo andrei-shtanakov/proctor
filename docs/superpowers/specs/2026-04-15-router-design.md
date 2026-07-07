@@ -340,7 +340,7 @@ Put specific rules before catch-all rules.
 
 The heuristic misses cases where patterns intersect without one being a
 subset (e.g. `trigger.a.*` vs `trigger.*.b`). This is acceptable for
-current proctor-a traffic — most patterns are two- or three-segment and
+current proctor traffic — most patterns are two- or three-segment and
 match by prefix. Future tightening tracked as "Risks" below.
 
 ## Error handling and observability
@@ -514,7 +514,7 @@ events go nowhere" regression — this issue closes it.
   Router or in an observability subscriber listening on `routing.*`.
 - **Shadow detection is heuristic.** `_is_strictly_broader` misses
   non-subset intersections like `trigger.a.*` vs `trigger.*.b`. Current
-  fnmatch usage in proctor-a doesn't hit this case. Tighten when needed.
+  fnmatch usage in proctor doesn't hit this case. Tighten when needed.
 - **Binding language is intentionally narrow.** Dotted path → string
   terminal covers the three current triggers. Webhook (LABS-66) may
   bring JSON bodies needing Jinja/JMESPath — track as a separate binding

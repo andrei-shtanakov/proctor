@@ -1,4 +1,4 @@
-# TODO — proctor-a (план от 2026-04-16)
+# TODO — proctor (план от 2026-04-16)
 
 > Роль в экосистеме: **первый реальный Mode-2 потребитель Maestro**. В roadmap экосистемы задач не имеет, но работает как живой dogfooding-стенд.
 > Стратегический контекст: `../_cowork_output/roadmap/ecosystem-roadmap.md`
@@ -15,7 +15,7 @@
 
 ## Правила ведения
 - После каждой выполненной задачи проставь `[x]` и добавь хеш коммита
-- **Dogfooding-обязанность**: если Maestro ломает задачу proctor-a, заводить issue в `../Maestro/` с конкретным воспроизведением (yaml + логи)
+- **Dogfooding-обязанность**: если Maestro ломает задачу proctor, заводить issue в `../Maestro/` с конкретным воспроизведением (yaml + логи)
 
 ---
 
@@ -41,7 +41,7 @@
 
 ### После R-03 (Maestro arbiter routing)
 
-- [ ] **Опционально включить arbiter routing** для proctor-a задач
+- [ ] **Опционально включить arbiter routing** для proctor задач
   - Сравнить качество: static routing vs arbiter routing на нашем pain-data
   - Это натуральный datapoint для R-07 (eval-driven routing validation)
 
@@ -59,4 +59,4 @@
 
 - ❌ Прямая интеграция с arbiter (маршрутизация приходит через Maestro)
 - ❌ Прямая интеграция с ATP (пока нет потребности в eval)
-- ❌ Ecosystem roadmap R-NN задачи (proctor-a там не упомянут)
+- ❌ Ecosystem roadmap R-NN задачи (proctor там не упомянут)

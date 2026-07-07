@@ -46,7 +46,7 @@ Out of scope / **deferred** (recorded so the door stays open):
   was part of the base extraction; events stay `docker_worker.*`.
 
 **Assumption (flag on review):** target remote hosts have a container
-runtime (docker/podman) and are hosts we control. proctor-a is a 0.1.0
+runtime (docker/podman) and are hosts we control. proctor is a 0.1.0
 dogfooding lab with no production fleet; the driving case is spreading
 load across controlled machines, which can run containers. If instead the
 real need is hosts that *cannot* run containers, stop and build the

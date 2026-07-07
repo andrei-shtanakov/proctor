@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Latest weekly status:** `../_cowork_output/status/2026-04-10-status.md`
 - **Sibling projects** (reference only): `../Maestro/`, `../arbiter/`, `../atp-platform/`, `../spec-runner/`
 
-proctor-a's role in the ecosystem: **first real Mode-2 consumer of Maestro**. Not named in ecosystem roadmap. Responsibility is dogfooding — when Maestro breaks a proctor-a task, file an issue with reproducible yaml + logs.
+proctor's role in the ecosystem: **first real Mode-2 consumer of Maestro**. Not named in ecosystem roadmap. Responsibility is dogfooding — when Maestro breaks a proctor task, file an issue with reproducible yaml + logs.
 
 ## `../_cowork_output/` is dev-only — never a code/runtime resource
 

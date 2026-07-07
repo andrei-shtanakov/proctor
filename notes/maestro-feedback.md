@@ -1,6 +1,6 @@
 # Maestro feedback — pain-points из Mode-2 runs
 
-> Обязанность proctor-a в экосистеме: первый реальный Mode-2 потребитель Maestro.
+> Обязанность proctor в экосистеме: первый реальный Mode-2 потребитель Maestro.
 > Каждый pain-point фиксируем здесь с воспроизведением (yaml + логи),
 > затем эскалируем как issue в `../Maestro/` или заметку в `../_cowork_output/`.
 
