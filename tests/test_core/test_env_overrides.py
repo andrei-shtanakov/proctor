@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from proctor.core.config import load_config
 
@@ -45,6 +46,20 @@ def test_worker_id_override(_yaml: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 def test_nats_servers_override(_yaml: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PROCTOR_NATS_SERVERS", "nats://a:4222,nats://b:4222")
     assert load_config(_yaml).nats.servers == ["nats://a:4222", "nats://b:4222"]
+
+
+def test_invalid_worker_id_override_raises(
+    _yaml: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An env override must still go through WorkerConfig's id pattern.
+
+    Proves _apply_env_overrides re-validates rather than bypassing pydantic
+    via model_copy: a bad PROCTOR_WORKER_ID must not silently reach NATS
+    subject construction.
+    """
+    monkeypatch.setenv("PROCTOR_WORKER_ID", "bad-id")
+    with pytest.raises(ValidationError):
+        load_config(_yaml)
 
 
 @pytest.mark.parametrize(

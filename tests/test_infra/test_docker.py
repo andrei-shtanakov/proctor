@@ -52,6 +52,8 @@ async def test_run_builds_argv() -> None:
     assert "-e" in argv
     assert "--env-file" in argv
     assert argv[argv.index("--env-file") + 1] == "/tmp/fleet.env"
+    assert "--label" in argv
+    assert "proctor.fleet=docker_py" in argv
     assert "--network" in argv
     assert argv[-1] == "proctor:latest"
 

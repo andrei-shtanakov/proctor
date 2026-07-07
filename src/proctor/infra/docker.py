@@ -8,13 +8,10 @@ docker-vs-podman JSON shape into one model.
 
 import asyncio
 import json
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import BaseModel, Field
-
-logger = logging.getLogger(__name__)
 
 RunCmd = Callable[[list[str]], Awaitable[tuple[int, str, str]]]
 
@@ -26,7 +23,11 @@ async def _default_run_cmd(argv: list[str]) -> tuple[int, str, str]:
         stderr=asyncio.subprocess.PIPE,
     )
     out, err = await proc.communicate()
-    return proc.returncode or 0, out.decode(), err.decode()
+    return (
+        proc.returncode or 0,
+        out.decode(errors="replace"),
+        err.decode(errors="replace"),
+    )
 
 
 class ContainerSpec(BaseModel):

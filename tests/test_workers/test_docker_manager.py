@@ -36,6 +36,7 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.runs: list[ContainerSpec] = []
         self.stopped: list[str] = []
+        self.stop_timeouts: list[float] = []
         self.removed: list[str] = []
         self.logged: list[str] = []
         self._n = 0
@@ -58,6 +59,7 @@ class FakeRuntime:
 
     async def stop(self, container_id: str, timeout: float) -> None:
         self.stopped.append(container_id)
+        self.stop_timeouts.append(timeout)
 
     async def remove(self, container_id: str) -> None:
         self.removed.append(container_id)
@@ -145,6 +147,17 @@ async def test_stop_stops_and_removes_all(bus: EventBus, tmp_path: Path) -> None
     await mgr.stop()
     assert sorted(rt.stopped) == sorted(cids)
     assert sorted(rt.removed) == sorted(cids)
+    # default fleet.stop_timeout (30.0) is passed through to runtime.stop
+    assert rt.stop_timeouts == [30.0] * len(cids)
+
+
+async def test_stop_passes_fleet_stop_timeout(bus: EventBus, tmp_path: Path) -> None:
+    rt = FakeRuntime()
+    mgr = _mgr(rt, bus, tmp_path, stop_timeout=5.0)
+    await mgr.start()
+    cids = [s.container_id for s in mgr.slots.values()]
+    await mgr.stop()
+    assert rt.stop_timeouts == [5.0] * len(cids)
 
 
 async def test_exit_captures_logs_then_removes_then_relaunches(

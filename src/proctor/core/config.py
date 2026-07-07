@@ -417,10 +417,10 @@ def _apply_env_overrides(config: ProctorConfig) -> ProctorConfig:
     updates: dict[str, object] = {}
     worker_updates: dict[str, object] = {}
     if (servers := os.environ.get("PROCTOR_NATS_SERVERS")) is not None:
-        nats = config.nats.model_copy(
-            update={"servers": [s.strip() for s in servers.split(",") if s.strip()]}
-        )
-        updates["nats"] = nats
+        nats_data = config.nats.model_dump() | {
+            "servers": [s.strip() for s in servers.split(",") if s.strip()]
+        }
+        updates["nats"] = NATSConfig.model_validate(nats_data)
     if (wid := os.environ.get("PROCTOR_WORKER_ID")) is not None:
         worker_updates["id"] = wid
     if (caps := os.environ.get("PROCTOR_WORKER_CAPABILITIES")) is not None:
@@ -428,10 +428,11 @@ def _apply_env_overrides(config: ProctorConfig) -> ProctorConfig:
             c.strip() for c in caps.split(",") if c.strip()
         ]
     if worker_updates:
-        updates["worker"] = config.worker.model_copy(update=worker_updates)
+        worker_data = config.worker.model_dump() | worker_updates
+        updates["worker"] = WorkerConfig.model_validate(worker_data)
     if not updates:
         return config
-    return config.model_copy(update=updates)
+    return ProctorConfig.model_validate(config.model_dump() | updates)
 
 
 def load_config(path: Path | str | None = None) -> ProctorConfig:
