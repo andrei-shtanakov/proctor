@@ -22,11 +22,13 @@ from proctor.core.router import Router
 from proctor.core.state import StateManager
 from proctor.core.transport import EventTransport, LocalEventTransport
 from proctor.core.transport.errors import TransportDrainingError
+from proctor.infra.docker import ContainerRuntime
 from proctor.router.models import AgentProfile, QueueEntry
 from proctor.router.router import TaskRouter
 from proctor.triggers.scheduler import SchedulerTrigger
 from proctor.triggers.telegram import TelegramTrigger
 from proctor.triggers.webhook import WebhookTrigger
+from proctor.workers.docker import DockerWorkerManager
 from proctor.workers.llm import episode_id_ctx, task_id_ctx
 from proctor.workers.node import WorkerNode
 from proctor.workers.registry import WorkerRegistry
@@ -107,6 +109,7 @@ class Application:
         self._scheduler: SchedulerTrigger | None = None
         self._webhook_trigger: WebhookTrigger | None = None
         self._worker_node: WorkerNode | None = None
+        self._docker_managers: list[DockerWorkerManager] = []
         # Subscribe in __init__ (ADR #19 — buffered until bus.start()).
         # Router and engine are nil until start(); _handle_trigger_event
         # checks before dispatching. A worker node must never react to
@@ -114,6 +117,7 @@ class Application:
         if config.node_role != "worker":
             self.bus.subscribe("trigger.>", self._handle_trigger_event)
             self.bus.subscribe("task.result", self._handle_task_result)
+            self.bus.subscribe("docker_worker.>", self._log_docker_event)
 
     def set_llm_call(self, llm_call: LLMCall) -> None:
         """Inject LLM callable and create WorkflowEngine."""
@@ -150,6 +154,15 @@ class Application:
             agent_provider=self._registry.alive_profiles,
         )
         self._tick_task = asyncio.create_task(self._queue_tick_loop())
+
+        for fleet in self.config.docker_workers:
+            manager = DockerWorkerManager(
+                ContainerRuntime(fleet.runtime),
+                fleet,
+                self.bus,
+            )
+            await manager.start()
+            self._docker_managers.append(manager)
 
         if self.config.telegram is not None:
             self._telegram_trigger = TelegramTrigger(self.config.telegram)
@@ -215,6 +228,9 @@ class Application:
                     # must proceed regardless.
                     logger.exception("Queue tick task exited with an error")
             self._tick_task = None
+        for manager in self._docker_managers:
+            await manager.stop()
+        self._docker_managers = []
         if self._registry is not None:
             await self._registry.stop()
             self._registry = None
@@ -511,6 +527,13 @@ class Application:
             # free this slot anymore. A failed save/publish must not leak
             # the reservation — release unconditionally.
             await self._release_and_spawn(task.id)
+
+    async def _log_docker_event(self, event: Event) -> None:
+        """Floor consumer for docker_worker.* so failures aren't silent."""
+        if event.type == "docker_worker.failed":
+            logger.error("Docker worker fleet failure: %s", event.payload)
+        else:
+            logger.info("Docker worker event %s: %s", event.type, event.payload)
 
     async def _handle_worker_lost(self, worker_id: str, instance_id: str) -> None:
         """Registry loss callback — exactly once per lost incarnation."""

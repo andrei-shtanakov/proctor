@@ -1,0 +1,11 @@
+# Base worker config baked into the image. worker.id, worker.capabilities,
+# and nats.servers are overridden per container by PROCTOR_* env vars
+# injected by the DockerWorkerManager. drain_timeout is deliberately
+# below the manager's default stop_timeout (30s) so graceful SIGTERM
+# drains fully before docker's SIGKILL.
+node_role: worker
+transport: nats
+worker:
+  id: placeholder_overridden_by_env
+events:
+  drain_timeout: 20.0

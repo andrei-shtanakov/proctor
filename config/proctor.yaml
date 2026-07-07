@@ -112,3 +112,17 @@ schedules:
 # registry:
 #   heartbeat_interval: 30.0
 #   liveness_timeout: 90.0
+#
+# Container worker fleets managed by the core (Phase 3). Each fleet is a
+# declared set of replicas; the core starts them, restarts on container
+# exit, and stops them on shutdown. worker_id churns per launch.
+# docker_workers:
+#   - image: proctor:latest
+#     base_worker_id: docker_py
+#     capabilities: [python, shell]
+#     replicas: 2
+#     runtime: podman              # or docker
+#     nats_servers: ["nats://host.docker.internal:4222"]  # container-facing
+#     secret_env: [ANTHROPIC_API_KEY]   # forwarded via one fleet env-file
+#     max_restarts: 5
+#     stop_timeout: 30.0           # must be >= container's drain_timeout
