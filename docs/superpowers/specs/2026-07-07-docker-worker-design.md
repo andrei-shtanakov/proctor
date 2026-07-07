@@ -84,11 +84,11 @@ are already covered by `test_stale_offline_ignored`,
 
 | File | Contents |
 |------|----------|
-| `infra/docker.py` | `ContainerRuntime(binary, run_cmd=...)` — async CLI wrapper. `run(spec) -> container_id`, `inspect(id) -> ContainerStatus`, `stop(id, timeout)`, `remove(id)`, `logs(id) -> str`. Every call shells out via `asyncio.create_subprocess_exec`; the exec function is injected (`run_cmd`) so unit tests fake subprocess with zero daemon. Pydantic `ContainerSpec` (image, name, env, env_file, labels, network) and `ContainerStatus` (id, state, exit_code, started_at). `inspect` uses `--format '{{json .}}'` — structured only, never scrape human output. `ContainerStatus.parse` normalizes the docker-vs-podman JSON shape divergence into one model. |
-| `workers/docker.py` | `DockerWorkerManager(runtime, config, bus, *, now_fn=None)` — owns a slot table `slot -> SlotState(worker_id, container_id, restarts, started_at)`. `start()` launches every declared replica; a poll loop (`poll_interval`) inspects containers, restarts exited ones with jittered backoff, resets the restart count after a stability window, and trips a slot to `failed` (publishing `docker_worker.failed`) past `max_restarts`. `stop()` gracefully stops+removes all containers. Same lifecycle discipline as the registry sweep / router tick loop: loop body exception-guarded, cancelled in `Application.stop()` before bus drain. |
+| `infra/docker.py` | `ContainerRuntime(binary, run_cmd=...)` — async CLI wrapper. `run(spec) -> container_id`, `inspect(id) -> ContainerStatus`, `stop(id, timeout)`, `remove(id)`, `logs(id, tail=...) -> str`. Every call shells out via `asyncio.create_subprocess_exec`; the exec function is injected (`run_cmd`) so unit tests fake subprocess with zero daemon. Pydantic `ContainerSpec` (image, name, env, env_file, labels, network, `restart_policy="no"`) and `ContainerStatus` (id, state, exit_code, started_at). `run` always passes `--restart=no` (see Restart policy — the manager owns restart). `inspect` uses `--format '{{json .}}'` — structured only, never scrape human output. `ContainerStatus.parse` normalizes the docker-vs-podman JSON shape divergence into one model. |
+| `workers/docker.py` | `DockerWorkerManager(runtime, config, bus, *, now_fn=None)` — owns a slot table `slot -> SlotState(worker_id, container_id, restarts, started_at)`. `start()` launches every declared replica; a poll loop (`poll_interval`) inspects containers, and on a detected exit: captures `logs(id, tail=N)` → `remove(old id)` → launches a fresh container (new worker_id) with jittered backoff. Resets the restart count after a stability window, and trips a slot to `failed` (publishing `docker_worker.failed` with the captured tail) past `max_restarts`. `stop()` gracefully stops+removes all containers and deletes the fleet env-file. Same lifecycle discipline as the registry sweep / router tick loop: loop body exception-guarded, cancelled in `Application.stop()` before bus drain. |
 | `Dockerfile` | Slim Python 3.12 base, installs proctor (with the `nats` extra), non-root user, entrypoint `python -m proctor --config /etc/proctor/worker.yaml`. The image ships a minimal base `worker.yaml` (`node_role: worker`, `transport: nats`); per-container specifics arrive via env overrides (below), so the same image serves every slot. |
-| `core/config.py` | `DockerWorkerConfig` (image, capabilities, replicas, runtime, env, network, base_worker_id, `nats_servers` — the **container-facing** NATS address) and `ProctorConfig.docker_workers: list[DockerWorkerConfig]`; env-var overrides in `load_config` (below). |
-| `core/bootstrap.py` | Wire `DockerWorkerManager` into the core/standalone branch (not worker role): construct after the registry, `start()` it, `stop()` it before drain. |
+| `core/config.py` | `DockerWorkerConfig` (image, capabilities, replicas, runtime, env, network, base_worker_id, `nats_servers` — the **container-facing** NATS address) and `ProctorConfig.docker_workers: list[DockerWorkerConfig]` with a validator that `base_worker_id` is unique across fleet entries (else two fleets' slots collapse onto the same worker_id keys); env-var overrides in `load_config` (below). |
+| `core/bootstrap.py` | Wire `DockerWorkerManager` into the core/standalone branch (not worker role): construct after the registry, `start()` it, `stop()` it before drain. Also subscribe a **log sink** on `docker_worker.>` so the crash-loop ceiling and restarts are never silent (see below). |
 
 ## Config injection into containers (Approach A)
 
@@ -120,9 +120,12 @@ Mechanism per container: the manager passes non-secret overrides via
 `docker run -e PROCTOR_WORKER_ID=... -e PROCTOR_WORKER_CAPABILITIES=... -e PROCTOR_NATS_SERVERS=...`.
 `PROCTOR_WORKER_ID` is injected by the manager (it generates the
 per-incarnation id) — never baked into the image. The **LLM key is
-passed via `--env-file`** (a temp file the manager writes `chmod 600`,
-removes on stop), not `-e`, because `-e` secrets are visible in
-`docker inspect` / process argv.
+passed via `--env-file`**, not `-e`, because `-e` secrets are visible in
+`docker inspect` / process argv. The key is one per fleet, so the
+manager writes **one fleet-level env-file** (`chmod 600`) on `start()`
+and reuses it for every replica and every restart, deleting it on
+`stop()` — not a per-container temp file, which a crash-loop would
+multiply.
 
 ## Restart policy
 
@@ -134,6 +137,13 @@ removes on stop), not `-e`, because `-e` secrets are visible in
   `liveness_timeout` later and cannot restart anything. Restarting on
   registry `worker.offline` was rejected: slower, and it would also fire
   for a merely-slow worker (flap).
+- **Runtime restart-policy is `no` (invariant):** every container is
+  launched with `--restart=no`. The manager owns restart exclusively;
+  the container runtime must not restart anything itself. A runtime-level
+  `--restart=always`/`on-failure` would bring the container back under
+  the **same** `container_id` and the **same** env — hence the same stale
+  `PROCTOR_WORKER_ID` — which the registry rejects for ~`liveness_timeout`,
+  reintroducing exactly the bug the fresh-id design removes.
 - **Backoff with jitter:** exponential base delay with **full jitter**,
   so a core-NATS blip that kills every slot at once does not produce a
   synchronized thundering-herd of restarts.
@@ -142,9 +152,34 @@ removes on stop), not `-e`, because `-e` secrets are visible in
   Without this, a slot that restarts rarely-but-regularly over weeks
   accumulates unrelated restarts and falsely trips the ceiling.
 - **Crash-loop ceiling:** past `max_restarts` (within the window) the
-  slot is marked `failed`, `docker_worker.failed` is published for the
-  operator, and the manager stops restarting that slot.
+  slot is marked `failed`, `docker_worker.failed` is published (with the
+  captured log tail — see Exit handling), and the manager stops
+  restarting that slot.
 - **Fresh id on every (re)start**, per the fencing section above.
+
+### Exit handling and container disposal
+
+On a detected exit the manager, in this order: (1) `logs(id, tail=N)` to
+capture the crash output *before* it is destroyed, (2) `remove(id)` the
+exited container, (3) launch a fresh container (new worker_id) after the
+jittered backoff. The captured tail is logged on every restart and
+carried in the `docker_worker.failed` payload at the ceiling — otherwise
+the operator's only outward signal has nothing to diagnose from.
+
+The container **`--name` equals the worker_id** (`{base}_{slot}_{suffix}`).
+Because the suffix is fresh per launch, names never collide with the
+lingering-but-exited previous container (it is removed anyway), and
+`docker ps` shows directly which worker_id each container is — the name
+tracks the incarnation.
+
+### Failure event has a sink
+
+`docker_worker.failed` is published "for the operator", but a bus event
+with no subscriber is a no-op. The core subscribes a **log sink** on
+`docker_worker.>` (restarts and ceiling-failures) in bootstrap, so the
+crash-loop ceiling can never trip silently. A richer consumer
+(operator notification, dashboard) is out of scope; the log sink is the
+floor.
 
 ## Graceful shutdown (drain vs abandon, made explicit)
 
@@ -184,14 +219,18 @@ offline is caught by the deadline reaper. No new task-recovery logic.
   **docker** JSON fixture and a captured **podman** JSON fixture (CI
   likely has only podman, so docker parsing is otherwise uncovered).
 - **Unit, `DockerWorkerManager`** with a fake `ContainerRuntime`: launches
-  `replicas` containers with distinct ids; a fresh id per (re)start;
-  exited container → restart; backoff increases and carries jitter;
+  `replicas` containers with distinct ids and `--restart=no`; a fresh id
+  per (re)start; exited container → **logs captured → old removed → new
+  launched** (assert that order); backoff increases and carries jitter;
   stability-window resets the counter; ceiling trips `failed` +
-  `docker_worker.failed`; `stop()` stops+removes all.
+  `docker_worker.failed` carrying the captured log tail; `stop()`
+  stops+removes all and deletes the fleet env-file.
   **Collision-on-manager-restart**: a new manager instance starting
   against a slot whose previous id is still "offline" picks a
   non-colliding fresh id (the argument for a unique, not sequential,
   suffix).
+- **Unit, config** — `base_worker_id` duplicated across two
+  `docker_workers` entries → ValidationError.
 - **Unit, `load_config` overrides** — `PROCTOR_NATS_SERVERS`,
   `PROCTOR_WORKER_ID`, `PROCTOR_WORKER_CAPABILITIES` (CSV boundaries:
   empty / one / many / surrounding whitespace); absence leaves YAML
