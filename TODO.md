@@ -8,6 +8,7 @@
 - ✅ Phase 2 завершена: triggers (terminal/telegram/scheduler/webhook), NATS-транспорт, EpisodicMemory, TaskRouter (admission: 4 инварианта + TTL-очередь)
 - ✅ Phase 3 (часть 1) — worker registry + remote dispatch: WorkerRegistry (liveness/fencing), capability scoring, WorkerNode (worker-role runtime), remote dispatch (rollback, loss policy, reaper); distribution loop покрыт как local-transport, так и multi-node NATS интеграционными тестами
 - ✅ Phase 3 (часть 2) — docker worker: core-managed container fleet (DockerWorkerManager + ContainerRuntime docker/podman CLI wrapper), fresh-id fencing, poll-loop restart (backoff/jitter/stability-reset/ceiling), Dockerfile + base worker config, integration test за `docker` pytest-маркером
+- ✅ Phase 3 (часть 3) — remote docker workers через `DOCKER_HOST=ssh://` (`ssh_host` на docker-fleet, per-op timeout с kill/reap, unreachable ceiling); bare-SSH backend отложен (rule-of-three)
 - ✅ Миграция asyncio → anyio завершена
 - ✅ Задачи TASK-00N идут через Maestro-спеки (`maestro: add spec for ...`) — первый реальный Mode-2 run
 - ✅ CI есть (GitHub Actions: unit + integration-nats с Toxiproxy reconnect-тестами)
