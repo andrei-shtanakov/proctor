@@ -54,7 +54,7 @@ pyrefly check                        # Type check (run after every change)
 **Key design decisions:**
 - Microkernel + distributed workers (no framework — pydantic + asyncio + own engine)
 - NATS (+ JetStream) for all inter-node messaging (single binary, covers pub/sub + queue + request/reply)
-- SQLite x3 for state: `state.db` (operational), `episodes.db` (history), `knowledge.db` (semantic memory + FTS5)
+- SQLite for state: `state.db` (operational), `episodes.db` (history) — implemented; `knowledge.db` (semantic memory + FTS5) is planned for Phase 4, not yet present
 - LiteLLM for multi-provider LLM calls; MCP for dynamic tool provisioning
 - Single operator (no multi-tenant complexity)
 
@@ -81,7 +81,7 @@ pyrefly check                        # Type check (run after every change)
 
 **Core model:** `Event` (typed messages), `Task` (status machine: pending→assigned→running→completed/failed), `Episode` (agent interaction record for episodic memory), `Envelope` (NATS message wrapper with correlation_id, reply_to, TTL).
 
-**NATS topics:** `proctor.events.>` (pub/sub), `proctor.tasks.{submit,assign,result}` (request/reply + queue), `proctor.agents.{id}.inbox` (direct), `proctor.mcp.proxy.{id}.call` (tool calls), `proctor.operator.{notify,ask,command}`.
+**Event subjects (implemented, dot-namespace — no `proctor.` prefix):** `trigger.{terminal,telegram,scheduler,webhook.<source>}` (inputs), `routing.{unmatched,binding_failed,queued,dequeued,expired,rejected}` (admission observability), `task.assign.{worker_id}` (dispatch to a worker), `task.result` (worker → core), `task.{completed,failed}` (outcome), `worker.{registered,heartbeat,offline}` (registry protocol, full-profile heartbeat), `docker_worker.{restarted,failed}` (fleet lifecycle). The same subjects work identically over Local and NATS transport. The architecture doc's `proctor.`-prefixed scheme (`proctor.mcp.proxy.*`, `proctor.operator.*`, `agents.{id}.inbox`) is design intent for later phases, not the current wire contract.
 
 ## Tech Stack
 
