@@ -39,6 +39,7 @@ class SlotState(BaseModel):
     started_at: datetime
     restart_at: datetime | None = None
     state: str = "running"  # running | backoff | failed
+    unreachable_since: datetime | None = None
 
 
 class DockerWorkerManager:
@@ -134,8 +135,32 @@ class DockerWorkerManager:
         """Write the fleet env-file and launch all replicas."""
         self._write_env_file()
         for slot in range(self._fleet.replicas):
-            await self._launch(slot)
+            await self._launch_slot(slot, self._now())
         self._poll_task = asyncio.create_task(self._poll_loop())
+
+    async def _launch_slot(self, slot: int, now: datetime) -> bool:
+        """Launch a slot; on failure schedule a backoff retry (or fail).
+
+        Returns True on success. Ensures a SlotState exists so a launch
+        that fails before any container is created still carries restart
+        bookkeeping and is retried by the poll loop.
+        """
+        try:
+            await self._launch(slot, at=now)
+            return True
+        except Exception:
+            logger.exception("Launch failed for docker slot %d", slot)
+            if slot not in self.slots:
+                self.slots[slot] = SlotState(
+                    slot=slot,
+                    worker_id="",
+                    container_id="",
+                    restarts=0,
+                    started_at=now,
+                    state="backoff",
+                )
+            await self._backoff_or_fail(slot, now, tail="", reason="launch_failed")
+            return False
 
     async def _poll_loop(self) -> None:
         while True:
@@ -154,7 +179,12 @@ class DockerWorkerManager:
                 if state.restart_at is not None and now >= state.restart_at:
                     await self._relaunch(slot, now)
                 continue
-            status = await self._rt.inspect(state.container_id)
+            try:
+                status = await self._rt.inspect(state.container_id)
+            except Exception:
+                await self._handle_unreachable(slot, now)
+                continue
+            state.unreachable_since = None  # recovery reset
             if status.state == "exited":
                 await self._handle_exit(slot, now)
             elif (now - state.started_at).total_seconds() >= (
@@ -174,14 +204,21 @@ class DockerWorkerManager:
             await self._rt.remove(state.container_id)
         except Exception:
             logger.exception("Failed to remove %s", state.container_id)
+        await self._backoff_or_fail(slot, now, tail, reason="exited")
 
+    async def _backoff_or_fail(
+        self, slot: int, now: datetime, tail: str, reason: str
+    ) -> None:
+        """Increment restarts; schedule backoff, or trip the ceiling."""
+        state = self.slots[slot]
         next_restarts = state.restarts + 1
         if next_restarts > self._fleet.max_restarts:
             state.state = "failed"
             state.restarts = next_restarts
             logger.error(
-                "Docker worker slot %d exceeded max_restarts; last logs:\n%s",
+                "Docker worker slot %d exceeded max_restarts (%s); last logs:\n%s",
                 slot,
+                reason,
                 tail,
             )
             await self._bus.publish(
@@ -192,12 +229,12 @@ class DockerWorkerManager:
                         "base_worker_id": self._fleet.base_worker_id,
                         "slot": slot,
                         "restarts": next_restarts,
+                        "reason": reason,
                         "log_tail": tail,
                     },
                 )
             )
             return
-
         delay = min(
             self._fleet.base_backoff * (2 ** (next_restarts - 1)),
             self._fleet.max_backoff,
@@ -207,9 +244,34 @@ class DockerWorkerManager:
         state.restart_at = now + timedelta(seconds=self._jitter(delay))
         self._pending_tail[slot] = tail
 
+    async def _handle_unreachable(self, slot: int, now: datetime) -> None:
+        """A failed inspect: start/continue the unreachable timer, or fail."""
+        state = self.slots[slot]
+        if state.unreachable_since is None:
+            state.unreachable_since = now
+            logger.warning("Docker worker slot %d unreachable", slot)
+            return
+        if (now - state.unreachable_since).total_seconds() >= (
+            self._fleet.max_unreachable_duration
+        ):
+            state.state = "failed"
+            logger.error("Docker worker slot %d unreachable past ceiling", slot)
+            await self._bus.publish(
+                Event(
+                    type="docker_worker.failed",
+                    source=_SOURCE,
+                    payload={
+                        "base_worker_id": self._fleet.base_worker_id,
+                        "slot": slot,
+                        "reason": "unreachable",
+                    },
+                )
+            )
+
     async def _relaunch(self, slot: int, now: datetime) -> None:
         tail = self._pending_tail.pop(slot, "")
-        await self._launch(slot, at=now)  # fresh worker_id; preserves restarts
+        if not await self._launch_slot(slot, now):
+            return  # launch failed; backoff already rescheduled
         logger.info(
             "Restarted docker worker slot %d (restart #%d)",
             slot,
@@ -241,6 +303,8 @@ class DockerWorkerManager:
                     logger.exception("Docker poll loop exited with error")
             self._poll_task = None
         for state in self.slots.values():
+            if not state.container_id:
+                continue  # launch-failed slot never created a container
             # stop and remove independently: if the container is already
             # gone (e.g. it exited between poll and teardown), stop() may
             # raise, but remove() must still run so nothing is leaked.

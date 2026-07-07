@@ -67,7 +67,7 @@ pyrefly check                        # Type check (run after every change)
 | `workflow/` | Pipeline engine — WorkflowSpec model, DAG executor (topo-sort + parallel), WorkflowEngine dispatcher. Supports simple and DAG modes |
 | `workers/` | Agent Runtime + WorkerRegistry (discovery/liveness) + WorkerNode (worker-role runtime) + DockerWorkerManager (container fleet lifecycle). Future: remote.py |
 | `router/` | Admission layer (M4) — TaskRouter: 4 safety invariants, TTL pending queue, capability-scoring seam for Phase 3 |
-| `infra/` | Thin async CLI wrappers — `docker.py` (ContainerRuntime). Future: ssh.py, vagrant.py |
+| `infra/` | Thin async CLI wrappers — `docker.py` (ContainerRuntime; remote fleets via `ssh_host` — see `docs/remote-workers.md`). Future: ssh.py, vagrant.py |
 
 **Planned modules** (not yet implemented):
 
@@ -97,7 +97,7 @@ Phase 0 (Foundation) and Phase 1 (MVP) are complete. Phase 2 is complete.
 
 **Current phase:** Phase 2 complete. The system accepts terminal input, Telegram messages, webhooks, and scheduled events. Executes simple and DAG workflows via LLM. Persists task state and episodic history in SQLite. Events flow over local or NATS transport. Admission layer enforces 4 safety invariants with TTL-pending queue semantics. Tasks requiring specific capabilities are dispatched to remote workers over local or NATS transport, with liveness-based loss handling. The core can also launch and supervise container-based worker fleets directly.
 
-**Next:** Phase 3 continues — workers/remote.py (SSH), mcp/.
+**Next:** Phase 3 — mcp/ (SSH bare-host worker deferred).
 
 ## Key Conventions
 

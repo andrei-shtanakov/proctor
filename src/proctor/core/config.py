@@ -5,6 +5,7 @@ import os
 import re
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
+from urllib.parse import urlsplit
 
 import yaml
 from croniter import croniter
@@ -14,6 +15,15 @@ from proctor.core.globs import is_strictly_broader
 from proctor.workflow.spec import WorkflowSpec
 
 logger = logging.getLogger(__name__)
+
+# Hosts that never resolve back to the core from a remote docker fleet's
+# host (loopback/docker-bridge addresses meaningful only on that box).
+# Compared by exact hostname (via urlsplit), never by substring — a
+# substring check would false-reject look-alikes like 172.17.0.10 or
+# nats://[2001:db8::1]:4222 (which merely contains "::1").
+_UNROUTABLE_NATS_HOSTS = frozenset(
+    {"host.docker.internal", "localhost", "127.0.0.1", "::1", "172.17.0.1"}
+)
 
 
 class LLMConfig(BaseModel):
@@ -268,6 +278,10 @@ class DockerWorkerConfig(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     secret_env: list[str] = Field(default_factory=list)
     network: str | None = None
+    ssh_host: str | None = None
+    op_timeout: float = Field(default=30.0, gt=0.0)
+    op_margin: float = Field(default=10.0, gt=0.0)
+    max_unreachable_duration: float = Field(default=120.0, gt=0.0)
     poll_interval: float = Field(default=2.0, gt=0.0)
     stop_timeout: float = Field(default=30.0, gt=0.0)
     base_backoff: float = Field(default=1.0, gt=0.0)
@@ -275,6 +289,47 @@ class DockerWorkerConfig(BaseModel):
     max_restarts: int = Field(default=5, ge=1)
     stability_window: float = Field(default=60.0, gt=0.0)
     log_tail: int = Field(default=50, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_ssh_host(self) -> Self:
+        # Reject ANY scheme (not just ssh://): the prefix is added
+        # automatically, so http://box would become ssh://http://box.
+        if self.ssh_host is not None and "://" in self.ssh_host:
+            raise ValueError(
+                "ssh_host must be [user@]host[:port] without a scheme; "
+                "the 'ssh://' prefix is added automatically"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_remote_nats_reachable(self) -> Self:
+        if self.ssh_host is None:
+            return self
+        for server in self.nats_servers:
+            # A scheme-less `host:port` misparses (hostname None); retry
+            # with a `//` netloc marker so the check is never silently
+            # skipped for a remote fleet.
+            hostname = urlsplit(server).hostname or urlsplit(f"//{server}").hostname
+            if hostname is not None and hostname.lower() in _UNROUTABLE_NATS_HOSTS:
+                raise ValueError(
+                    f"remote fleet nats_servers {server!r} is unroutable from "
+                    "the remote host; set nats_servers to a core address "
+                    "reachable from there"
+                )
+        return self
+
+
+def docker_ssh_env(fleet: DockerWorkerConfig) -> dict[str, str]:
+    """Env that points a fleet's container client at its remote socket.
+
+    docker → DOCKER_HOST, podman → CONTAINER_HOST; local (no ssh_host) → {}.
+    """
+    if fleet.ssh_host is None:
+        return {}
+    url = f"ssh://{fleet.ssh_host}"
+    if fleet.runtime == "podman":
+        return {"CONTAINER_HOST": url}
+    return {"DOCKER_HOST": url}
 
 
 class RegistryConfig(BaseModel):

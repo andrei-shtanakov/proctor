@@ -9,26 +9,45 @@ docker-vs-podman JSON shape into one model.
 import asyncio
 import json
 import math
+import os
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-RunCmd = Callable[[list[str]], Awaitable[tuple[int, str, str]]]
+RunCmd = Callable[[list[str], float | None], Awaitable[tuple[int, str, str]]]
 
 
-async def _default_run_cmd(argv: list[str]) -> tuple[int, str, str]:
-    proc = await asyncio.create_subprocess_exec(
-        *argv,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    out, err = await proc.communicate()
-    return (
-        proc.returncode or 0,
-        out.decode(errors="replace"),
-        err.decode(errors="replace"),
-    )
+def _make_default_run_cmd(env: dict[str, str] | None) -> RunCmd:
+    """Build a subprocess runner with `env` merged over os.environ.
+
+    Applies a per-call deadline and, on expiry, explicitly kills and
+    reaps the child (a bare asyncio.timeout only cancels the await and
+    would leak the ssh/docker process as a zombie).
+    """
+    merged = {**os.environ, **(env or {})}
+
+    async def run_cmd(argv: list[str], timeout: float | None) -> tuple[int, str, str]:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=merged,
+        )
+        try:
+            async with asyncio.timeout(timeout):
+                out, err = await proc.communicate()
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError(f"{' '.join(argv)} timed out after {timeout}s") from None
+        return (
+            proc.returncode or 0,
+            out.decode(errors="replace"),
+            err.decode(errors="replace"),
+        )
+
+    return run_cmd
 
 
 class ContainerSpec(BaseModel):
@@ -65,13 +84,23 @@ class ContainerStatus(BaseModel):
 class ContainerRuntime:
     """Async CLI wrapper; `binary` is `docker` or `podman`."""
 
-    def __init__(self, binary: str, run_cmd: RunCmd | None = None) -> None:
+    def __init__(
+        self,
+        binary: str,
+        run_cmd: RunCmd | None = None,
+        *,
+        env: dict[str, str] | None = None,
+        op_timeout: float = 30.0,
+        op_margin: float = 10.0,
+    ) -> None:
         self._binary = binary
-        self._run = run_cmd or _default_run_cmd
+        self._run = run_cmd or _make_default_run_cmd(env)
+        self._op_timeout = op_timeout
+        self._op_margin = op_margin
 
-    async def _exec(self, args: list[str]) -> str:
+    async def _exec(self, args: list[str], timeout: float | None) -> str:
         argv = [self._binary, *args]
-        rc, out, err = await self._run(argv)
+        rc, out, err = await self._run(argv, timeout)
         if rc != 0:
             raise RuntimeError(
                 f"{' '.join(argv)} exited {rc}: {err.strip() or out.strip()}"
@@ -96,10 +125,12 @@ class ContainerRuntime:
         if spec.network is not None:
             args += ["--network", spec.network]
         args.append(spec.image)
-        return (await self._exec(args)).strip()
+        return (await self._exec(args, self._op_timeout)).strip()
 
     async def inspect(self, container_id: str) -> ContainerStatus:
-        out = await self._exec(["inspect", "--format", "{{json .}}", container_id])
+        out = await self._exec(
+            ["inspect", "--format", "{{json .}}", container_id], self._op_timeout
+        )
         return ContainerStatus.parse(json.loads(out))
 
     async def stop(self, container_id: str, timeout: float) -> None:
@@ -107,10 +138,15 @@ class ContainerRuntime:
         # never floors to 0 (which would SIGKILL immediately, defeating
         # the drain window).
         secs = max(1, math.ceil(timeout)) if timeout > 0 else 0
-        await self._exec(["stop", "-t", str(secs), container_id])
+        await self._exec(
+            ["stop", "-t", str(secs), container_id],
+            float(secs) + self._op_margin,
+        )
 
     async def remove(self, container_id: str) -> None:
-        await self._exec(["rm", "-f", container_id])
+        await self._exec(["rm", "-f", container_id], self._op_timeout)
 
     async def logs(self, container_id: str, tail: int) -> str:
-        return await self._exec(["logs", "--tail", str(tail), container_id])
+        return await self._exec(
+            ["logs", "--tail", str(tail), container_id], self._op_timeout
+        )
