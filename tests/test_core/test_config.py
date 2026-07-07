@@ -1021,6 +1021,37 @@ class TestRemoteDockerConfig:
         with pytest.raises(ValidationError, match="ssh://"):
             DockerWorkerConfig(image="i", base_worker_id="d", ssh_host="ssh://box")
 
+    def test_ssh_host_any_scheme_rejected(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        for bad in ("http://box", "tcp://box", "ssh://box"):
+            with pytest.raises(ValidationError, match="without a scheme"):
+                DockerWorkerConfig(image="i", base_worker_id="d", ssh_host=bad)
+
+    def test_schemeless_unroutable_nats_still_rejected(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        # `localhost:4222` (no scheme) misparses under urlsplit; the
+        # validator must still catch it for a remote fleet.
+        with pytest.raises(ValidationError, match="nats_servers"):
+            DockerWorkerConfig(
+                image="i",
+                base_worker_id="d",
+                ssh_host="box",
+                nats_servers=["localhost:4222"],
+            )
+
+    def test_schemeless_routable_nats_ok(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        fleet = DockerWorkerConfig(
+            image="i",
+            base_worker_id="d",
+            ssh_host="box",
+            nats_servers=["10.0.0.1:4222"],
+        )
+        assert fleet.ssh_host == "box"
+
     def test_ssh_env_docker(self) -> None:
         from proctor.core.config import DockerWorkerConfig, docker_ssh_env
 

@@ -292,7 +292,9 @@ class DockerWorkerConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_ssh_host(self) -> Self:
-        if self.ssh_host is not None and self.ssh_host.startswith("ssh://"):
+        # Reject ANY scheme (not just ssh://): the prefix is added
+        # automatically, so http://box would become ssh://http://box.
+        if self.ssh_host is not None and "://" in self.ssh_host:
             raise ValueError(
                 "ssh_host must be [user@]host[:port] without a scheme; "
                 "the 'ssh://' prefix is added automatically"
@@ -304,7 +306,10 @@ class DockerWorkerConfig(BaseModel):
         if self.ssh_host is None:
             return self
         for server in self.nats_servers:
-            hostname = urlsplit(server).hostname
+            # A scheme-less `host:port` misparses (hostname None); retry
+            # with a `//` netloc marker so the check is never silently
+            # skipped for a remote fleet.
+            hostname = urlsplit(server).hostname or urlsplit(f"//{server}").hostname
             if hostname is not None and hostname.lower() in _UNROUTABLE_NATS_HOSTS:
                 raise ValueError(
                     f"remote fleet nats_servers {server!r} is unroutable from "
