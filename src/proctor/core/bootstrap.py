@@ -15,6 +15,7 @@ from proctor.core.bus import EventBus
 from proctor.core.config import (
     ProctorConfig,
     _resolve_transport_mode_static,
+    docker_ssh_env,
 )
 from proctor.core.memory import EpisodicMemory
 from proctor.core.models import Episode, Event, Task, TaskStatus
@@ -157,7 +158,12 @@ class Application:
 
         for fleet in self.config.docker_workers:
             manager = DockerWorkerManager(
-                ContainerRuntime(fleet.runtime),
+                ContainerRuntime(
+                    fleet.runtime,
+                    env=docker_ssh_env(fleet),
+                    op_timeout=fleet.op_timeout,
+                    op_margin=fleet.op_margin,
+                ),
                 fleet,
                 self.bus,
             )

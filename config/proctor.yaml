@@ -126,3 +126,13 @@ schedules:
 #     secret_env: [ANTHROPIC_API_KEY]   # forwarded via one fleet env-file
 #     max_restarts: 5
 #     stop_timeout: 30.0           # must be >= container's drain_timeout
+#   - image: proctor:latest
+#     base_worker_id: remote_gpu
+#     capabilities: [python]
+#     replicas: 1
+#     runtime: docker
+#     ssh_host: user@gpu-box:22        # [user@]host[:port], no ssh:// prefix
+#     nats_servers: ["nats://10.0.0.5:4222"]  # core address routable FROM the host
+#     secret_env: [ANTHROPIC_API_KEY]
+#     op_timeout: 30.0                 # deadline for fast ops (kills a hung ssh)
+#     max_unreachable_duration: 120.0  # then the slot is failed
