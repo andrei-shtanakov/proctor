@@ -89,11 +89,25 @@ Two changes to `ContainerRuntime` (both needed for remote correctness):
    timeout of tens of seconds to minutes). Today `_default_run_cmd` awaits
    `communicate()` with no deadline and `_poll_once` awaits `inspect`
    unwrapped, so one hung op stalls the **entire poll loop for every slot**
-   — worse than the silent-stuck-slot it was meant to fix. Every runtime
-   op therefore runs under `op_timeout` (via `asyncio.timeout`); on expiry
-   the subprocess is **killed** and the op raises `RuntimeError`
-   (timeout), which feeds the unreachable logic below. `op_timeout`
-   defaults from a fleet config field (`op_timeout: float`, e.g. 30s).
+   — worse than the silent-stuck-slot it was meant to fix. Each runtime op
+   runs under a deadline: on expiry `_default_run_cmd` **explicitly kills
+   the subprocess and reaps it** (`proc.kill()` then `await proc.wait()`)
+   before raising `RuntimeError` — a bare `asyncio.timeout` around
+   `communicate()` only cancels the await and would leak the ssh/docker
+   child as a zombie (and fail the "process is gone" test). The raised
+   timeout feeds the unreachable logic below.
+
+   **`stop` gets its own budget, not `op_timeout` (finding A).** `stop` is
+   `docker stop -t <stop_timeout>`; a container that ignores SIGTERM for
+   the full grace window makes `stop` legitimately take ~`stop_timeout`
+   (+ ssh latency). If it ran under the same `op_timeout` (both default
+   30s), the deadline would kill the client **mid-drain** — breaking the
+   graceful shutdown it exists to protect, even locally (default vs
+   default). So poll/inspect/run/remove/logs use `op_timeout` (they must
+   be fast); `stop` uses `stop_timeout + op_margin` (ssh/latency headroom),
+   so it can never be cut before its own grace completes. `op_timeout`
+   (`op_timeout: float`, e.g. 30s) and `op_margin` (e.g. 10s) are fleet
+   config fields.
 
 The op-timeout is the code-side **guarantee** that a hang is bounded.
 Fail-fast SSH options (below) are an operational optimization that turns
@@ -133,16 +147,22 @@ instead of retrying forever.
   prepends `ssh://`). A validator **rejects** a value already starting
   with `ssh://` (single owner of the scheme prefix; prevents
   `ssh://ssh://box`).
-- `op_timeout: float = Field(default=30.0, gt=0.0)`.
+- `op_timeout: float = Field(default=30.0, gt=0.0)` — deadline for
+  poll/inspect/run/remove/logs (fast ops).
+- `op_margin: float = Field(default=10.0, gt=0.0)` — extra headroom on
+  `stop`'s deadline over its `-t` grace, so drain is never cut short.
 - `max_unreachable_duration: float = Field(default=120.0, gt=0.0)`.
 
 **NATS-reachability validator (semantic, not "non-default"):** if
 `ssh_host` is set AND any entry in `nats_servers` contains
-`host.docker.internal`, `localhost`, `127.0.0.1`, or `::1`, raise
-ValidationError — those addresses never resolve to the core from a remote
-host. This catches the misconfiguration by value (a loopback/docker-internal
-address) rather than by comparing against the default object, which
-pydantic cannot distinguish from a user re-typing the same value.
+`host.docker.internal`, `localhost`, `127.0.0.1`, `::1`, or `172.17.0.1`
+(the default docker bridge IP — the next-most-common footgun after
+`host.docker.internal`), raise ValidationError — those addresses never
+resolve to the core from a remote host. This catches the misconfiguration
+by value (a loopback/docker-internal address) rather than by comparing
+against the default object, which pydantic cannot distinguish from a user
+re-typing the same value. It cannot catch every unroutable private IP, but
+covers the common footguns.
 
 ## Operational preconditions (docs, not code)
 
@@ -152,6 +172,11 @@ runtime must carry: the `ssh` binary, a usable private key (agent or
 mounted), and a `known_hosts` entry for each remote host. The current
 image ships none of these — documented as a hard precondition in a
 CLAUDE.md / README remote section, and exercised by the integration smoke.
+
+**Podman remote is heavier than docker (finding D):** `CONTAINER_HOST=ssh://`
+requires the remote host to run the `podman system service` (socket-activated)
+— not just an installed binary. The remote-setup docs must call this out
+alongside the ssh/key/known_hosts preconditions.
 
 Recommended per-host `~/.ssh/config` (turns missing-key/host-key and dead
 hosts from hangs into fast failures, complementing the op-timeout):
@@ -177,6 +202,14 @@ ssh config; the code-side `op_timeout` is the backstop for any not set.
   to `failed(reason="unreachable")` and the host later returns, the remote
   container may still be alive; the failed slot does not reap it. Low
   priority for v1; noted.
+- **Untracked container from a timed-out `run` (finding C).** If a `run`
+  is killed by `op_timeout` but the container actually started on the
+  remote host, the manager never recorded its id, so the next `_launch`
+  proceeds with a fresh worker_id (no name collision) while the orphan
+  keeps running and heartbeating to NATS — worse than the tracked
+  orphan above, because nothing knows it exists. Bounded by the crash-loop
+  ceiling on the slot, but the stray container persists until an operator
+  reaps it. Recorded; a future reconcile-by-label sweep would close it.
 - Sequential per-tick polling: a dead host's replicas each cost up to
   `op_timeout` per tick (they share the down host). Fine for small fleets;
   parallelizing inspects is a future optimization.
@@ -192,10 +225,14 @@ ssh config; the code-side `op_timeout` is the backstop for any not set.
 - **Unit, ContainerRuntime** — `env` is merged into the subprocess
   environment (two runtimes with different env don't clobber; verified via
   a fake run_cmd capturing the env it was given — extend the fake to
-  receive env); `op_timeout` kills a hanging op and raises: a focused test
-  runs a real trivial `sleep`-style command via the default run_cmd with a
-  tiny `op_timeout` and asserts it raises and the process is gone (no
-  docker/ssh needed).
+  receive env); `op_timeout` kills a hanging op and **reaps** it: a focused
+  test runs a real trivial `sleep`-style command via the default run_cmd
+  with a tiny `op_timeout` and asserts it raises **and the child process is
+  gone** (pid not alive — proves kill+reap, not just await-cancel; no
+  docker/ssh needed); `stop`'s deadline is `stop_timeout + op_margin`, not
+  `op_timeout` — a fake whose `stop` sleeps longer than `op_timeout` but
+  within `stop_timeout + op_margin` completes rather than being cut
+  (guards finding A: drain isn't killed mid-grace).
 - **Unit, manager unreachable** (fake runtime whose `inspect` raises):
   a single failure does not stall the loop or trip failure immediately;
   after `max_unreachable_duration` the slot is `failed` with
