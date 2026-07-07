@@ -282,3 +282,112 @@ async def test_stop_removes_even_if_stop_raises(bus: EventBus, tmp_path: Path) -
     await mgr.stop()
     # stop raised for each, but remove ran for all — nothing leaked
     assert sorted(rt.removed) == sorted(cids)
+
+
+async def test_inspect_failure_does_not_stall_other_slots(
+    bus: EventBus, tmp_path: Path
+) -> None:
+    """One unreachable slot must not block polling the others."""
+    rt = FakeRuntime()
+    mgr = _mgr(rt, bus, tmp_path, replicas=2)
+    await mgr.start()
+    try:
+        good = mgr.slots[1].container_id
+
+        async def flaky_inspect(container_id: str):  # type: ignore[no-untyped-def]
+            if container_id == mgr.slots[0].container_id:
+                raise RuntimeError("unreachable")
+            return ContainerStatus(
+                id=container_id,
+                state="running",
+                exit_code=0,
+                started_at="2026-07-07T12:00:00Z",
+            )
+
+        rt.inspect = flaky_inspect  # type: ignore[method-assign]
+        await mgr._poll_once(T0)
+        # slot 0 marked unreachable, slot 1 still inspected (unchanged)
+        assert mgr.slots[0].unreachable_since == T0
+        assert mgr.slots[1].container_id == good
+        assert mgr.slots[1].state == "running"
+    finally:
+        await mgr.stop()
+
+
+async def test_unreachable_ceiling_fails_slot(bus: EventBus, tmp_path: Path) -> None:
+    from datetime import timedelta
+
+    events: list[object] = []
+
+    async def collect(event: object) -> None:
+        events.append(event)
+
+    bus.subscribe("docker_worker.>", collect)
+    rt = FakeRuntime()
+    mgr = _mgr(rt, bus, tmp_path, replicas=1, max_unreachable_duration=60.0)
+    await mgr.start()
+    try:
+
+        async def dead_inspect(container_id: str):  # type: ignore[no-untyped-def]
+            raise RuntimeError("host down")
+
+        rt.inspect = dead_inspect  # type: ignore[method-assign]
+        await mgr._poll_once(T0)  # marks unreachable_since
+        assert mgr.slots[0].state == "running"
+        await mgr._poll_once(T0 + timedelta(seconds=59))  # still under ceiling
+        assert mgr.slots[0].state == "running"
+        await mgr._poll_once(T0 + timedelta(seconds=60))  # ceiling
+        assert mgr.slots[0].state == "failed"
+        await bus.flush()
+        failed = [e for e in events if getattr(e, "type", "") == "docker_worker.failed"]
+        assert failed
+        assert getattr(failed[0], "payload", {})["reason"] == "unreachable"
+    finally:
+        await mgr.stop()
+
+
+async def test_recovery_resets_unreachable_since(bus: EventBus, tmp_path: Path) -> None:
+    from datetime import timedelta
+
+    rt = FakeRuntime()
+    mgr = _mgr(rt, bus, tmp_path, replicas=1, max_unreachable_duration=60.0)
+    await mgr.start()
+    try:
+        fail = {"on": True}
+
+        async def flapping_inspect(container_id: str):  # type: ignore[no-untyped-def]
+            if fail["on"]:
+                raise RuntimeError("blip")
+            return ContainerStatus(
+                id=container_id,
+                state="running",
+                exit_code=0,
+                started_at="2026-07-07T12:00:00Z",
+            )
+
+        rt.inspect = flapping_inspect  # type: ignore[method-assign]
+        await mgr._poll_once(T0)
+        assert mgr.slots[0].unreachable_since == T0
+        fail["on"] = False  # tunnel recovers
+        await mgr._poll_once(T0 + timedelta(seconds=30))
+        assert mgr.slots[0].unreachable_since is None  # reset
+    finally:
+        await mgr.stop()
+
+
+async def test_launch_failure_at_start_backs_off_not_crash(
+    bus: EventBus, tmp_path: Path
+) -> None:
+    rt = FakeRuntime()
+
+    async def boom_run(spec: object) -> str:
+        raise RuntimeError("remote host down")
+
+    rt.run = boom_run  # type: ignore[method-assign]
+    mgr = _mgr(rt, bus, tmp_path, replicas=1)
+    await mgr.start()  # must NOT raise
+    try:
+        assert mgr.slots[0].state == "backoff"
+        assert mgr.slots[0].restarts == 1
+    finally:
+        await mgr.stop()
