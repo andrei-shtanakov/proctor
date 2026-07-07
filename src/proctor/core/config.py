@@ -1,6 +1,7 @@
 """Configuration system: YAML loading with pydantic models and defaults."""
 
 import logging
+import os
 import re
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
@@ -253,6 +254,29 @@ class WorkerConfig(BaseModel):
     max_slots: int = Field(default=4, ge=1)
 
 
+class DockerWorkerConfig(BaseModel):
+    """One declared fleet of container-based workers."""
+
+    image: str
+    base_worker_id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    capabilities: list[str] = Field(default_factory=list)
+    replicas: int = Field(default=1, ge=1)
+    runtime: Literal["docker", "podman"] = "docker"
+    nats_servers: list[str] = Field(
+        default_factory=lambda: ["nats://host.docker.internal:4222"]
+    )
+    env: dict[str, str] = Field(default_factory=dict)
+    secret_env: list[str] = Field(default_factory=list)
+    network: str | None = None
+    poll_interval: float = Field(default=2.0, gt=0.0)
+    stop_timeout: float = Field(default=30.0, gt=0.0)
+    base_backoff: float = Field(default=1.0, gt=0.0)
+    max_backoff: float = Field(default=60.0, gt=0.0)
+    max_restarts: int = Field(default=5, ge=1)
+    stability_window: float = Field(default=60.0, gt=0.0)
+    log_tail: int = Field(default=50, ge=1)
+
+
 class RegistryConfig(BaseModel):
     """Worker discovery/liveness settings.
 
@@ -299,6 +323,7 @@ class ProctorConfig(BaseModel):
     schedules: list[ScheduleItemConfig] = []
     workflows: dict[str, WorkflowSpec] = Field(default_factory=dict)
     routes: list[RouteRule] = Field(default_factory=list)
+    docker_workers: list[DockerWorkerConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_transport_consistency(self) -> Self:
@@ -360,6 +385,18 @@ class ProctorConfig(BaseModel):
                     )
         return self
 
+    @model_validator(mode="after")
+    def _unique_docker_base_ids(self) -> Self:
+        seen: set[str] = set()
+        for fleet in self.docker_workers:
+            if fleet.base_worker_id in seen:
+                raise ValueError(
+                    f"duplicate docker_workers base_worker_id "
+                    f"{fleet.base_worker_id!r}; each fleet needs a unique base"
+                )
+            seen.add(fleet.base_worker_id)
+        return self
+
 
 def _resolve_transport_mode_static(
     transport: Literal["auto", "local", "nats"],
@@ -371,20 +408,47 @@ def _resolve_transport_mode_static(
     return "local" if node_role == "standalone" else "nats"
 
 
+def _apply_env_overrides(config: ProctorConfig) -> ProctorConfig:
+    """Apply the container-injection env overrides after YAML load.
+
+    Only the three fields a containerized worker needs; deliberately not
+    a general env layer (see the design's Approach A rationale).
+    """
+    updates: dict[str, object] = {}
+    worker_updates: dict[str, object] = {}
+    if (servers := os.environ.get("PROCTOR_NATS_SERVERS")) is not None:
+        nats = config.nats.model_copy(
+            update={"servers": [s.strip() for s in servers.split(",") if s.strip()]}
+        )
+        updates["nats"] = nats
+    if (wid := os.environ.get("PROCTOR_WORKER_ID")) is not None:
+        worker_updates["id"] = wid
+    if (caps := os.environ.get("PROCTOR_WORKER_CAPABILITIES")) is not None:
+        worker_updates["capabilities"] = [
+            c.strip() for c in caps.split(",") if c.strip()
+        ]
+    if worker_updates:
+        updates["worker"] = config.worker.model_copy(update=worker_updates)
+    if not updates:
+        return config
+    return config.model_copy(update=updates)
+
+
 def load_config(path: Path | str | None = None) -> ProctorConfig:
     """Load config from YAML file, returning defaults if file missing."""
     if path is None:
-        return ProctorConfig()
+        return _apply_env_overrides(ProctorConfig())
 
     config_path = Path(path)
     if not config_path.exists():
         logger.info("Config file %s not found, using defaults", config_path)
-        return ProctorConfig()
+        return _apply_env_overrides(ProctorConfig())
 
     with open(config_path) as f:
         data = yaml.safe_load(f)
 
     if data is None:
-        return ProctorConfig()
+        return _apply_env_overrides(ProctorConfig())
 
-    return ProctorConfig.model_validate(data)
+    config = ProctorConfig.model_validate(data)
+    return _apply_env_overrides(config)

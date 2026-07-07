@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from proctor.core.config import (
     LLMConfig,
@@ -966,3 +967,39 @@ class TestWorkerAndRegistryConfig:
     def test_liveness_must_exceed_heartbeat(self) -> None:
         with pytest.raises(ValueError):
             RegistryConfig(heartbeat_interval=30.0, liveness_timeout=30.0)
+
+
+class TestDockerWorkerConfig:
+    def test_defaults(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        fleet = DockerWorkerConfig(image="proctor:latest", base_worker_id="docker_py")
+        assert fleet.replicas == 1
+        assert fleet.runtime == "docker"
+        assert fleet.capabilities == []
+        assert fleet.max_restarts == 5
+        assert fleet.stop_timeout == 30.0
+        assert fleet.nats_servers == ["nats://host.docker.internal:4222"]
+
+    def test_base_worker_id_charset(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        with pytest.raises(ValidationError):
+            DockerWorkerConfig(
+                image="i",
+                base_worker_id="docker-py",  # hyphen illegal
+            )
+
+    def test_duplicate_base_worker_id_rejected(self) -> None:
+        from proctor.core.config import DockerWorkerConfig
+
+        with pytest.raises(ValidationError, match="base_worker_id"):
+            ProctorConfig(
+                docker_workers=[
+                    DockerWorkerConfig(image="a", base_worker_id="dup"),
+                    DockerWorkerConfig(image="b", base_worker_id="dup"),
+                ]
+            )
+
+    def test_empty_docker_workers_default(self) -> None:
+        assert ProctorConfig().docker_workers == []
