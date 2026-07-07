@@ -6,13 +6,27 @@ Proctor orchestrates LLM-powered agents that execute workflows (simple prompts, 
 
 ## Status
 
-Phase 0 (Foundation) and Phase 1 (MVP) complete. Phase 2 in progress:
-SchedulerTrigger (cron/interval), TelegramTrigger (Bot API polling),
-EpisodicMemory, LiteLLM integration, and the declarative Router are all
-implemented. The system accepts terminal input, Telegram messages, and
-scheduled events; routes them to catalog workflows via the Router; and
-persists task state and episodic history in SQLite. NATS messaging and
-the webhook trigger are the remaining Phase 2 items.
+Phases 0–2 complete; Phase 3 (Distribution) is in progress — parts 1–3 done.
+
+- **Phase 2 (Proactivity):** SchedulerTrigger (cron/interval), TelegramTrigger,
+  WebhookTrigger (HTTP + HMAC/Bearer auth), EpisodicMemory, LiteLLM, the
+  declarative Router, the NATS transport layer, and the TaskRouter admission
+  layer (4 safety invariants + TTL pending queue).
+- **Phase 3 part 1:** worker registry + remote dispatch — WorkerRegistry
+  (heartbeat liveness, first-alive-owns fencing), capability scoring, WorkerNode
+  (worker-role runtime), remote dispatch with rollback / loss-policy / deadline
+  reaper.
+- **Phase 3 part 2:** docker workers — `ContainerRuntime` (docker/podman CLI)
+  and `DockerWorkerManager` (container fleet lifecycle: poll-loop restart,
+  backoff/jitter/stability-reset/ceiling, fresh-id fencing).
+- **Phase 3 part 3:** remote docker workers via `DOCKER_HOST=ssh://` (see
+  `docs/remote-workers.md`).
+
+The system accepts terminal input, Telegram messages, webhooks, and scheduled
+events; routes them to catalog workflows; admits them through the safety
+invariants; and executes locally or dispatches to worker nodes over local or
+NATS transport, including container fleets the core launches itself. **Next:**
+the `mcp/` dynamic-tool layer; a bare-host SSH worker is deferred.
 
 ## Requirements
 
@@ -123,7 +137,7 @@ export OPENAI_API_KEY=sk-...       # for OpenAI models
 ## Routing
 
 Trigger events (`trigger.terminal`, `trigger.telegram`, `trigger.scheduler`,
-future `trigger.webhook`) flow through a declarative Router that matches
+`trigger.webhook.<source>`) flow through a declarative Router that matches
 each event against a list of rules and dispatches it to a named workflow.
 
 Example (`config/proctor.yaml` excerpt):
@@ -409,24 +423,28 @@ pyrefly check
 
 ### Running integration tests
 
-Integration tests against external services (currently: Ollama) are marked
-with the `integration` pytest marker and skipped by default.
+The default `uv run pytest` deselects tests that need external services:
+`nats`, `ollama`, `docker`, and `benchmark` markers are all excluded. Run
+each opt-in group by its marker.
 
-To run them, start a local Ollama server and pull the default model:
+**Ollama** — start a local server and pull the default model, then run the
+marked tests:
 
 ```bash
 ollama serve
 ollama pull llama3.2
+uv run pytest -m ollama
 ```
 
-Then:
+If Ollama is not reachable at `localhost:11434`, the tests skip cleanly.
+
+**Docker/remote** — container-worker tests need a container runtime
+(docker/podman) present and, for the remote path, the `proctor:latest` image
+built and a reachable remote socket. They skip cleanly when unavailable:
 
 ```bash
-uv run pytest -m integration
+uv run pytest -m docker
 ```
-
-If Ollama is not reachable at `localhost:11434`, the tests skip cleanly — no
-action required for the default `uv run pytest` run.
 
 ### Running NATS integration tests
 
@@ -470,23 +488,40 @@ proctor/
 │   ├── requirements.md           # Functional and non-functional requirements
 │   ├── tasks.md                  # Task breakdown with acceptance criteria
 │   └── design.md                 # Design decisions and rationale
+├── docs/remote-workers.md         # Remote container workers (DOCKER_HOST=ssh://)
+├── Dockerfile                     # Worker-role image
 ├── src/proctor/
 │   ├── __init__.py               # Package init, __version__ = "0.1.0"
 │   ├── __main__.py               # CLI entrypoint (argparse + signal handling)
 │   ├── core/
 │   │   ├── bootstrap.py          # Application lifecycle + event wiring
-│   │   ├── bus.py                # Async EventBus with fnmatch wildcard subscriptions
+│   │   ├── bus.py                # EventBus over the transport abstraction
 │   │   ├── config.py             # YAML config loading with pydantic models
+│   │   ├── globs.py              # Shared fnmatch glob heuristics (routing + scope)
 │   │   ├── memory.py             # EpisodicMemory: SQLite store for interaction history
 │   │   ├── models.py             # Core models: Event, Task, Episode, Envelope, TaskStatus
-│   │   └── state.py              # SQLite state manager (tasks, schedules, config_overrides)
+│   │   ├── router.py             # Declarative Router (trigger event → catalog workflow)
+│   │   ├── state.py              # SQLite state manager (tasks, schedules, config_overrides)
+│   │   └── transport/            # EventTransport ABC + LocalEventTransport + NATSEventTransport
 │   ├── triggers/
 │   │   ├── base.py               # Trigger ABC
 │   │   ├── scheduler.py          # SchedulerTrigger: cron/interval event firing
 │   │   ├── telegram.py           # TelegramTrigger: Bot API long-polling
 │   │   ├── terminal.py           # TerminalTrigger: stdin reader with /quit command
 │   │   └── webhook.py            # WebhookTrigger: HTTP POST handler with auth
+│   ├── router/                   # TaskRouter admission: invariants, scoring, TTL queue
+│   │   ├── invariants.py         # 4 critical safety invariants
+│   │   ├── models.py             # AgentProfile, Candidate, AdmitDecision, QueueEntry
+│   │   ├── queue.py              # PendingQueue (pure FIFO with TTL)
+│   │   ├── router.py             # TaskRouter facade (admit/release/retry)
+│   │   └── scoring.py            # Capability scoring (requires ⊆ capabilities)
+│   ├── infra/
+│   │   └── docker.py             # ContainerRuntime: async docker/podman CLI wrapper
 │   ├── workers/
+│   │   ├── docker.py             # DockerWorkerManager: container fleet lifecycle
+│   │   ├── llm.py                # build_llm_call: LiteLLM closure + telemetry
+│   │   ├── node.py               # WorkerNode: worker-role runtime
+│   │   ├── registry.py           # WorkerRegistry: discovery + heartbeat liveness
 │   │   └── runtime.py            # AgentRuntime: LLM loop with tool calling
 │   └── workflow/
 │       ├── dag.py                # DAG executor with topo-sort + parallel execution
@@ -494,11 +529,13 @@ proctor/
 │       └── spec.py               # WorkflowSpec model (simple/dag/fsm/orchestrator)
 └── tests/
     ├── conftest.py               # anyio backend fixture
-    ├── test_core/                # Unit tests: models, config, bus, state, bootstrap
-    ├── test_triggers/            # TerminalTrigger, TelegramTrigger, SchedulerTrigger tests
-    ├── test_workers/             # AgentRuntime tests
-    ├── test_workflow/            # WorkflowSpec, DAG, engine tests
-    └── test_integration.py       # End-to-end: terminal -> workflow -> DB persistence
+    ├── test_core/                # models, config, bus, state, bootstrap, router, globs
+    ├── test_triggers/            # terminal, telegram, scheduler, webhook
+    ├── test_router/              # invariants, scoring, queue, TaskRouter, dispatch
+    ├── test_infra/               # ContainerRuntime
+    ├── test_workers/             # AgentRuntime, registry, node, docker manager
+    ├── test_workflow/            # WorkflowSpec, DAG, engine
+    └── integration/              # NATS + docker-marker end-to-end tests
 ```
 
 ## Architecture
@@ -621,8 +658,9 @@ Tasks are saved at every state transition. Episodes are saved after each workflo
 | Runtime | Python 3.12, pydantic 2.x, asyncio, anyio |
 | Storage | aiosqlite |
 | LLM | litellm, tiktoken |
-| Messaging | nats-py (installed, Phase 2 integration) |
-| Protocols | mcp SDK (installed, Phase 3+ integration) |
+| Messaging | nats-py (integrated — `transport: nats`, `[nats]` extra) |
+| Containers | docker/podman CLI (subprocess wrapper, no Python SDK dep) |
+| Protocols | mcp SDK (installed, Phase 3 `mcp/` integration pending) |
 | HTTP | aiohttp |
 | Scheduling | croniter |
 | Config | pyyaml |
@@ -634,8 +672,8 @@ Tasks are saved at every state transition. Episodes are saved after each workflo
 |-------|-------|--------|
 | 0 | Foundation (models, config, bus, state, bootstrap) | Done |
 | 1 | MVP (workflow engine, DAG, agent runtime, terminal trigger) | Done |
-| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory, webhook) | Done (scheduler, Telegram, episodic memory, router, LiteLLM, webhook). NATS transport deferred to Phase 3. |
-| 3 | Distribution (NATS transport, worker pool, task queue, MCP tools) | Planned |
+| 2 | Proactivity (scheduler, Telegram trigger, router, episodic memory, webhook, NATS transport, admission layer) | Done |
+| 3 | Distribution (worker registry + dispatch, docker & remote-docker workers, MCP tools) | In progress — registry/dispatch, docker & remote-docker workers done; `mcp/` and a bare-host SSH worker remain |
 | 4 | Advanced orchestration (FSM, multi-agent, self-modification) | Planned |
 | 5 | Observability & control (OpenTelemetry, dashboards, audit log, TUI) | Planned |
 | 6 | Security & hardening (RBAC, encryption, guardrails, A2A gateway) | Planned |
