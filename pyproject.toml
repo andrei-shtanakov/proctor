@@ -40,12 +40,13 @@ packages = ["src/proctor"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "strict"
-addopts = "-m 'not nats and not ollama and not benchmark'"
+addopts = "-m 'not nats and not ollama and not benchmark and not docker'"
 markers = [
     "integration: requires external services",
     "nats: requires running NATS server (docker/podman or CI services)",
     "ollama: requires local Ollama",
     "benchmark: performance smoke tests (opt-in)",
+    "docker: requires a container runtime (docker/podman) present",
 ]
 
 [tool.ruff]
