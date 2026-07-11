@@ -1,8 +1,8 @@
 # TODO — proctor (план от 2026-04-16)
 
 > Роль в экосистеме: **первый реальный Mode-2 потребитель Maestro**. В roadmap экосистемы задач не имеет, но работает как живой dogfooding-стенд.
-> Стратегический контекст: `../_cowork_output/roadmap/ecosystem-roadmap.md`
-> Актуальный статус: `../_cowork_output/status/2026-04-10-status.md`
+> Стратегический контекст: `../prograph-vault/authored/notes/ecosystem-roadmap.md`
+> Актуальный статус: `../prograph-vault/authored/notes/status/2026-04-10-status.md`
 
 ## Текущее состояние
 - ✅ Phase 2 завершена: triggers (terminal/telegram/scheduler/webhook), NATS-транспорт, EpisodicMemory, TaskRouter (admission: 4 инварианта + TTL-очередь)
