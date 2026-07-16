@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Project-specific tasks:** `spec/tasks.md` (Phase 2)
 - **Ecosystem roadmap (strategic):** `../prograph-vault/authored/notes/ecosystem-roadmap.md` — R-01…R-16 across Maestro / arbiter / ATP / spec-runner
 - **Latest weekly status:** `../prograph-vault/authored/notes/status/2026-04-10-status.md`
-- **Sibling projects** (reference only): `../Maestro/`, `../arbiter/`, `../atp-platform/`, `../spec-runner/`
+- **Sibling projects** (reference only): `../maestro/`, `../arbiter/`, `../atp-platform/`, `../spec-runner/`
 
 proctor's role in the ecosystem: **first real Mode-2 consumer of Maestro**. Not named in ecosystem roadmap. Responsibility is dogfooding — when Maestro breaks a proctor task, file an issue with reproducible yaml + logs.
 
@@ -116,7 +116,7 @@ Phase 0 (Foundation) and Phase 1 (MVP) are complete. Phase 2 is complete.
 ## Repo scope & boundaries
 
 - **Этот репо:** `proctor` — git-корень `all_ai_orchestrators/proctor/`, remote `git@github.com:andrei-shtanakov/proctor.git`.
-- **Соседи (READ-ONLY reference):** `../arbiter/`, `../atp-platform/`, `../deployer/`, `../dispatcher/`, `../Maestro/`, `../open-prose/`, `../prograph/`, `../prograph-vault/`, `../robin-runtime/`, `../robin-toolkit/`, `../spec-runner/`, `../spec-runner-vscode/`, `../steward/` — их код не редактировать.
+- **Соседи (READ-ONLY reference):** `../arbiter/`, `../atp-platform/`, `../deployer/`, `../dispatcher/`, `../maestro/`, `../libretto/`, `../prograph/`, `../prograph-vault/`, `../robin-runtime/`, `../robin-toolkit/`, `../spec-runner/`, `../spec-runner-vscode/`, `../steward/` — их код не редактировать.
 - Нужна правка у соседа → **стоп**: запиши handoff в `../prograph-vault/authored/notes/`
   (кросс-проектное) или `../_cowork_output/` (черновик), не трогай его файлы.
 - Кросс-репные контракты — **вендорить пиненой копией внутрь**, не ссылаться наружу.
