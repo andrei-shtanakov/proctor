@@ -13,7 +13,7 @@
 - ✅ Задачи TASK-00N идут через Maestro-спеки (`maestro: add spec for ...`) — первый реальный Mode-2 run
 - ✅ CI есть (GitHub Actions: unit + integration-nats с Toxiproxy reconnect-тестами)
 - ✅ Governance-гейт экосистемы принят (ADR-ECO-004 D5, PR #40): `governance / gate` — обязательный чек на `master`, плюс CODEOWNERS и ruleset (1 approving review, запрет force-push/удаления ветки)
-- 🔜 Следующий крупный кусок — Phase 3, модуль `mcp/` (client/server/controller/registry/proxy)
+- 🔜 Phase 3 (часть 4) — модуль `mcp/` (client/server/controller/registry/proxy): не начата, следующий крупный кусок
 
 ## Правила ведения
 - После каждой выполненной задачи проставь `[x]` и добавь хеш коммита
@@ -41,7 +41,7 @@
   - Сравнить качество: static routing vs arbiter routing на нашем pain-data
   - Это натуральный datapoint для R-07 (eval-driven routing validation)
 
-### Phase 3 — `mcp/`
+### Phase 3 (часть 4) — `mcp/`
 
 - [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:andrei @trigger:"старт работ над модулем mcp/"
   - С `mcp` 1.28.0 (у нас 1.28.1, PR #39) задепрекейчены WebSocket-транспорт (`mcp.client.websocket` / `mcp.server.websocket`) и experimental tasks API (`ClientSession.experimental`, `experimental_task_handlers=`) — удаление в v2
