@@ -1,57 +1,69 @@
-# TODO — proctor (план от 2026-04-16)
+# TODO — proctor (план от 2026-04-16, ревизия 2026-07-26)
 
 > Роль в экосистеме: **первый реальный Mode-2 потребитель Maestro**. В roadmap экосистемы задач не имеет, но работает как живой dogfooding-стенд.
 > Стратегический контекст: `../prograph-vault/authored/notes/ecosystem-roadmap.md`
-> Актуальный статус: `../prograph-vault/authored/notes/status/2026-04-10-status.md`
+> Актуальный статус: `../prograph-vault/authored/notes/status/2026-07-08-status.md`
 
 ## Текущее состояние
-- ✅ Phase 2 завершена: triggers (terminal/telegram/scheduler/webhook), NATS-транспорт, EpisodicMemory, TaskRouter (admission: 4 инварианта + TTL-очередь)
+- ✅ Phase 2 завершена: triggers (terminal/telegram/scheduler/webhook), NATS-транспорт, EpisodicMemory, TaskRouter (admission: 4 инварианта + TTL-очередь). Все задачи `spec/tasks.md` закрыты
 - ✅ Phase 3 (часть 1) — worker registry + remote dispatch: WorkerRegistry (liveness/fencing), capability scoring, WorkerNode (worker-role runtime), remote dispatch (rollback, loss policy, reaper); distribution loop покрыт как local-transport, так и multi-node NATS интеграционными тестами
 - ✅ Phase 3 (часть 2) — docker worker: core-managed container fleet (DockerWorkerManager + ContainerRuntime docker/podman CLI wrapper), fresh-id fencing, poll-loop restart (backoff/jitter/stability-reset/ceiling), Dockerfile + base worker config, integration test за `docker` pytest-маркером
 - ✅ Phase 3 (часть 3) — remote docker workers через `DOCKER_HOST=ssh://` (`ssh_host` на docker-fleet, per-op timeout с kill/reap, unreachable ceiling); bare-SSH backend отложен (rule-of-three)
 - ✅ Миграция asyncio → anyio завершена
 - ✅ Задачи TASK-00N идут через Maestro-спеки (`maestro: add spec for ...`) — первый реальный Mode-2 run
 - ✅ CI есть (GitHub Actions: unit + integration-nats с Toxiproxy reconnect-тестами)
+- ✅ Governance-гейт экосистемы принят (ADR-ECO-004 D5, PR #40): `governance / gate` — обязательный чек на `master`, плюс CODEOWNERS и ruleset (1 approving review, запрет force-push/удаления ветки)
+- 🔜 Следующий крупный кусок — Phase 3, модуль `mcp/` (client/server/controller/registry/proxy)
 
 ## Правила ведения
 - После каждой выполненной задачи проставь `[x]` и добавь хеш коммита
 - **Dogfooding-обязанность**: если Maestro ломает задачу proctor, заводить issue в `../maestro/` с конкретным воспроизведением (yaml + логи)
+- Пункты размечаем инлайн-тегами `@owner:` / `@blocked_by:` / `@trigger:` — формат из `../_cowork_output/2026-07-26-plan-fields-and-todo-coverage-handoff.md` §3. Теги опциональны: пусто = «неизвестно», выдумывать триггер там, где его нет, не надо
 
 ---
 
-## Активные задачи (собственный Phase 2 — детали в коде/спеках)
+## Активные задачи
 
-Полный список задач Phase 2 — в `spec/tasks.md` этого проекта. Здесь только **кросс-проектные** пункты:
+Задачи уровня реализации живут в `docs/plans/` и спеках; здесь — только пункты уровня команды и кросс-проектные.
 
 ### Dogfooding Maestro
 
-- [ ] **Собрать pain-points от Mode-2 run** (ongoing)
-  - Вести `notes/maestro-feedback.md` с конкретными примерами где Maestro:
-    - падает
-    - дает непонятное сообщение об ошибке
-    - требует ручного вмешательства
-  - Эскалировать в `../maestro/` как issues или в `_cowork_output/`
+- [ ] **Собрать pain-points от Mode-2 run** (ongoing) @owner:andrei
+  - Журнал заведён: `notes/maestro-feedback.md` (шаблон записи готов, **записей пока 0** — с 2026-07-17 новых Mode-2 прогонов не было)
+  - Фиксировать, где Maestro: падает / даёт непонятную ошибку / требует ручного вмешательства
+  - Эскалировать в `../maestro/` как issues или в `../_cowork_output/`
   - Мотивация: мы единственный реальный внешний потребитель — без нашего фидбэка Maestro не узнает о багах кроме собственного dogfooding
 
-### После R-01 (Maestro rename `codex` → `codex_cli`)
+### Arbiter routing (после Maestro R-03b)
 
-- [ ] **Обновить spec-ы и конфиги** если в наших yaml/спеках фигурирует `agent_type: codex`
-  - Grep: `grep -rn "codex" spec/ config/ *.yaml`
-  - Синхронизация с Maestro — перед её релизом v0.1.0
-
-### После R-03 (Maestro arbiter routing)
-
-- [ ] **Опционально включить arbiter routing** для proctor задач
+- [ ] **Опционально включить arbiter routing** для proctor задач @owner:andrei @blocked_by:Maestro#R-03b @trigger:"Maestro закрыла R-03b (Mode-2 workstream-level routing)"
+  - Maestro R-03 (MCP-клиент arbiter) уже shipped в v0.2.0, но для нас релевантен именно Mode-2 — это R-03b, который у Maestro открыт и сам гейтится «≥1 неделя стабильного Mode-1 dogfood после v0.2.0»
   - Сравнить качество: static routing vs arbiter routing на нашем pain-data
   - Это натуральный datapoint для R-07 (eval-driven routing validation)
+
+### Phase 3 — `mcp/`
+
+- [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:andrei @trigger:"старт работ над модулем mcp/"
+  - С `mcp` 1.28.0 (у нас 1.28.1, PR #39) задепрекейчены WebSocket-транспорт (`mcp.client.websocket` / `mcp.server.websocket`) и experimental tasks API (`ClientSession.experimental`, `experimental_task_handlers=`) — удаление в v2
+  - Следствие: не строить транспорт на WebSocket и не опираться на tasks API; если в pytest включим `filterwarnings = ["error"]` — понадобится scoped ignore
 
 ---
 
 ## Ждём от других проектов
 
-- **Maestro → R-09 (CI)**: уменьшит шанс, что обновление Maestro сломает наш Mode-2 run
-- **Maestro → R-04 (ExecutorState)**: даст типизированный feedback loop между нами и Maestro через spec-runner
-- **Maestro → R-01..R-03**: после R-03 мы сможем осмысленно тестировать arbiter routing
+На 2026-07-26 весь список, который мы ждали в апреле, **приехал**:
+
+- ✅ **Maestro R-09 (CI)** — GitHub Actions, зелёный прогон
+- ✅ **Maestro R-04 (ExecutorState)** — типизированный feedback loop
+- ✅ **Maestro R-01..R-03** — shipped в v0.2.0
+
+Открыто остаётся одно: **Maestro R-03b** (Mode-2 workstream-level routing) — от него зависит наш пункт про arbiter routing выше.
+
+---
+
+## Сделано / снято
+
+- [x] **Обновить spec-ы и конфиги после Maestro R-01** (`codex` → `codex_cli`) — снято 2026-07-26 как неприменимое: `grep -rn "codex" spec/ config/ *.yaml` даёт только упоминания в `spec/.executor-logs/` (имена файлов шаблонов ревью), ни одного `agent_type: codex` в наших спеках и конфигах нет. Maestro R-01 закрыт на их стороне (commit `8fd0b51`)
 
 ---
 
