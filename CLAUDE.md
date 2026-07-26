@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Current task list:** `./TODO.md` — read it at the start of every session
 - **Project-specific tasks:** `spec/tasks.md` (Phase 2)
 - **Ecosystem roadmap (strategic):** `../prograph-vault/authored/notes/ecosystem-roadmap.md` — R-01…R-16 across Maestro / arbiter / ATP / spec-runner
-- **Latest weekly status:** `../prograph-vault/authored/notes/status/2026-04-10-status.md`
+- **Latest weekly status:** `../prograph-vault/authored/notes/status/2026-07-08-status.md`
 - **Sibling projects** (reference only): `../maestro/`, `../arbiter/`, `../atp-platform/`, `../spec-runner/`
 
 proctor's role in the ecosystem: **first real Mode-2 consumer of Maestro**. Not named in ecosystem roadmap. Responsibility is dogfooding — when Maestro breaks a proctor task, file an issue with reproducible yaml + logs.
