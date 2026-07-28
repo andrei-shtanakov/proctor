@@ -29,7 +29,7 @@
 
 ### Dogfooding Maestro
 
-- [ ] **Собрать pain-points от Mode-2 run** (ongoing) @owner:andrei
+- [ ] **Собрать pain-points от Mode-2 run** (ongoing) @owner:andrei @id:mode-2-pain-points
   - Журнал заведён: `notes/maestro-feedback.md` (шаблон записи готов, **записей пока 0** — с 2026-07-17 новых Mode-2 прогонов не было)
   - Фиксировать, где Maestro: падает / даёт непонятную ошибку / требует ручного вмешательства
   - Эскалировать в `../maestro/` как issues или в `../_cowork_output/`
@@ -44,7 +44,7 @@
 
 ### Phase 3 (часть 4) — `mcp/`
 
-- [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:andrei @trigger:"старт работ над модулем mcp/"
+- [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:andrei @trigger:"старт работ над модулем mcp/" @id:mcp-sdk-deprecations
   - С `mcp` 1.28.0 (у нас 1.28.1, PR #39) задепрекейчены WebSocket-транспорт (`mcp.client.websocket` / `mcp.server.websocket`) и experimental tasks API (`ClientSession.experimental`, `experimental_task_handlers=`) — удаление в v2
   - Следствие: не строить транспорт на WebSocket и не опираться на tasks API; если в pytest включим `filterwarnings = ["error"]` — понадобится scoped ignore
 
