@@ -36,7 +36,7 @@
 
 ### Arbiter routing (после Maestro R-03b)
 
-- [ ] **Опционально включить arbiter routing** для proctor задач @owner:andrei @blocked_by:Maestro#R-03b @trigger:"Maestro закрыла R-03b (Mode-2 workstream-level routing)"
+- [ ] **Опционально включить arbiter routing** для proctor задач @owner:andrei @blocked_by:todo://maestro/r-03b @trigger:"Maestro закрыла R-03b (Mode-2 workstream-level routing)" @id:arbiter-routing-opt-in
   - Maestro R-03 (MCP-клиент arbiter) уже shipped в v0.2.0, но для нас релевантен именно Mode-2 — это R-03b, который у Maestro открыт и сам гейтится «≥1 неделя стабильного Mode-1 dogfood после v0.2.0»
   - Сравнить качество: static routing vs arbiter routing на нашем pain-data
   - Это натуральный datapoint для R-07 (eval-driven routing validation)
