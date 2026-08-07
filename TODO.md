@@ -18,7 +18,7 @@
 ## Правила ведения
 - После каждой выполненной задачи проставь `[x]` и добавь хеш коммита
 - **Dogfooding-обязанность**: если Maestro ломает задачу proctor, заводить issue в `../maestro/` с конкретным воспроизведением (yaml + логи)
-- Пункты размечаем инлайн-тегами `@owner:` / `@blocked_by:` / `@trigger:` / `@id:` — формат из `../_cowork_output/2026-07-26-plan-fields-and-todo-coverage-handoff.md` §3. Теги опциональны: пусто = «неизвестно», выдумывать триггер там, где его нет, не надо
+- Пункты размечаем инлайн-тегами `@owner:` / `@blocked_by:` / `@trigger:` / `@id:` по plan-fields v2. Для `@owner:` каноничны `github:<login>`, `github-team:<org>/<team>`, `repo:<manifest-key>` и `TBD`; bare handle/role — legacy. Теги опциональны: пусто = «неизвестно», выдумывать триггер там, где его нет, не надо
   - `@id:<node-id>` — канонический идентификатор пункта (ADR-ECO-005 PF-2B): строчная грамматика `[a-z0-9][a-z0-9._-]{0,63}`, из него строится URI `todo://proctor/<id>`. Переходно `@blocked_by` принимает и legacy `<repo>#<slug>`, и канонический `todo://<repo>/<id>`
 
 ---
@@ -29,7 +29,7 @@
 
 ### Dogfooding Maestro
 
-- [ ] **Собрать pain-points от Mode-2 run** (ongoing) @owner:andrei @id:mode-2-pain-points
+- [ ] **Собрать pain-points от Mode-2 run** (ongoing) @owner:github:andrei-shtanakov @id:mode-2-pain-points
   - Журнал заведён: `notes/maestro-feedback.md` (шаблон записи готов, **записей пока 0** — с 2026-07-17 новых Mode-2 прогонов не было)
   - Фиксировать, где Maestro: падает / даёт непонятную ошибку / требует ручного вмешательства
   - Эскалировать в `../maestro/` как issues или в `../_cowork_output/`
@@ -37,14 +37,14 @@
 
 ### Arbiter routing (после Maestro R-03b)
 
-- [ ] **Опционально включить arbiter routing** для proctor задач @owner:andrei @blocked_by:todo://maestro/r-03b @trigger:"Maestro закрыла R-03b (Mode-2 workstream-level routing)" @id:arbiter-routing-opt-in
+- [ ] **Опционально включить arbiter routing** для proctor задач @owner:github:andrei-shtanakov @blocked_by:todo://maestro/r-03b @trigger:"Maestro закрыла R-03b (Mode-2 workstream-level routing)" @id:arbiter-routing-opt-in
   - Maestro R-03 (MCP-клиент arbiter) уже shipped в v0.2.0, но для нас релевантен именно Mode-2 — это R-03b, который у Maestro открыт и сам гейтится «≥1 неделя стабильного Mode-1 dogfood после v0.2.0»
   - Сравнить качество: static routing vs arbiter routing на нашем pain-data
   - Это натуральный datapoint для R-07 (eval-driven routing validation)
 
 ### Phase 3 (часть 4) — `mcp/`
 
-- [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:andrei @trigger:"старт работ над модулем mcp/" @id:mcp-sdk-deprecations
+- [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:github:andrei-shtanakov @trigger:"старт работ над модулем mcp/" @id:mcp-sdk-deprecations
   - С `mcp` 1.28.0 (у нас 1.28.1, PR #39) задепрекейчены WebSocket-транспорт (`mcp.client.websocket` / `mcp.server.websocket`) и experimental tasks API (`ClientSession.experimental`, `experimental_task_handlers=`) — удаление в v2
   - Следствие: не строить транспорт на WebSocket и не опираться на tasks API; если в pytest включим `filterwarnings = ["error"]` — понадобится scoped ignore
 
