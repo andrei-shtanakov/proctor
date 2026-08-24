@@ -48,6 +48,12 @@
   - С `mcp` 1.28.0 (у нас 1.28.1, PR #39) задепрекейчены WebSocket-транспорт (`mcp.client.websocket` / `mcp.server.websocket`) и experimental tasks API (`ClientSession.experimental`, `experimental_task_handlers=`) — удаление в v2
   - Следствие: не строить транспорт на WebSocket и не опираться на tasks API; если в pytest включим `filterwarnings = ["error"]` — понадобится scoped ignore
 
+- [ ] **Guard результата MCP-инструмента в дизайне `mcp/`** (slug: mcp-tool-result-guard) @owner:github:andrei-shtanakov @trigger:"начат модуль mcp/" @id:mcp-tool-result-guard
+  - Запрос: issue #52 (from: ai-repos-research#proposal-v3-harvest)
+  - Путь «результат инструмента → контекст агента» сейчас не проверяет никто (гейты стоят на маршрутизации вызовов); тул-результат — канал prompt-injection и утечки креденшелов. Закрыть при постройке mcp/proxy, не после
+  - Две детерминированные проверки результата до отдачи в контекст: (1) индикаторы prompt-injection («ignore previous instructions», «new instructions:», скрытые HTML-комментарии-инструкции); (2) regex-детектор креденшелов (AWS `AKIA…`, GitHub `ghp_`/`github_pat_`, `sk-ant-…` и др.)
+  - Образец: mcptoon `src/mcptoon/router.py` (`_POISONING_INDICATORS` + `_CREDENTIAL_PATTERNS`) — переносим как идею; при заимствовании текста паттернов проверить лицензию. Evidence: `labs/ai-repos-research/details/mcptoon.md`
+
 ---
 
 ## Ждём от других проектов
