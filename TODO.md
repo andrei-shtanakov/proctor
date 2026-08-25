@@ -29,7 +29,7 @@
 
 ### Dogfooding Maestro
 
-- [ ] **Собрать pain-points от Mode-2 run** (ongoing) @owner:github:andrei-shtanakov @id:mode-2-pain-points
+- [ ] **Собрать pain-points от Mode-2 run** (ongoing) @owner:github:andrei-shtanakov @id:mode-2-pain-points @epic:eco.distributed-execution
   - Журнал заведён: `notes/maestro-feedback.md` (шаблон записи готов, **записей пока 0** — с 2026-07-17 новых Mode-2 прогонов не было)
   - Фиксировать, где Maestro: падает / даёт непонятную ошибку / требует ручного вмешательства
   - Эскалировать в `../maestro/` как issues или в `../_cowork_output/`
@@ -37,18 +37,18 @@
 
 ### Arbiter routing (после Maestro R-03b)
 
-- [ ] **Опционально включить arbiter routing** для proctor задач @owner:github:andrei-shtanakov @blocked_by:todo://maestro/r-03b @trigger:"Maestro закрыла R-03b (Mode-2 workstream-level routing)" @id:arbiter-routing-opt-in
+- [ ] **Опционально включить arbiter routing** для proctor задач @owner:github:andrei-shtanakov @blocked_by:todo://maestro/r-03b @trigger:"Maestro закрыла R-03b (Mode-2 workstream-level routing)" @id:arbiter-routing-opt-in @epic:eco.routing
   - Maestro R-03 (MCP-клиент arbiter) уже shipped в v0.2.0, но для нас релевантен именно Mode-2 — это R-03b, который у Maestro открыт и сам гейтится «≥1 неделя стабильного Mode-1 dogfood после v0.2.0»
   - Сравнить качество: static routing vs arbiter routing на нашем pain-data
   - Это натуральный datapoint для R-07 (eval-driven routing validation)
 
 ### Phase 3 (часть 4) — `mcp/`
 
-- [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:github:andrei-shtanakov @trigger:"старт работ над модулем mcp/" @id:mcp-sdk-deprecations
+- [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:github:andrei-shtanakov @trigger:"старт работ над модулем mcp/" @id:mcp-sdk-deprecations @epic:eco.distributed-execution
   - С `mcp` 1.28.0 (у нас 1.28.1, PR #39) задепрекейчены WebSocket-транспорт (`mcp.client.websocket` / `mcp.server.websocket`) и experimental tasks API (`ClientSession.experimental`, `experimental_task_handlers=`) — удаление в v2
   - Следствие: не строить транспорт на WebSocket и не опираться на tasks API; если в pytest включим `filterwarnings = ["error"]` — понадобится scoped ignore
 
-- [ ] **Guard результата MCP-инструмента в дизайне `mcp/`** (slug: mcp-tool-result-guard) @owner:github:andrei-shtanakov @trigger:"старт работ над модулем mcp/" @id:mcp-tool-result-guard
+- [ ] **Guard результата MCP-инструмента в дизайне `mcp/`** (slug: mcp-tool-result-guard) @owner:github:andrei-shtanakov @trigger:"старт работ над модулем mcp/" @id:mcp-tool-result-guard @epic:eco.distributed-execution
   - Запрос: issue #52 (from: ai-repos-research#proposal-v3-harvest)
   - Путь «результат инструмента → контекст агента» сейчас не проверяет никто (гейты стоят на маршрутизации вызовов); тул-результат — канал prompt-injection и утечки креденшелов. Закрыть при постройке mcp/proxy, не после
   - Две детерминированные проверки результата до отдачи в контекст: (1) индикаторы prompt-injection («ignore previous instructions», «new instructions:», скрытые HTML-комментарии-инструкции); (2) regex-детектор креденшелов (AWS `AKIA…`, GitHub `ghp_`/`github_pat_`, `sk-ant-…` и др.)
