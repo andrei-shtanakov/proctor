@@ -32,18 +32,17 @@ _INJECTION_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
-        "hidden_html_comment",
-        re.compile(
-            r"<!--(?:(?!-->)[\s\S]){0,400}?"
-            r"(?:instruction|ignore\b|system\s+prompt)"
-            r"(?:(?!-->)[\s\S]){0,400}?-->",
-            re.IGNORECASE,
-        ),
-    ),
-    (
         "role_marker",
         re.compile(r"^\s*(?:system|assistant|developer)\s*:", re.IGNORECASE | re.M),
     ),
+)
+
+# Скрытые HTML-комментарии проверяются отдельно от _INJECTION_RULES:
+# комментарий любой длины (в т.ч. незакрытый — до конца текста) извлекается
+# целиком, и уже его тело матчится на директивные ключевые слова.
+_HTML_COMMENT_RE = re.compile(r"<!--([\s\S]*?)(?:-->|\Z)")
+_COMMENT_DIRECTIVE_RE = re.compile(
+    r"instruction|ignore\b|system\s+prompt", re.IGNORECASE
 )
 
 _CREDENTIAL_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -111,6 +110,15 @@ def scan_tool_result(text: str) -> GuardReport:
                 GuardFinding(
                     kind=GuardFindingKind.PROMPT_INJECTION,
                     rule=rule,
+                    snippet=_truncate(match.group(0)),
+                )
+            )
+    for match in _HTML_COMMENT_RE.finditer(text):
+        if _COMMENT_DIRECTIVE_RE.search(match.group(1)):
+            findings.append(
+                GuardFinding(
+                    kind=GuardFindingKind.PROMPT_INJECTION,
+                    rule="hidden_html_comment",
                     snippet=_truncate(match.group(0)),
                 )
             )
