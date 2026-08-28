@@ -97,6 +97,13 @@ def _mask(secret: str) -> str:
     return secret[:_MASK_PREFIX_LEN] + "…"
 
 
+def _mask_credentials(text: str) -> str:
+    """Mask every recognized credential inside arbitrary snippet text."""
+    for _, pattern in _CREDENTIAL_RULES:
+        text = pattern.sub(lambda m: _mask(m.group(0)), text)
+    return text
+
+
 def scan_tool_result(text: str) -> GuardReport:
     """Scan a tool result for prompt-injection indicators and credentials.
 
@@ -110,7 +117,7 @@ def scan_tool_result(text: str) -> GuardReport:
                 GuardFinding(
                     kind=GuardFindingKind.PROMPT_INJECTION,
                     rule=rule,
-                    snippet=_truncate(match.group(0)),
+                    snippet=_truncate(_mask_credentials(match.group(0))),
                 )
             )
     for match in _HTML_COMMENT_RE.finditer(text):
@@ -119,7 +126,7 @@ def scan_tool_result(text: str) -> GuardReport:
                 GuardFinding(
                     kind=GuardFindingKind.PROMPT_INJECTION,
                     rule="hidden_html_comment",
-                    snippet=_truncate(match.group(0)),
+                    snippet=_truncate(_mask_credentials(match.group(0))),
                 )
             )
     for rule, pattern in _CREDENTIAL_RULES:
