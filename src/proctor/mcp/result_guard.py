@@ -42,7 +42,9 @@ _INJECTION_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
 # целиком, и уже его тело матчится на директивные ключевые слова.
 _HTML_COMMENT_RE = re.compile(r"<!--([\s\S]*?)(?:-->|\Z)")
 _COMMENT_DIRECTIVE_RE = re.compile(
-    r"instruction|ignore\b|system\s+prompt", re.IGNORECASE
+    r"instruction|ignore\b|system\s+prompt"
+    r"|\b(?:system|assistant|developer)\s*:",
+    re.IGNORECASE,
 )
 
 _CREDENTIAL_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
