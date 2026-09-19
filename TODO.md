@@ -42,6 +42,15 @@
   - Сравнить качество: static routing vs arbiter routing на нашем pain-data
   - Это натуральный datapoint для R-07 (eval-driven routing validation)
 
+### Инфраструктура ревью
+
+- [x] **Догнать вендор-копию review-kit до текущего релиза** (slug: review-kit-catchup-scope) @owner:github:andrei-shtanakov @id:review-kit-catchup-scope — ре-вендор до `steward @ c18bf87` сделан `bd3a977` (PR #68, аттестация целостности `devtools/attest-vendor.sh` вместо модельного ревью)
+  - Запрос: issue #67 (from: steward, срез B области ревью, steward#172)
+  - Запрос описывал копию как `e4c43cc` без харнесс-слоя и просил догнать два релиза. Харнесс-слой (`a2d7e71`) здесь уже стоял с 2026-09-14 (PR #64/#65) — реальный долг был один, срез B области ревью
+  - Приехало: `scripts/review/prose-paths.env` (пиненая копия SSOT `devtools contracts/review-scope/v1/`) и фильтр области ревью в `local.sh` с кодом выхода 5 — прозаический диапазон до модели больше не доходит
+  - Попутно выровнены режимы файлов по апстриму: `checksum.sh` и `collect-context.sh` лежали здесь с битом исполнения, в апстриме они 100644. Побайтовая сверка содержимого этого не видит — режим не часть содержимого
+  - `.github/hooks/pre-push` из того же релиза не вендорили: хук — сосед кита у steward, в этом репо его нет
+
 ### Phase 3 (часть 4) — `mcp/`
 
 - [ ] **Учесть депрекейшены mcp SDK при проектировании `mcp/`** @owner:github:andrei-shtanakov @trigger:"старт работ над модулем mcp/" @id:mcp-sdk-deprecations @epic:eco.distributed-execution
